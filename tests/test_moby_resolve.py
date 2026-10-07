@@ -11,6 +11,8 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from moby_resolve import (  # noqa: E402
     build_moby_attribution_sentence,
     moby_attribution_text,
+    moby_description_for_omeka,
+    moby_search_title_candidates,
 )
 
 
@@ -37,6 +39,26 @@ def test_attribution_skips_redundant_data_suffix_when_mobygames_named() -> None:
     meta = {"moby_game_id": 1, "moby_catalog_fields": ["publisher"]}
     moby_cfg = {"attribution_suffix": "Data by MobyGames.com"}
     assert moby_attribution_text(meta, moby_cfg) == "Publisher information from MobyGames."
+
+
+def test_search_title_candidates_champion_to_championship() -> None:
+    alts = moby_search_title_candidates("PAC-MAN Champion Edition DX")
+    assert "PAC-MAN Champion Edition DX" in alts
+    assert "PAC-MAN Championship Edition DX" in alts
+    assert any(a.startswith("Pac-") for a in alts)
+
+
+def test_description_for_omeka_labels_ad_blurb() -> None:
+    meta = {
+        "moby_game_id": 1,
+        "description_source": "ad_blurb",
+        "official_ad_blurb_plain": "Step into the shoes of one of two main characters.",
+        "official_ad_blurb_source": "PlayStation Store Description",
+        "moby_catalog_fields": ["official_description", "publisher"],
+    }
+    text = moby_description_for_omeka(meta, {})
+    assert text.startswith("Official description (ad blurb) (PlayStation Store Description)")
+    assert "Step into the shoes" in text
 
 
 def test_attribution_appends_suffix_when_sentence_does_not_name_mobygames() -> None:

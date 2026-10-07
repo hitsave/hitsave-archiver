@@ -8,6 +8,9 @@ mobygames:
   min_request_interval_seconds: 1.1
   # earliest_platform: one /games/{id}/platforms/{pid} call; all: merge companies from every platform.
   company_platform_scope: earliest_platform
+  # When Moby has no synopsis, use official ad blurbs (API or platform release text when present).
+  fetch_ad_blurbs_api: true
+  ad_blurb_min_chars: 80
   # Test stack: record failures but still upload to Omeka.
   block_on_failure: false
   search_title_from: folder_name

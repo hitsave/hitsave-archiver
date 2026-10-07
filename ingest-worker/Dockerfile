@@ -24,6 +24,9 @@ COPY scripts/batch-expand-preservation.py \
     scripts/moby_resolve.py \
     scripts/moby_omeka_fields.py \
     scripts/moby_enrich_game.py \
+    scripts/apply-moby-metadata-omeka.py \
+    scripts/backfill-ledger-omeka-ids.py \
+    scripts/dedupe-omeka-test-items.py \
     scripts/reset-batch-ledger.py \
     scripts/upload-aip-wasabi.py \
     scripts/submission_common.py \

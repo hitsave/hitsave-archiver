@@ -157,6 +157,41 @@ def create_item_with_dip(
     return item_id, media_id
 
 
+def apply_moby_metadata_to_item(
+    session: requests.Session,
+    base: str,
+    creds: dict,
+    item_id: int,
+    metadata_json: dict,
+    moby_cfg: dict,
+) -> list[str]:
+    """PATCH Moby catalog fields onto an existing Omeka item (partial update)."""
+    extra: dict[str, list] = {}
+    append_moby_fields_to_payload(
+        extra,
+        metadata_json,
+        moby_cfg,
+        session=session,
+        base=base,
+        creds=creds,
+        literal_value=literal_value,
+        uri_value=uri_value,
+        resolve_property_id=resolve_property_id,
+    )
+    if not extra:
+        return []
+    url = api_url(base, f"items/{item_id}", creds)
+    resp = session.patch(
+        url,
+        headers={"Accept": "application/ld+json", "Content-Type": "application/json"},
+        json=extra,
+        timeout=120,
+    )
+    if not resp.ok:
+        raise RuntimeError(f"Moby metadata PATCH failed ({resp.status_code}): {resp.text[:2000]}")
+    return sorted(extra.keys())
+
+
 def update_ledger(conn, game_key: str, item_id: int, media_id: int) -> None:
     with conn.cursor() as cur:
         cur.execute(
@@ -228,12 +263,23 @@ def main() -> None:
             metadata_json = row[2]
             if isinstance(metadata_json, str):
                 metadata_json = json.loads(metadata_json)
+        moby_cfg = load_yaml(CONFIG_ROOT / "mobygames.yaml").get("mobygames") or {}
         if (
             row
             and row[0]
             and row[1]
             and item_has_dip_media(session, base, creds, int(row[0]))
         ):
+            moby_applied: list[str] = []
+            if metadata_json and uses_moby_catalog_data(metadata_json):
+                moby_applied = apply_moby_metadata_to_item(
+                    session,
+                    base,
+                    creds,
+                    int(row[0]),
+                    metadata_json,
+                    moby_cfg,
+                )
             print(
                 json.dumps(
                     {
@@ -241,6 +287,7 @@ def main() -> None:
                         "skipped": True,
                         "omeka_item_id": row[0],
                         "omeka_media_id": row[1],
+                        "moby_fields_applied": moby_applied,
                     },
                     indent=2,
                 )
@@ -250,7 +297,6 @@ def main() -> None:
         conn.close()
 
     extra: dict[str, list] = {}
-    moby_cfg = load_yaml(CONFIG_ROOT / "mobygames.yaml").get("mobygames") or {}
     if metadata_json and uses_moby_catalog_data(metadata_json):
         append_moby_fields_to_payload(
             extra,

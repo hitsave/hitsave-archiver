@@ -22,6 +22,16 @@ from normalize_display_title import normalize_name_fragment
 
 # MobyGames API terms: required suffix wherever API-sourced catalog data is shown.
 MOBY_ATTRIBUTION_SUFFIX = "Data by MobyGames.com"
+OFFICIAL_DESCRIPTION_LABEL = "Official description (ad blurb)"
+# Release notes from Moby platform API — not marketing ad blurbs.
+_RELEASE_DESCRIPTION_SKIP = frozenset(
+    {
+        "download release",
+        "digital release",
+        "playstation store release",
+        "xbox live release",
+    }
+)
 
 
 def uses_moby_catalog_data(metadata_json: dict | None) -> bool:
@@ -67,6 +77,9 @@ def moby_catalog_fields(metadata_json: dict) -> list[str]:
     desc = (metadata_json.get("description_plain") or metadata_json.get("description") or "").strip()
     if desc:
         fields.append("description")
+    ad = (metadata_json.get("official_ad_blurb_plain") or metadata_json.get("official_ad_blurb") or "").strip()
+    if ad and metadata_json.get("description_source") == "ad_blurb":
+        fields.append("official_description")
     if metadata_json.get("publishers"):
         fields.append("publisher")
     if metadata_json.get("developers"):
@@ -79,13 +92,14 @@ def moby_catalog_fields(metadata_json: dict) -> list[str]:
 def build_moby_attribution_sentence(metadata_json: dict) -> str:
     field_labels = {
         "description": "Description",
+        "official_description": OFFICIAL_DESCRIPTION_LABEL,
         "publisher": "Publisher",
         "developer": "Developer",
         "first_release_date": "Release date",
     }
     fields = metadata_json.get("moby_catalog_fields") or moby_catalog_fields(metadata_json)
     phrases: list[str] = []
-    for key in ("description", "publisher", "developer", "first_release_date"):
+    for key in ("description", "official_description", "publisher", "developer", "first_release_date"):
         if key in fields:
             phrases.append(field_labels[key])
     if not phrases:
@@ -126,7 +140,13 @@ def moby_description_plain(metadata_json: dict) -> str:
     plain = (metadata_json.get("description_plain") or "").strip()
     if plain:
         return plain
-    return html_to_plain_text(metadata_json.get("description") or "")
+    synopsis = html_to_plain_text(metadata_json.get("description") or "")
+    if synopsis:
+        return synopsis
+    ad = (metadata_json.get("official_ad_blurb_plain") or "").strip()
+    if ad:
+        return ad
+    return html_to_plain_text(metadata_json.get("official_ad_blurb") or "")
 
 
 def moby_description_for_omeka(metadata_json: dict, moby_cfg: dict | None = None) -> str:
@@ -135,6 +155,12 @@ def moby_description_for_omeka(metadata_json: dict, moby_cfg: dict | None = None
     plain = moby_description_plain(metadata_json)
     if not plain:
         return ""
+    if metadata_json.get("description_source") == "ad_blurb":
+        source = (metadata_json.get("official_ad_blurb_source") or "MobyGames").strip()
+        header = OFFICIAL_DESCRIPTION_LABEL
+        if source:
+            header = f"{OFFICIAL_DESCRIPTION_LABEL} ({source})"
+        plain = f"{header}\n\n{plain}"
     credit = moby_attribution_text(metadata_json, moby_cfg)
     if credit and credit.casefold() in plain.casefold():
         # Strip a trailing attribution block from older ledger/API payloads.
@@ -187,10 +213,89 @@ def companies_from_platform_detail(detail: dict) -> tuple[list[str], list[str]]:
     return publishers, developers
 
 
+def _ad_blurb_from_api_payload(data: Any) -> tuple[str, str]:
+    if not data:
+        return "", ""
+    rows = data if isinstance(data, list) else (
+        data.get("ad_blurbs")
+        or data.get("official_descriptions")
+        or data.get("descriptions")
+        or []
+    )
+    best = ""
+    best_source = ""
+    for row in rows:
+        if isinstance(row, str):
+            text = row.strip()
+            source = ""
+        else:
+            text = (row.get("text") or row.get("description") or row.get("body") or "").strip()
+            source = (row.get("source") or row.get("source_name") or row.get("label") or "").strip()
+        if len(text) > len(best):
+            best = text
+            best_source = source
+    return best, best_source
+
+
+def fetch_official_ad_blurb(
+    client: "MobyClient",
+    game_id: int,
+    platform_ids: list[int],
+    moby_cfg: dict | None = None,
+) -> tuple[str, str]:
+    """Best-effort official ad blurb (Moby catalog or platform release text)."""
+    moby_cfg = moby_cfg or {}
+    min_chars = int(moby_cfg.get("ad_blurb_min_chars", 80))
+    best = ""
+    best_source = ""
+    if moby_cfg.get("fetch_ad_blurbs_api", True):
+        try:
+            text, source = _ad_blurb_from_api_payload(client._get(f"games/{game_id}/ad-blurbs"))
+            if len(text) >= min_chars and len(text) > len(best):
+                best, best_source = text, source or "MobyGames"
+        except Exception:
+            pass
+    for platform_id in platform_ids:
+        try:
+            plat_detail = client._get(f"games/{game_id}/platforms/{platform_id}")
+        except Exception:
+            continue
+        text, source = _ad_blurb_from_api_payload(plat_detail)
+        if len(text) >= min_chars and len(text) > len(best):
+            best, best_source = text, source or "MobyGames"
+        for release in plat_detail.get("releases") or []:
+            desc = (release.get("description") or "").strip()
+            if len(desc) < min_chars or desc.casefold() in _RELEASE_DESCRIPTION_SKIP:
+                continue
+            countries = release.get("countries") or []
+            source = "MobyGames platform release"
+            if countries:
+                source = f"MobyGames ({', '.join(countries)})"
+            if len(desc) > len(best):
+                best, best_source = desc, source
+    return best, best_source
+
+
+def attach_official_ad_blurb(metadata: dict, client: "MobyClient", platform_ids: list[int], moby_cfg: dict) -> None:
+    has_synopsis = bool((metadata.get("description") or "").strip())
+    if has_synopsis:
+        return
+    text, source = fetch_official_ad_blurb(client, int(metadata["moby_game_id"]), platform_ids, moby_cfg)
+    if not text:
+        return
+    metadata["official_ad_blurb"] = text
+    metadata["official_ad_blurb_plain"] = html_to_plain_text(text)
+    metadata["official_ad_blurb_source"] = source or "MobyGames"
+    metadata["description_source"] = "ad_blurb"
+
+
 def finalize_moby_metadata(metadata: dict) -> dict:
     desc = (metadata.get("description") or "").strip()
     if desc:
         metadata["description_plain"] = html_to_plain_text(desc)
+    ad = (metadata.get("official_ad_blurb") or "").strip()
+    if ad and not metadata.get("official_ad_blurb_plain"):
+        metadata["official_ad_blurb_plain"] = html_to_plain_text(ad)
     metadata["moby_catalog_fields"] = moby_catalog_fields(metadata)
     metadata["attribution"] = moby_attribution_text(metadata)
     return metadata
@@ -218,6 +323,54 @@ def search_title_from_folder(folder_name: str, display_title: str | None) -> str
         main = display_title.split(" — ", 1)[0]
         return normalize_name_fragment(main)
     return normalize_name_fragment(folder_name)
+
+
+def moby_search_title_candidates(primary: str) -> list[str]:
+    """Alternate Moby search strings when folder or press titles differ from Moby catalog spelling."""
+    candidates: list[str] = []
+    seen: set[str] = set()
+
+    def add(title: str) -> None:
+        text = re.sub(r"\s+", " ", (title or "").strip())
+        if text and text not in seen:
+            seen.add(text)
+            candidates.append(text)
+
+    add(primary)
+    if re.search(r"(?i)\bchampion edition\b", primary) and not re.search(
+        r"(?i)\bchampionship\b", primary
+    ):
+        add(re.sub(r"(?i)\bchampion edition\b", "Championship Edition", primary))
+    if primary.upper().startswith("PAC-"):
+        add("Pac" + primary[3:])
+    if re.search(r"(?i)\bdynasty warriors gundam reborn\b", primary) and ":" not in primary:
+        add(re.sub(r"(?i)\bdynasty warriors gundam reborn\b", "Dynasty Warriors: Gundam Reborn", primary))
+    for title in list(candidates):
+        if re.search(r"(?i)pac-man.*(?:champion|championship) edition dx", title):
+            add("Pac-Man: Championship Edition DX")
+            break
+    return candidates
+
+
+def pick_moby_search_game(search_title: str, games: list[dict]) -> dict | None:
+    if not games:
+        return None
+    if len(games) == 1:
+        return games[0]
+    normalized_query = search_title.casefold()
+    exact = [g for g in games if (g.get("title") or "").casefold() == normalized_query]
+    if len(exact) == 1:
+        return exact[0]
+    if "championship edition dx" in normalized_query and "+" not in search_title:
+        base = [
+            g
+            for g in games
+            if "+" not in (g.get("title") or "")
+            and "championship edition dx" in (g.get("title") or "").casefold()
+        ]
+        if len(base) == 1:
+            return base[0]
+    return None
 
 
 class MobyClient:
@@ -261,9 +414,7 @@ class MobyClient:
         if not games:
             return MobyResult("no_match", "moby_no_match", None, None, None, None)
 
-        normalized_query = search_title.casefold()
-        exact = [g for g in games if (g.get("title") or "").casefold() == normalized_query]
-        chosen = exact[0] if len(exact) == 1 else (games[0] if len(games) == 1 else None)
+        chosen = pick_moby_search_game(search_title, games)
         if chosen is None:
             return MobyResult(
                 "ambiguous",
@@ -336,9 +487,11 @@ class MobyClient:
         if all_developers:
             metadata["developers"] = all_developers
 
+        attach_official_ad_blurb(metadata, self, platform_ids, self.cfg)
         finalize_moby_metadata(metadata)
 
-        if not description:
+        has_body = bool((metadata.get("description_plain") or metadata.get("official_ad_blurb_plain") or "").strip())
+        if not has_body:
             return MobyResult(
                 "incomplete",
                 "moby_metadata_incomplete",
@@ -379,7 +532,18 @@ def resolve_for_game(
         client = MobyClient(moby_cfg, cred_path)
         if moby_game_id is not None:
             return client.resolve_by_id(int(moby_game_id), search)
-        return client.resolve(search)
+        best: MobyResult | None = None
+        for candidate in moby_search_title_candidates(search):
+            result = client.resolve(candidate)
+            if result.status in ("ok", "incomplete"):
+                return result
+            if result.status == "ambiguous" and (
+                best is None or best.status in ("no_match", "error")
+            ):
+                best = result
+            if best is None or (best.status == "no_match" and result.moby_game_id):
+                best = result
+        return best if best is not None else MobyResult("no_match", "moby_no_match", None, None, None, None)
     except RuntimeError as e:
         if "moby_credentials_missing" in str(e):
             return MobyResult("skipped", None, None, None, {"note": "no credentials file"}, None)
