@@ -18,22 +18,20 @@ source /path/to/hitsave-archiver-config/host.env
 
 Reuse an existing DIP tree by pointing `HOST_OUTPUT` at that directory before compose or batch scripts.
 
-## Batch configs (repo)
+## Batch configs (local, not in git)
 
-- `config/preservation/batch-repcopies-s.yml` — Representation_Copies/S (25 games)
-- `config/preservation/batch-repcopies-t.yml` — Representation_Copies/T (25 games)
-- `config/preservation/pilot-game.yaml` — single-game WoG1 pilot (`pilot-wog1.tar`)
-
-Expand manifests (once per batch, or after changing `select`):
+Batch manifests are **operator-local** (see `AGENTS.md`). Start from the template:
 
 ```bash
-cd hitsave-archiver
+cp config/preservation/batch.yml.example config/preservation/batch-my-run.yml
+# edit select / paths, then:
 python3 scripts/sync-preservation-config.py
-./scripts/batch-expand-preservation.sh config/preservation/batch-repcopies-s.yml
-./scripts/batch-expand-preservation.sh config/preservation/batch-repcopies-t.yml
+./scripts/batch-expand-preservation.sh config/preservation/batch-my-run.yml
 ```
 
 Generated per-game YAML lives under `config/preservation/generated/<batch_key>/`.
+
+Single-game pilot (committed): `config/preservation/pilot-game.yaml` → `pilot-wog1.tar`.
 
 ## Full E2E: ingest + Omeka upload
 
@@ -42,8 +40,7 @@ Test Omeka must be running (`run-omeka-test.sh` in **hitsave-omeka-test**).
 ```bash
 cd hitsave-archiver
 docker compose up -d postgres clamav
-bash scripts/run-batch-resume-omeka.sh config/preservation/batch-repcopies-s.yml
-bash scripts/run-batch-resume-omeka.sh config/preservation/batch-repcopies-t.yml
+bash scripts/run-batch-resume-omeka.sh config/preservation/batch-my-run.yml
 docker compose run --rm -T ingest-worker /config/preservation/pilot-game.yaml </dev/null
 docker compose run --rm -T omeka-uploader pilot-wog1 /config/preservation/pilot-game.yaml </dev/null
 ```
@@ -53,7 +50,7 @@ docker compose run --rm -T omeka-uploader pilot-wog1 /config/preservation/pilot-
 ### Ingest only (ledger / AIP, no new Omeka items)
 
 ```bash
-bash scripts/run-batch-resume-omeka.sh --ingest-only config/preservation/batch-repcopies-s.yml
+bash scripts/run-batch-resume-omeka.sh --ingest-only config/preservation/batch-my-run.yml
 ```
 
 ## Upload only (DIP .tar already on disk)
@@ -61,14 +58,13 @@ bash scripts/run-batch-resume-omeka.sh --ingest-only config/preservation/batch-r
 When DIPs exist under `$HOST_OUTPUT/dip/…` and you only need Omeka items:
 
 ```bash
-bash scripts/upload-manifest-dips-omeka.sh config/preservation/batch-repcopies-s.yml
-bash scripts/upload-manifest-dips-omeka.sh config/preservation/batch-repcopies-t.yml
+bash scripts/upload-manifest-dips-omeka.sh config/preservation/batch-my-run.yml
 bash scripts/upload-manifest-dips-omeka.sh --pilot
 ```
 
 Log: `.generated/upload-manifest-dips-omeka.log` (override with `HITSAVE_UPLOAD_LOG`).
 
-**Note:** `docker compose run` must use `-T` and `</dev/null` so Compose does not consume the manifest stdin (see script).
+**Note:** `docker compose run` must use `-T` and `</dev/null>` so Compose does not consume the manifest stdin (see script).
 
 ## Verify
 

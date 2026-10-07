@@ -23,4 +23,4 @@ CI=1 ./scripts/test-submission-security-fixtures.sh
 
 Ship public changes via PR when this repo uses branch protection; push private config only to **hitsave-archiver-config** (private remote).
 
-**Do not commit** operator-specific preservation batch manifests under `config/preservation/` (real tank paths, one-off game lists, local batch names). Use `batch.yml.example` and private config or an untracked local file. Never commit `data/` from test runs. Legacy `batch-repcopies-*.yml` files predate this rule; do not add new batch YAML to git.
+**Do not commit** operator-specific preservation batch manifests under `config/preservation/` (real tank paths, one-off game lists, local batch names). Copy `batch.yml.example` to a local `batch.yml` or another ignored `batch-*.yml` path. Never commit `data/` from test runs.

@@ -1,9 +1,0 @@
-# E2E batch: 25 folders from Representation_Copies/T (see docs/e2e-preservation-batch.md).
-batch_key: repcopies-t-25
-source_subpath: Representation_Copies/T
-select:
-  min_bytes: 1048576
-  max_bytes: 524288000
-  limit: 25
-  sort_by: size
-omeka_item_title_suffix: " — Representation Copies (T batch test)"
