@@ -2,7 +2,7 @@
 
 Public preservation machinery for [HitSave](https://hitsave.org): press-material and portable zip ingest, E-ARK AIP/DIP packaging, ClamAV scanning, optional Wasabi AIP upload, and Omeka S DIP upload via REST.
 
-**Credentials never belong in this repo.** Operator secrets use a separate checkout mounted at runtime; see `docs/public-repos.md`.
+**Credentials never belong in this repo.** Operator secrets use a separate checkout mounted at runtime; build it from `config/**/*.example` — see **[docs/operator-config.md](docs/operator-config.md)** and [docs/public-repos.md](docs/public-repos.md).
 
 Related public repos:
 
@@ -28,8 +28,8 @@ Omeka REST upload settings: `config/omeka-uploader.yaml` (points at test or prod
 git clone https://github.com/hitsave/hitsave-archiver.git
 cd hitsave-archiver
 
-# Placeholder secrets for local/CI (real keys go in the private repo):
-./scripts/ensure-local-config.sh   # creates ../hitsave-archiver-config from *.example if missing
+# Bootstrap private config from config/secrets/*.example and database.yaml.example:
+./scripts/ensure-local-config.sh   # see docs/operator-config.md for the full file list
 
 # Submission security fixtures (Docker):
 CI=1 ./scripts/test-submission-security-fixtures.sh

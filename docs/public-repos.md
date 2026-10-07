@@ -6,13 +6,13 @@
 |------|------------|----------|
 | [**hitsave-archiver**](https://github.com/hitsave/hitsave-archiver) | Public | Ingest worker, E-ARK scripts, Compose stack, schema, CI fixtures |
 | [**hitsave-archiver-config**](https://github.com/hitsave/hitsave-archiver-config) | **Private** | Wasabi, Omeka API, MobyGames credentials; `preservation/database.yaml` |
-| [**hitsave-omeka-test**](https://github.com/hitsave/hitsave-omeka-test) | Public | Local Omeka S stack, theme/DIP QA, prod mirror scripts, fixture DIPs |
+| [**hitsave-omeka-test**](https://github.com/hitsave/hitsave-omeka-test) | Public | Local Omeka S stack, theme/DIP QA, prod mirror scripts |
 | [**hitsave-archive-theme**](https://github.com/hitsave/hitsave-archive-theme) | Public | Foundation overlay theme build |
 | [**omeka-dip-viewer**](https://github.com/hitsave/omeka-dip-viewer) | Public | Omeka S module `OmekaDipViewer` — E-ARK DIP `.tar` browse (`omeka_dip_package`) |
 
 ## Never commit to the public archiver
 
-Real credentials live only in **hitsave-archiver-config** (mounted at `/config/secrets` and as `preservation/database.yaml`). The public repo keeps `*.example` templates under `config/secrets/` and `config/preservation/database.yaml.example`.
+Real credentials live only in **hitsave-archiver-config** (mounted at `/config/secrets` and as `preservation/database.yaml`). Templates to create that tree: **[operator-config.md](./operator-config.md)** (`config/secrets/*.example`, `config/preservation/database.yaml.example`, `config/host.env.example`).
 
 Gitignored on the public archiver clone (operator batch configs):
 

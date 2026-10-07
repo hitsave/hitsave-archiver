@@ -35,4 +35,6 @@ copy_if_missing "$ROOT/config/preservation/database.yaml.example" "$ROOT/config/
 HITSAVE_PRIVATE_CONFIG="$PRIVATE" python3 "$ROOT/scripts/sync-preservation-config.py"
 
 echo "Private config root: $PRIVATE"
-echo "Local Omeka test stack: clone hitsave-omeka-test (HITSAVE_OMEKA_TEST_ROOT)."
+echo "Example file map: docs/operator-config.md"
+echo "Host paths: copy config/host.env.example → \$PRIVATE/host.env, edit, source before compose."
+echo "Local Omeka test stack: clone hitsave-omeka-test (see that repo docs/build-real-dip.md)."
