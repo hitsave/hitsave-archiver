@@ -22,6 +22,8 @@ Docker Compose mounts the private tree at `/config/secrets` and overlays `/confi
 
 Omeka REST upload settings: `config/omeka-uploader.yaml` (points at test or prod API via private credentials).
 
+**E2E on Saturn / tank output:** [docs/e2e-preservation-batch.md](docs/e2e-preservation-batch.md) (batch ingest, upload-only manifest script, `HOST_OUTPUT=/tank/hitsave-archiver/output`).
+
 ## Quick start (dev / CI)
 
 ```bash

@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 # Resume batch ingest + Omeka upload (uploader skips rows that verify in Omeka).
+#   --ingest-only   Run ingest-worker only (no Omeka upload).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+
+INGEST_ONLY=0
+if [[ "${1:-}" == "--ingest-only" ]]; then
+  INGEST_ONLY=1
+  shift
+fi
 
 BATCH="${1:-config/preservation/batch.yml}"
 MANIFEST="config/preservation/generated/$(python3 -c "import yaml; from pathlib import Path; print(yaml.safe_load(Path('$BATCH').read_text())['batch_key'])")/manifest.yaml"
@@ -23,10 +30,12 @@ for cfg in "${CONFIGS[@]}"; do
     "SELECT status FROM game_ingest WHERE game_key='${key}' LIMIT 1" 2>/dev/null | tr -d ' ' || true)"
   if [[ "$status" != "complete" ]]; then
     echo "=== ingest: $key ==="
-    docker compose run --rm ingest-worker "/config/preservation/${cfg#config/preservation/}"
+    docker compose run --rm -T ingest-worker "/config/preservation/${cfg#config/preservation/}" </dev/null
   fi
-  echo "=== omeka upload: $key ==="
-  docker compose run --rm omeka-uploader "$key" "/config/preservation/${cfg#config/preservation/}"
+  if [[ "$INGEST_ONLY" -eq 0 ]]; then
+    echo "=== omeka upload: $key ==="
+    docker compose run --rm -T omeka-uploader "$key" "/config/preservation/${cfg#config/preservation/}" </dev/null
+  fi
 done
 
 echo "Resume complete."

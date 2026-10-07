@@ -1,0 +1,75 @@
+# E2E preservation batch (tank DIPs + test Omeka)
+
+Use this when **`hitsave-archiver`**, **`hitsave-archiver-config`**, and **`hitsave-omeka-test`** are set up on one host (see [hitsave-omeka-test `docs/build-real-dip.md`](https://github.com/hitsave/hitsave-omeka-test/blob/main/docs/build-real-dip.md)).
+
+## Paths
+
+| Host path | Typical role |
+|-----------|----------------|
+| `/tank/hitsave-archiver/output` | Existing AIP/DIP output from prior batch runs (`HOST_OUTPUT`) |
+| `/tank2/press-material` | Read-only press material for **ingest-worker** (`HOST_PRESS_MATERIAL`) |
+
+In `host.env`:
+
+```bash
+export HOST_OUTPUT=/tank/hitsave-archiver/output
+export HOST_PRESS_MATERIAL=/tank2/press-material
+source ~/hitsave-archiver-config/host.env
+```
+
+## Batch configs (repo)
+
+- `config/preservation/batch-repcopies-s.yml` — Representation_Copies/S (25 games)
+- `config/preservation/batch-repcopies-t.yml` — Representation_Copies/T (25 games)
+- `config/preservation/pilot-game.yaml` — single-game WoG1 pilot (`pilot-wog1.tar`)
+
+Expand manifests (once per batch, or after changing `select`):
+
+```bash
+cd ~/hitsave-archiver
+python3 scripts/sync-preservation-config.py
+./scripts/batch-expand-preservation.sh config/preservation/batch-repcopies-s.yml
+./scripts/batch-expand-preservation.sh config/preservation/batch-repcopies-t.yml
+```
+
+Generated per-game YAML lives under `config/preservation/generated/<batch_key>/`.
+
+## Full E2E: ingest + Omeka upload
+
+Test Omeka must be running (`run-omeka-test.sh` in **hitsave-omeka-test**).
+
+```bash
+cd ~/hitsave-archiver
+docker compose up -d postgres clamav
+bash scripts/run-batch-resume-omeka.sh config/preservation/batch-repcopies-s.yml
+bash scripts/run-batch-resume-omeka.sh config/preservation/batch-repcopies-t.yml
+docker compose run --rm -T ingest-worker /config/preservation/pilot-game.yaml </dev/null
+docker compose run --rm -T omeka-uploader pilot-wog1 /config/preservation/pilot-game.yaml </dev/null
+```
+
+`run-batch-resume-omeka.sh` skips **ingest** when ledger `status=complete`, then runs **omeka-uploader** (skips when the item already verifies in Omeka).
+
+### Ingest only (ledger / AIP, no new Omeka items)
+
+```bash
+bash scripts/run-batch-resume-omeka.sh --ingest-only config/preservation/batch-repcopies-s.yml
+```
+
+## Upload only (DIP .tar already on disk)
+
+When DIPs exist under `$HOST_OUTPUT/dip/…` and you only need Omeka items:
+
+```bash
+bash scripts/upload-manifest-dips-omeka.sh config/preservation/batch-repcopies-s.yml
+bash scripts/upload-manifest-dips-omeka.sh config/preservation/batch-repcopies-t.yml
+bash scripts/upload-manifest-dips-omeka.sh --pilot
+```
+
+Log: `.generated/upload-manifest-dips-omeka.log` (override with `HITSAVE_UPLOAD_LOG`).
+
+**Note:** `docker compose run` must use `-T` and `</dev/null` so Compose does not consume the manifest stdin (see script).
+
+## Verify
+
+- Ledger: `docker compose exec -T postgres psql -U hitsave -d hitsave_ledger -c 'SELECT game_key, status, omeka_item_id FROM game_ingest ORDER BY game_key LIMIT 20;'`
+- Omeka admin: `http://<host>:8088/admin` (site slug from `config/omeka-test/settings.yaml`)

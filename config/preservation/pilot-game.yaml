@@ -1,0 +1,14 @@
+# WoG1 pilot — paths are inside the preservation ingest container.
+source_game_folder: /data/press-material/Varna/Softmax/WoG1
+output_tar: /output/dip/pilot-wog1.tar
+staging_dir: /output/.staging/pilot-wog1
+aip_bag_dir: /output/aip/pilot-wog1
+game_key: pilot-wog1
+omeka_item_title: "War of Genesis (WoG1) — press material pilot"
+max_files: 100
+max_total_bytes: 524288000
+
+preservation:
+  repository_code: hitsave
+  agent_name: HitSave archive ingest
+  agent_version: build-dip-e-ark.py
