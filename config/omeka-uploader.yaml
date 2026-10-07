@@ -5,7 +5,8 @@ api:
   base_url: http://host.docker.internal:8088/api
   credentials_file: secrets/omeka-api-credentials-local.yaml
   site_slug: hitsave-test
-  default_is_public: false
+  # Test E2E: anonymous browse; prod uploads use private config overlay when needed.
+  default_is_public: true
   item_set_title: Press and Marketing Materials
   production_item_set_id: 1459
   dip_ingester: omeka_dip_package

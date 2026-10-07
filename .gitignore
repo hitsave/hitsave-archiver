@@ -5,6 +5,10 @@ config/preservation/generated/
 config/preservation/batch.yml
 config/preservation/game.yml
 config/preservation/batch-*.yaml
+# Local batch manifests (real paths); see batch.yml.example and AGENTS.md
+config/preservation/batch-*.yml
+!config/preservation/batch.yml.example
+data/
 fixtures/submissions-security/bombs/*.zip
 .ci/submissions/
 .ci/output/
