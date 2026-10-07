@@ -13,7 +13,6 @@ COPY packaging/e-ark-schemas /app/packaging/e-ark-schemas
 
 COPY scripts/build-dip-e-ark.py \
     scripts/build-aip-e-ark.py \
-    scripts/rebuild-e-ark-omeka-test.py \
     scripts/validate-e-ark-package.sh \
     scripts/preservation_common.py \
     scripts/normalize_display_title.py \
@@ -21,7 +20,6 @@ COPY scripts/build-dip-e-ark.py \
     scripts/fixity-check.py \
     scripts/read-config-yaml.py \
     scripts/upload-dip-omeka-api.py \
-    scripts/normalize-omeka-item-titles.py \
     scripts/moby_resolve.py \
     scripts/moby_omeka_fields.py \
     scripts/moby_enrich_game.py \

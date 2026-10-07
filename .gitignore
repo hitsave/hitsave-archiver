@@ -1,26 +1,12 @@
 .cursor/
-config/omeka-test/generated.env
-config/omeka-test/local.config.php
-config/omeka-test/mirror/*
-!config/omeka-test/mirror/README.md
-config/omeka-test/omeka-prod-source.yaml
-config/omeka-test/sample-from-prod.yaml
-config/omeka-test/settings.yaml
-config/omeka-test/settings.local.yaml
-config/omeka-test/database.ini
 config/preservation/generated.env
 config/preservation/database.local.yaml
 config/preservation/generated/
 config/preservation/batch.yml
 config/preservation/game.yml
 config/preservation/batch-*.yaml
-config/omeka-test/pilot-game.yaml
-fixtures/dips/.staging/
 fixtures/submissions-security/bombs/*.zip
 .ci/submissions/
 .ci/output/
 __pycache__/
 *.py[cod]
-# Rebuild with scripts/build-fixture-dips.sh / create-dip-from-press-pilot.sh
-fixtures/dips/built/large-sample.tar
-fixtures/dips/built/pilot-wog1.tar

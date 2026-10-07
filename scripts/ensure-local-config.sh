@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Bootstrap operator config: private repo (secrets + database) and optional omeka-test files.
+# Bootstrap operator config: private repo (secrets + database).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PRIVATE="${HITSAVE_PRIVATE_CONFIG:-$ROOT/../hitsave-archiver-config}"
@@ -30,12 +30,9 @@ copy_if_missing "$ROOT/config/secrets/omeka-api-credentials-local.yaml.example" 
 copy_if_missing "$ROOT/config/secrets/omeka-api-credentials-prod.yaml.example" \
   "$PRIVATE/secrets/omeka-api-credentials-prod.yaml"
 copy_if_missing "$ROOT/config/preservation/database.yaml.example" "$PRIVATE/preservation/database.yaml"
-# Public tree keeps a placeholder database.yaml for Docker; private mount overrides at runtime.
 copy_if_missing "$ROOT/config/preservation/database.yaml.example" "$ROOT/config/preservation/database.yaml"
-
-copy_if_missing "$ROOT/config/omeka-test/settings.example.yaml" "$ROOT/config/omeka-test/settings.yaml"
-copy_if_missing "$ROOT/config/omeka-test/database.ini.example" "$ROOT/config/omeka-test/database.ini"
 
 HITSAVE_PRIVATE_CONFIG="$PRIVATE" python3 "$ROOT/scripts/sync-preservation-config.py"
 
 echo "Private config root: $PRIVATE"
+echo "Local Omeka test stack: clone hitsave-omeka-test (HITSAVE_OMEKA_TEST_ROOT)."

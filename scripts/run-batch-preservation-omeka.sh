@@ -10,7 +10,6 @@ if [[ ! -f "$BATCH" ]]; then
 fi
 
 python3 scripts/sync-preservation-config.py
-python3 scripts/sync-docker-config.py
 python3 scripts/batch-expand-preservation.py "$BATCH"
 
 PRIVATE="${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}"

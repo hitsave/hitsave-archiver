@@ -12,6 +12,8 @@ import xml.sax.saxutils as xml_escape
 from dataclasses import dataclass
 from pathlib import Path
 
+import os
+
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,7 +45,13 @@ from preservation_common import (  # noqa: E402
 )
 from normalize_display_title import normalize_display_title  # noqa: E402
 
-DEFAULT_SETTINGS = ROOT / "config" / "omeka-test" / "settings.yaml"
+def _omeka_test_settings_path() -> Path:
+    if os.environ.get("HITSAVE_OMEKA_SETTINGS"):
+        return Path(os.environ["HITSAVE_OMEKA_SETTINGS"])
+    return ROOT.parent / "hitsave-omeka-test" / "config" / "omeka-test" / "settings.yaml"
+
+
+DEFAULT_SETTINGS = _omeka_test_settings_path()
 DEFAULT_VIDEO_EXTENSIONS = [
     "mov",
     "avi",

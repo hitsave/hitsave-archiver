@@ -4,6 +4,7 @@
 
 - **Public:** this repo — no credentials in git.
 - **Private:** `hitsave-archiver-config` — Wasabi, Omeka API, MobyGames, ledger Postgres password.
+- **Omeka QA:** `hitsave-omeka-test` — local MariaDB/Omeka stack (not in this repo).
 - **Theme:** `hitsave-archive-theme` — rebuild/deploy separately.
 
 Compose expects `HITSAVE_PRIVATE_CONFIG` (default sibling `../hitsave-archiver-config`). Run `./scripts/ensure-local-config.sh` after clone.

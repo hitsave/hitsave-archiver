@@ -6,17 +6,21 @@ Public preservation machinery for [HitSave](https://hitsave.org): press-material
 
 Related public repos:
 
+- [`hitsave-omeka-test`](https://github.com/hitsave/hitsave-omeka-test) — local Omeka S QA stack (theme, DipViewer, prod mirror)
 - [`hitsave-archive-theme`](https://github.com/hitsave/hitsave-archive-theme) — Omeka S theme (Foundation overlay)
 - [`omeka-dip-viewer`](https://github.com/hitsave/omeka-dip-viewer) — Omeka S DIP browse module
 
-## Layout (two clones)
+## Layout (three clones)
 
 ```text
 ~/hitsave-archiver/              # this repo (public)
 ~/hitsave-archiver-config/       # secrets + operator database.yaml (private)
+~/hitsave-omeka-test/            # local Omeka on :8088 (optional, for QA / uploader target)
 ```
 
 Docker Compose mounts the private tree at `/config/secrets` and overlays `/config/preservation/database.yaml`. Override the host path with `HITSAVE_PRIVATE_CONFIG` if your private clone is not a sibling directory.
+
+Omeka REST upload settings: `config/omeka-uploader.yaml` (points at test or prod API via private credentials).
 
 ## Quick start (dev / CI)
 
@@ -31,7 +35,7 @@ cd hitsave-archiver
 CI=1 ./scripts/test-submission-security-fixtures.sh
 ```
 
-Production operators clone **both** repos, fill in real files under `hitsave-archiver-config/secrets/`, edit `preservation/database.yaml`, then:
+Production operators clone **archiver + config**, fill in real files under `hitsave-archiver-config/secrets/`, edit `preservation/database.yaml`, then:
 
 ```bash
 export HITSAVE_PRIVATE_CONFIG=/path/to/hitsave-archiver-config
@@ -42,7 +46,9 @@ python3 scripts/sync-preservation-config.py
 docker compose up -d --build
 ```
 
-See `docs/portable-submissions.md`, `docs/preservation-wasabi.md`, and `docs/omeka-production.md`.
+For a local Omeka target, also clone **hitsave-omeka-test** and set `HITSAVE_OMEKA_TEST_ROOT` when using `scripts/run-fresh-test-stack.sh`.
+
+See `docs/portable-submissions.md` and `docs/preservation-wasabi.md`.
 
 ## Saturn (example paths)
 
@@ -50,6 +56,7 @@ See `docs/portable-submissions.md`, `docs/preservation-wasabi.md`, and `docs/ome
 |------|------|
 | `/home/jonas/hitsave-archiver` | Public code checkout |
 | `/home/jonas/hitsave-archiver-config` | Private secrets checkout |
+| `/home/jonas/hitsave-omeka-test` | Local Omeka test stack |
 | `/tank/hitsave-archiver/submissions` | Portable zip intake |
 | `/tank2/press-material` | Press-material source tree |
 | `/tank/hitsave-archiver/output` | AIP/DIP output |
@@ -58,7 +65,7 @@ Set `HITSAVE_PRIVATE_CONFIG` and the `HOST_*` variables in a host env file (not 
 
 ## Config hygiene
 
-- Committed templates: `config/secrets/*.example`, `config/preservation/database.yaml.example`
+- Committed templates: `config/secrets/*.example`, `config/preservation/database.yaml.example`, `config/omeka-uploader.yaml`
 - Before pushing changes, scan for accidental secrets:
 
 ```bash

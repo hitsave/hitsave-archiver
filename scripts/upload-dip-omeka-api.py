@@ -186,7 +186,7 @@ def main() -> None:
     if not dip_path.is_file():
         raise SystemExit(f"DIP not found: {dip_path}")
 
-    api_cfg = load_yaml(CONFIG_ROOT / "omeka-test/omeka-api.yaml")["api"]
+    api_cfg = load_yaml(CONFIG_ROOT / "omeka-uploader.yaml")["api"]
     cred_rel = Path(api_cfg["credentials_file"])
     if cred_rel.parts and cred_rel.parts[0] == "config":
         cred_rel = Path(*cred_rel.parts[1:])
