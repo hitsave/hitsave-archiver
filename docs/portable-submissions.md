@@ -6,7 +6,7 @@ Policy and limits: [`config/preservation/submissions.yaml`](../config/preservati
 
 ## Layout (host)
 
-Create once on Saturn:
+Create once on your preservation host:
 
 ```bash
 sudo mkdir -p /tank/hitsave-archiver/submissions/{incoming,workspace,processed,failed}
@@ -82,7 +82,7 @@ Submissions are **untrusted input** until ingest completes. Controls are layered
 
 ### Trust and placement
 
-- Only operators copy zips onto Saturn; archivists do not get shell or press-material paths.
+- Only operators copy zips onto the preservation host; archivists do not get shell or press-material paths.
 - Extracted data stays under **`/data/submissions/workspace`** (ClamAV mounts this read-only for scanning).
 - Press-material remains read-only on the worker; submissions do not write into `/data/press-material`.
 
@@ -146,7 +146,7 @@ Re-download upstream zips and regenerate synthetics per that README.
 ### Operational checklist
 
 - [ ] Known submitter / ticket reference in manifest `submitter` / `notes`
-- [ ] Ingest on Saturn only (`ingest-submission-incoming.sh`)
+- [ ] Ingest on the preservation host only (`ingest-submission-incoming.sh`)
 - [ ] Inspect `failed/` and ledger `status = failed`
 - [ ] Keep ClamAV image and virus definitions current
 - [ ] Tighten `limits.*` for external partners if needed

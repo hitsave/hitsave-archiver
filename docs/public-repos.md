@@ -40,4 +40,4 @@ Rotate credentials if they ever appeared in public git history.
 
 ## Legacy monorepo
 
-`hitsave-archive-agent` on Saturn was the pre-split working tree; **hitsave-archiver** + **hitsave-omeka-test** are the canonical public code path going forward.
+`hitsave-archive-agent` was the pre-split monorepo checkout; **hitsave-archiver** + **hitsave-omeka-test** are the canonical public code path going forward.

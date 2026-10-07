@@ -50,13 +50,13 @@ For a local Omeka target, also clone **hitsave-omeka-test** and set `HITSAVE_OME
 
 See `docs/portable-submissions.md` and `docs/preservation-wasabi.md`.
 
-## Saturn (example paths)
+## Example host paths
 
 | Path | Role |
 |------|------|
-| `/home/jonas/hitsave-archiver` | Public code checkout |
-| `/home/jonas/hitsave-archiver-config` | Private secrets checkout |
-| `/home/jonas/hitsave-omeka-test` | Local Omeka test stack |
+| `~/hitsave-archiver` | Public code checkout |
+| `~/hitsave-archiver-config` | Private secrets checkout |
+| `~/hitsave-omeka-test` | Local Omeka test stack |
 | `/tank/hitsave-archiver/submissions` | Portable zip intake |
 | `/tank2/press-material` | Press-material source tree |
 | `/tank/hitsave-archiver/output` | AIP/DIP output |
