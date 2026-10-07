@@ -25,6 +25,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from moby_omeka_fields import append_moby_fields_to_payload  # noqa: E402
 from moby_resolve import uses_moby_catalog_data  # noqa: E402
 from normalize_display_title import normalize_display_title  # noqa: E402
+from preservation_common import resolve_game_config  # noqa: E402
 
 
 def load_yaml(path: Path) -> dict:
@@ -181,7 +182,7 @@ def main() -> None:
             raise SystemExit(f"Expected one generated config for {game_key}, found {len(matches)}")
         game_cfg_path = matches[0]
 
-    game_cfg = load_yaml(game_cfg_path)
+    game_cfg = resolve_game_config(load_yaml(game_cfg_path), agent_version="upload-dip-omeka-api.py")
     dip_path = Path(game_cfg["output_tar"])
     if not dip_path.is_file():
         raise SystemExit(f"DIP not found: {dip_path}")

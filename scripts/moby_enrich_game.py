@@ -21,11 +21,15 @@ from moby_resolve import (  # noqa: E402
     resolve_for_game,
     uses_moby_catalog_data,
 )
+from preservation_common import resolve_game_config  # noqa: E402
 
 
 def main() -> None:
     game_cfg_path = Path(sys.argv[1])
-    game_cfg = yaml.safe_load(game_cfg_path.read_text())
+    game_cfg = resolve_game_config(
+        yaml.safe_load(game_cfg_path.read_text()),
+        agent_version="moby_enrich_game.py",
+    )
     game_key = game_cfg["game_key"]
     folder_name = Path(game_cfg["source_game_folder"]).name
     display_title = game_cfg.get("omeka_item_title")
