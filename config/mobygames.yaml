@@ -8,7 +8,7 @@ mobygames:
   min_request_interval_seconds: 1.1
   # earliest_platform: one /games/{id}/platforms/{pid} call; all: merge companies from every platform.
   company_platform_scope: earliest_platform
-  # When Moby has no synopsis, use official ad blurbs (API or platform release text when present).
+  # When Moby has no synopsis: platform release descriptions from /games/{id}/platforms/{pid}, then HTML.
   fetch_ad_blurbs_api: true
   fetch_ad_blurbs_html: true
   # Optional Netscape cookie jar for curl (export from browser if Cloudflare blocks the host).

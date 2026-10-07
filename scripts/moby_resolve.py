@@ -257,36 +257,30 @@ def fetch_official_ad_blurb(
     *,
     moby_url: str | None = None,
 ) -> tuple[str, str]:
-    """Best-effort official ad blurb (Moby catalog or platform release text)."""
+    """Best-effort official ad blurb from documented Moby API fields, then optional HTML."""
     moby_cfg = moby_cfg or {}
     min_chars = int(moby_cfg.get("ad_blurb_min_chars", 80))
     best = ""
     best_source = ""
     if moby_cfg.get("fetch_ad_blurbs_api", True):
-        try:
-            text, source = _ad_blurb_from_api_payload(client._get(f"games/{game_id}/ad-blurbs"))
+        for platform_id in platform_ids:
+            try:
+                plat_detail = client._get(f"games/{game_id}/platforms/{platform_id}")
+            except Exception:
+                continue
+            text, source = _ad_blurb_from_api_payload(plat_detail)
             if len(text) >= min_chars and len(text) > len(best):
                 best, best_source = text, source or "MobyGames"
-        except Exception:
-            pass
-    for platform_id in platform_ids:
-        try:
-            plat_detail = client._get(f"games/{game_id}/platforms/{platform_id}")
-        except Exception:
-            continue
-        text, source = _ad_blurb_from_api_payload(plat_detail)
-        if len(text) >= min_chars and len(text) > len(best):
-            best, best_source = text, source or "MobyGames"
-        for release in plat_detail.get("releases") or []:
-            desc = (release.get("description") or "").strip()
-            if len(desc) < min_chars or desc.casefold() in _RELEASE_DESCRIPTION_SKIP:
-                continue
-            countries = release.get("countries") or []
-            source = "MobyGames platform release"
-            if countries:
-                source = f"MobyGames ({', '.join(countries)})"
-            if len(desc) > len(best):
-                best, best_source = desc, source
+            for release in plat_detail.get("releases") or []:
+                desc = (release.get("description") or "").strip()
+                if len(desc) < min_chars or desc.casefold() in _RELEASE_DESCRIPTION_SKIP:
+                    continue
+                countries = release.get("countries") or []
+                source = "MobyGames platform release"
+                if countries:
+                    source = f"MobyGames ({', '.join(countries)})"
+                if len(desc) > len(best):
+                    best, best_source = desc, source
     if (
         len(best) < min_chars
         and moby_cfg.get("fetch_ad_blurbs_html", True)
