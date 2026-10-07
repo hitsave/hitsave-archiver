@@ -1,6 +1,10 @@
 .cursor/
 config/omeka-test/generated.env
 config/omeka-test/local.config.php
+config/omeka-test/mirror/*
+!config/omeka-test/mirror/README.md
+config/omeka-test/omeka-prod-source.yaml
+config/omeka-test/sample-from-prod.yaml
 config/omeka-test/settings.yaml
 config/omeka-test/settings.local.yaml
 config/omeka-test/database.ini

@@ -15,6 +15,7 @@ except ImportError as e:
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "config/omeka-test/omeka-prod-source.yaml"
+SOURCE_EXAMPLE = ROOT / "config/omeka-test/omeka-prod-source.yaml.example"
 OUT = ROOT / "config/omeka-test/mirror/prod-archive.yaml"
 OUT_JSON = ROOT / "config/omeka-test/mirror/prod-archive.json"
 def load_creds(prod_cfg: dict) -> dict:
@@ -35,6 +36,11 @@ def property_term(session: requests.Session, base: str, params: dict, prop_id: i
 
 
 def main() -> None:
+    if not SOURCE.is_file():
+        raise SystemExit(
+            f"Missing {SOURCE.relative_to(ROOT)} — copy from {SOURCE_EXAMPLE.name} and edit."
+        )
+    OUT.parent.mkdir(parents=True, exist_ok=True)
     src = yaml.safe_load(SOURCE.read_text())
     prod = src["production"]
     creds = load_creds(prod)

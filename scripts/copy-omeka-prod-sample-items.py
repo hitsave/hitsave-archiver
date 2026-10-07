@@ -17,6 +17,7 @@ except ImportError as exc:
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = REPO_ROOT / "config/omeka-test/sample-from-prod.yaml"
+DEFAULT_CONFIG_EXAMPLE = REPO_ROOT / "config/omeka-test/sample-from-prod.yaml.example"
 
 SKIP_ITEM_KEYS = {
     "@context",
@@ -281,6 +282,10 @@ def copy_item(
 
 def main() -> None:
     config_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_CONFIG
+    if not config_path.is_file():
+        raise SystemExit(
+            f"Missing {config_path} — copy from {DEFAULT_CONFIG_EXAMPLE.name} and edit."
+        )
     cfg = load_yaml(config_path)
     prod_cfg = cfg["production"]
     prod_base = prod_cfg["base_url"].rstrip("/")

@@ -16,6 +16,8 @@ Real credentials live only in **hitsave-archiver-config** (mounted at `/config/s
 Gitignored on the public clone (local omeka-test stack only):
 
 - `config/omeka-test/settings.yaml`, `database.ini`, `generated.env`
+- `config/omeka-test/mirror/*` (prod pull output), `omeka-prod-source.yaml`, `sample-from-prod.yaml`
+- `config/preservation/batch.yml`, `game.yml`, `generated/` (batch expand output)
 - `config/preservation/generated.env` (rendered from private `database.yaml`)
 
 CI uses committed placeholders under `.ci/private-config/` (no live keys).
