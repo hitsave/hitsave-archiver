@@ -1,21 +1,22 @@
-# E2E preservation batch (tank DIPs + test Omeka)
+# E2E preservation batch (multi-game + test Omeka)
 
-Use this when **`hitsave-archiver`**, **`hitsave-archiver-config`**, and **`hitsave-omeka-test`** are set up on one host (see [hitsave-omeka-test `docs/build-real-dip.md`](https://github.com/hitsave/hitsave-omeka-test/blob/main/docs/build-real-dip.md)).
+Use when **`hitsave-archiver`**, **`hitsave-archiver-config`**, and **`hitsave-omeka-test`** run on one machine (see [hitsave-omeka-test `docs/build-real-dip.md`](https://github.com/hitsave/hitsave-omeka-test/blob/main/docs/build-real-dip.md)).
 
-## Paths
+## Host paths (private `host.env`, not in git)
 
-| Host path | Typical role |
-|-----------|----------------|
-| `/tank/hitsave-archiver/output` | Existing AIP/DIP output from prior batch runs (`HOST_OUTPUT`) |
-| `/tank2/press-material` | Read-only press material for **ingest-worker** (`HOST_PRESS_MATERIAL`) |
+Set in **`hitsave-archiver-config/host.env`** (from `config/host.env.example` in this repo):
 
-In `host.env`:
+| Variable | Role |
+|----------|------|
+| `HOST_OUTPUT` | Host directory mounted as `/output` (AIP/DIP trees, including `dip/…`) |
+| `HOST_PRESS_MATERIAL` | Press material mounted read-only at `/data/press-material` |
+| `HITSAVE_PRIVATE_CONFIG` | Private config checkout (secrets, operator `database.yaml`) |
 
 ```bash
-export HOST_OUTPUT=/tank/hitsave-archiver/output
-export HOST_PRESS_MATERIAL=/tank2/press-material
-source ~/hitsave-archiver-config/host.env
+source /path/to/hitsave-archiver-config/host.env
 ```
+
+Reuse an existing DIP tree by pointing `HOST_OUTPUT` at that directory before compose or batch scripts.
 
 ## Batch configs (repo)
 
@@ -26,7 +27,7 @@ source ~/hitsave-archiver-config/host.env
 Expand manifests (once per batch, or after changing `select`):
 
 ```bash
-cd ~/hitsave-archiver
+cd hitsave-archiver
 python3 scripts/sync-preservation-config.py
 ./scripts/batch-expand-preservation.sh config/preservation/batch-repcopies-s.yml
 ./scripts/batch-expand-preservation.sh config/preservation/batch-repcopies-t.yml
@@ -39,7 +40,7 @@ Generated per-game YAML lives under `config/preservation/generated/<batch_key>/`
 Test Omeka must be running (`run-omeka-test.sh` in **hitsave-omeka-test**).
 
 ```bash
-cd ~/hitsave-archiver
+cd hitsave-archiver
 docker compose up -d postgres clamav
 bash scripts/run-batch-resume-omeka.sh config/preservation/batch-repcopies-s.yml
 bash scripts/run-batch-resume-omeka.sh config/preservation/batch-repcopies-t.yml
@@ -72,4 +73,4 @@ Log: `.generated/upload-manifest-dips-omeka.log` (override with `HITSAVE_UPLOAD_
 ## Verify
 
 - Ledger: `docker compose exec -T postgres psql -U hitsave -d hitsave_ledger -c 'SELECT game_key, status, omeka_item_id FROM game_ingest ORDER BY game_key LIMIT 20;'`
-- Omeka admin: `http://<host>:8088/admin` (site slug from `config/omeka-test/settings.yaml`)
+- Omeka admin and public site URLs come from **`hitsave-omeka-test`** `config/omeka-test/settings.yaml` (`omeka.public_url`, `omeka.site_slug`).

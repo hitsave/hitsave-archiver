@@ -6,8 +6,8 @@
 # generated manifest under config/preservation/generated/<batch_key>/manifest.yaml.
 #
 # Usage:
-#   source ~/hitsave-archiver-config/host.env
-#   export HOST_OUTPUT=/tank/hitsave-archiver/output   # optional: reuse tank DIPs
+#   source /path/to/hitsave-archiver-config/host.env
+#   export HOST_OUTPUT=/path/to/existing/aip-dip-output   # optional
 #   ./scripts/upload-manifest-dips-omeka.sh config/preservation/batch-repcopies-s.yml
 #   ./scripts/upload-manifest-dips-omeka.sh --pilot   # pilot-wog1 only
 set -euo pipefail
