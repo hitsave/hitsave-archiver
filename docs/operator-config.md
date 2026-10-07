@@ -47,7 +47,7 @@ hitsave-archiver-config/
 | `preservation/database.yaml` | [`config/preservation/database.yaml.example`](../config/preservation/database.yaml.example) |
 | `host.env` (shell exports for `HOST_*`) | [`config/host.env.example`](../config/host.env.example) |
 
-Generic Omeka API template (pick local vs prod filename above): [`config/secrets/omeka-api-credentials.yaml.example`](../config/secrets/omeka-api-credentials.yaml.example).
+Use **local** credentials for test Omeka (`config/omeka-uploader.yaml` → `secrets/omeka-api-credentials-local.yaml`) and **prod** for archive.hitsave.org when running prod-targeted scripts.
 
 Manual copy example:
 
