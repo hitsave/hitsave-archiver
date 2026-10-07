@@ -1,6 +1,6 @@
 # MobyGames API (optional). Copy mobygames-credentials.yaml from example.
 mobygames:
-  # Appended to the auto-generated “… from MobyGames.” sentence (API terms).
+  # Appended only when the attribution sentence does not already mention MobyGames.
   attribution_suffix: "Data by MobyGames.com"
   enabled: true
   api_base: https://api.mobygames.com/v1

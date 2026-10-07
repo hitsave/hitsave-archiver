@@ -77,16 +77,17 @@ def moby_catalog_fields(metadata_json: dict) -> list[str]:
 
 
 def build_moby_attribution_sentence(metadata_json: dict) -> str:
+    field_labels = {
+        "description": "Description",
+        "publisher": "Publisher",
+        "developer": "Developer",
+        "first_release_date": "Release date",
+    }
     fields = metadata_json.get("moby_catalog_fields") or moby_catalog_fields(metadata_json)
     phrases: list[str] = []
-    if "description" in fields:
-        phrases.append("Description")
-    if "publisher" in fields:
-        phrases.append("publisher")
-    if "developer" in fields:
-        phrases.append("developer")
-    if "first_release_date" in fields:
-        phrases.append("release date")
+    for key in ("description", "publisher", "developer", "first_release_date"):
+        if key in fields:
+            phrases.append(field_labels[key])
     if not phrases:
         return "Catalog information from MobyGames."
     if len(phrases) == 1:
@@ -95,7 +96,7 @@ def build_moby_attribution_sentence(metadata_json: dict) -> str:
         body = f"{phrases[0]} and {phrases[1]}"
     else:
         body = ", ".join(phrases[:-1]) + f", and {phrases[-1]}"
-    return f"{body} from MobyGames."
+    return f"{body} information from MobyGames."
 
 
 def moby_attribution_suffix(moby_cfg: dict | None = None) -> str:
@@ -111,6 +112,11 @@ def moby_attribution_text(metadata_json: dict | None, moby_cfg: dict | None = No
         return moby_attribution_suffix(moby_cfg)
     sentence = build_moby_attribution_sentence(metadata_json)
     suffix = moby_attribution_suffix(moby_cfg)
+    if not suffix:
+        return sentence.strip()
+    # Sentence already credits MobyGames (e.g. “… from MobyGames.”); skip redundant suffix.
+    if "mobygames" in sentence.casefold():
+        return sentence.strip()
     if suffix.casefold() in sentence.casefold():
         return sentence.strip()
     return f"{sentence} {suffix}".strip()
