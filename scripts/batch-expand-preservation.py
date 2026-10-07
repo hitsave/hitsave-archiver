@@ -21,6 +21,7 @@ except ImportError:
 APP_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(APP_ROOT / "scripts"))
 from normalize_display_title import normalize_display_title  # noqa: E402
+from preservation_common import batch_output_dirs, load_ingest_config  # noqa: E402
 
 
 def config_root() -> Path:
@@ -47,15 +48,9 @@ def folder_bytes(path: Path) -> int:
     return total
 
 
-def load_ingest_paths(cfg_root: Path) -> dict:
-    ingest_path = cfg_root / "preservation" / "ingest.yaml"
-    data = yaml.safe_load(ingest_path.read_text()) or {}
-    return data.get("paths") or {}
-
-
 def resolve_source_parent(batch: dict, cfg_root: Path) -> Path:
     """Folder to scan: press_material_root + source_subpath (see ingest.yaml)."""
-    paths = load_ingest_paths(cfg_root)
+    paths = load_ingest_config()["paths"]
     press_root = Path(paths.get("press_material_root", "/data/press-material"))
     if batch.get("source_subpath") is not None:
         sub = str(batch["source_subpath"]).strip().strip("/")
@@ -122,10 +117,9 @@ def main() -> None:
             file=sys.stderr,
         )
 
-    out_cfg = batch.get("output") or {}
-    dip_dir = Path(out_cfg.get("dip_dir", f"/output/dip/batch/{batch_key}"))
-    aip_dir = Path(out_cfg.get("aip_dir", f"/output/aip/batch/{batch_key}"))
-    staging_root = Path(out_cfg.get("staging_dir", f"/output/.staging/batch/{batch_key}"))
+    ingest = load_ingest_config()
+    press_root = Path(ingest["paths"]["press_material_root"])
+    batch_output_dirs(batch_key, ingest, batch.get("output") or {})  # validate / override dirs exist in batch.yml
 
     gen_dir = cfg_root / "preservation" / "generated" / batch_key
     gen_dir.mkdir(parents=True, exist_ok=True)
@@ -134,18 +128,16 @@ def main() -> None:
     for size, child in chosen:
         game_key = slug_key(batch_key, child.name)
         container_source = source_parent / child.name
+        try:
+            subpath = container_source.relative_to(press_root).as_posix()
+        except ValueError as exc:
+            raise SystemExit(f"Source folder not under press_material_root: {container_source}") from exc
         raw_title = f"{child.name}{batch.get('omeka_item_title_suffix', '')}"
         title = normalize_display_title(raw_title)
         game_cfg = {
-            "source_game_folder": str(container_source),
-            "output_tar": str(dip_dir / f"{game_key}.tar"),
-            "staging_dir": str(staging_root / game_key),
-            "aip_bag_dir": str(aip_dir / game_key),
+            "source_subpath": subpath,
             "game_key": game_key,
             "omeka_item_title": title,
-            "max_files": batch.get("max_files", 5000),
-            "max_total_bytes": batch.get("max_total_bytes", 5368709120),
-            "preservation": batch.get("preservation") or {},
             "batch_key": batch_key,
         }
         out_path = gen_dir / f"{game_key}.yaml"

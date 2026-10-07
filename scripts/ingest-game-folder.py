@@ -16,6 +16,8 @@ except ImportError as e:
     sys.exit(1)
 
 SCRIPTS = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPTS))
+from preservation_common import resolve_game_config  # noqa: E402
 
 
 def load_yaml(path: Path) -> dict:
@@ -127,7 +129,7 @@ def main() -> None:
         raise SystemExit(f"Missing game config: {game_cfg_path}")
 
     ingest_cfg = load_yaml(ingest_cfg_path)
-    game_cfg = load_yaml(game_cfg_path)
+    game_cfg = resolve_game_config(load_yaml(game_cfg_path), agent_version="ingest-game-folder.py")
 
     db_path = Path(ingest_cfg["database"]["config_file"])
     db_cfg = load_yaml(db_path)["postgres"]

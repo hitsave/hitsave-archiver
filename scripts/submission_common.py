@@ -281,15 +281,16 @@ def build_game_config(
     source_game_folder: Path,
     game_key: str,
     omeka_item_title: str,
-    output_root: Path,
+    paths: dict,
     batch_key: str,
-    max_files: int,
-    max_total_bytes: int,
-    preservation: dict,
     video_access: dict | None = None,
 ) -> dict:
-    dip_dir = output_root / "dip" / "submissions" / batch_key
-    aip_dir = output_root / "aip" / "submissions" / batch_key
+    """Submission layout under output/{dip,aip,.staging}/submissions/{batch_key}/ (not batch/)."""
+    output_root = Path(paths["output_root"])
+    dip_sub = paths.get("dip_subdir", "dip")
+    aip_sub = paths.get("aip_subdir", "aip")
+    dip_dir = output_root / dip_sub / "submissions" / batch_key
+    aip_dir = output_root / aip_sub / "submissions" / batch_key
     staging_root = output_root / ".staging" / "submissions" / batch_key
     cfg: dict = {
         "source_game_folder": str(source_game_folder),
@@ -298,9 +299,6 @@ def build_game_config(
         "aip_bag_dir": str(aip_dir / game_key),
         "game_key": game_key,
         "omeka_item_title": omeka_item_title,
-        "max_files": max_files,
-        "max_total_bytes": max_total_bytes,
-        "preservation": preservation,
         "submission": {"batch_key": batch_key},
     }
     if video_access is not None:

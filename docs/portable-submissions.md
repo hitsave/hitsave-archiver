@@ -123,7 +123,7 @@ docker compose up -d --force-recreate clamav
 
 ### Packaging caps (second line of defense)
 
-Generated game config uses `preservation.max_files` and `preservation.max_total_bytes` so E-ARK builders refuse oversized trees even if checks were bypassed.
+Generated game config picks **`max_files`** and **`max_total_bytes`** from [`config/preservation/ingest.yaml`](../config/preservation/ingest.yaml) `defaults` (see [config-contract.md](./config-contract.md)) so E-ARK builders refuse oversized trees even if zip checks were bypassed. Override only in `submissions.yaml` `preservation` when you need a stricter cap.
 
 ### FFmpeg / video access copies
 

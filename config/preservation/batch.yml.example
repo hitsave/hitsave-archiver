@@ -1,11 +1,8 @@
-# Copy to batch.yml (gitignored) and edit paths for a one-off or scale ingest.
+# Copy to batch.yml (gitignored). See docs/config-contract.md.
 # Expand: ./scripts/batch-expand-preservation.sh config/preservation/batch.yml
 # Run:    bash scripts/run-batch-preservation-omeka.sh config/preservation/batch.yml
-#
-# Source is read-only; outputs go under /output only (see output.*).
 
 batch_key: my-batch-key
-# Subfolder under paths.press_material_root in config/preservation/ingest.yaml (/data/press-material).
 source_subpath: Representation_Copies/T
 
 select:
@@ -14,18 +11,10 @@ select:
   limit: 25
   sort_by: size # size | name
 
-output:
-  dip_dir: /output/dip/batch/my-batch-key
-  aip_dir: /output/aip/batch/my-batch-key
-  staging_dir: /output/.staging/batch/my-batch-key
+# Optional: override default batch output dirs (otherwise derived from ingest.yaml paths.*)
+# output:
+#   dip_dir: /output/dip/batch/my-batch-key
+#   aip_dir: /output/aip/batch/my-batch-key
+#   staging_dir: /output/.staging/batch/my-batch-key
 
-# Appended to each folder name for Omeka item titles (use "" for folder name only).
 omeka_item_title_suffix: ""
-
-max_files: 5000
-max_total_bytes: 5368709120
-
-preservation:
-  repository_code: hitsave
-  agent_name: HitSave archive ingest
-  agent_version: build-dip-e-ark.py

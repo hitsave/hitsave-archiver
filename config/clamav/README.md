@@ -8,7 +8,7 @@
 | `MaxFiles` / `MaxRecursion` | Align with `config/preservation/submissions.yaml` → `limits.max_archive_members` (50000) and archive depth. |
 | `MaxFileSize`, `MaxScanSize`, `StreamMaxLength`, `PCREMaxFileSize` | 512 MiB cap for large press videos; same order of magnitude as `limits.max_member_bytes`. |
 
-Portable submission security notes: [docs/portable-submissions.md](../../docs/portable-submissions.md).
+SSOT map (which file owns limits vs daemon caps): [docs/config-contract.md](../../docs/config-contract.md). Portable submission security: [docs/portable-submissions.md](../../docs/portable-submissions.md).
 
 After editing this file:
 

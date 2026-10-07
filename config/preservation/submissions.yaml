@@ -79,8 +79,7 @@ security:
 
 preservation:
   batch_key: portable-submissions
-  max_files: 5000
-  max_total_bytes: 5368709120
+  # max_files / max_total_bytes: defaults from config/preservation/ingest.yaml
   # Skip ffmpeg access copies for portable intake until operator review (see docs/portable-submissions.md).
   video_access:
     enabled: false

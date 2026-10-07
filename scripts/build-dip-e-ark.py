@@ -41,6 +41,7 @@ from preservation_common import (  # noqa: E402
     mets_file_element,
     new_id,
     premis_event_file,
+    resolve_game_config,
     sha256_file,
 )
 from normalize_display_title import normalize_display_title  # noqa: E402
@@ -504,7 +505,7 @@ def main() -> None:
         raise SystemExit("Usage: build-dip-e-ark.py <game_config.yaml>")
 
     cfg_path = Path(sys.argv[1]).resolve()
-    cfg = load_game_config(cfg_path)
+    cfg = resolve_game_config(load_game_config(cfg_path), agent_version="build-dip-e-ark.py")
     source = Path(cfg["source_game_folder"]).resolve()
     if not source.is_dir():
         raise SystemExit(f"Source not found: {source}")
@@ -514,10 +515,8 @@ def main() -> None:
     title = normalize_display_title(cfg.get("omeka_item_title") or source.name)
     package_uuid = cfg.get("package_uuid") or str(uuid.uuid4())
     preservation = cfg.get("preservation") or {}
-    if isinstance(preservation, dict):
-        preservation = {**preservation, "agent_version": "build-dip-e-ark.py"}
-    max_files = int(cfg.get("max_files", 100))
-    max_bytes = int(cfg.get("max_total_bytes", 524288000))
+    max_files = int(cfg["max_files"])
+    max_bytes = int(cfg["max_total_bytes"])
     video_cfg = load_video_access_cfg(cfg)
 
     build_dip_tar(

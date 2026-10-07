@@ -1,18 +1,15 @@
-# Copy to game.yml (gitignored) for a single press-material folder ingest.
-# Run: docker compose run --rm ingest-worker /config/preservation/game.yml
+# Copy to game.yml (gitignored). Paths and limits come from config/preservation/ingest.yaml
+# via resolve_game_config (see docs/config-contract.md).
 #
-# Paths below are inside the ingest-worker container.
+# Run: docker compose run --rm ingest-worker /config/preservation/game.yml
 
-source_game_folder: /data/press-material/Example/Publisher/GameFolder
-output_tar: /output/dip/example-game.tar
-staging_dir: /output/.staging/example-game
-aip_bag_dir: /output/aip/example-game
+source_subpath: Example/Publisher/GameFolder
 game_key: example-game
 omeka_item_title: "Example Game — press material"
-max_files: 5000
-max_total_bytes: 5368709120
 
-preservation:
-  repository_code: hitsave
-  agent_name: HitSave archive ingest
-  agent_version: build-dip-e-ark.py
+# Optional overrides (container paths):
+# output_tar: /output/dip/example-game.tar
+# staging_dir: /output/.staging/example-game
+# aip_bag_dir: /output/aip/example-game
+# max_files: 5000
+# max_total_bytes: 5368709120

@@ -1,4 +1,5 @@
-# Preservation ingest worker (paths inside containers).
+# Preservation ingest worker (paths inside containers). SSOT for container paths, ingest
+# defaults, and preservation agent metadata — see docs/config-contract.md.
 # Portable zip intake: config/preservation/submissions.yaml and docs/portable-submissions.md
 paths:
   press_material_root: /data/press-material
@@ -12,6 +13,10 @@ clamav:
   host: clamav
   port: 3310
   connect_timeout_seconds: 120
+
+defaults:
+  max_files: 5000
+  max_total_bytes: 5368709120
 
 preservation:
   repository_code: hitsave

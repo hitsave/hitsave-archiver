@@ -31,6 +31,7 @@ from submission_common import (  # noqa: E402
     validate_allowlist,
 )
 from normalize_display_title import normalize_display_title  # noqa: E402
+from preservation_common import resolve_game_config  # noqa: E402
 
 
 def load_yaml(path: Path) -> dict:
@@ -156,12 +157,8 @@ def main() -> None:
         title_raw = args.title or manifest.omeka_item_title or zip_path.stem.replace("_", " ")
         omeka_title = normalize_display_title(title_raw)
 
-        pres = dict(ingest_cfg.get("preservation") or {})
-        pres.setdefault("agent_version", "ingest-submission.py")
         batch_key = str((sub_cfg.get("preservation") or {}).get("batch_key") or "portable-submissions")
         pres_block = sub_cfg.get("preservation") or {}
-        max_files = int(pres_block.get("max_files", 5000))
-        max_total_bytes = int(pres_block.get("max_total_bytes", 5368709120))
         video_access = pres_block.get("video_access")
         if isinstance(video_access, dict):
             video_access = dict(video_access)
@@ -172,13 +169,15 @@ def main() -> None:
             source_game_folder=source_folder,
             game_key=game_key,
             omeka_item_title=omeka_title,
-            output_root=paths["output_root"],
+            paths=ingest_cfg["paths"],
             batch_key=batch_key,
-            max_files=max_files,
-            max_total_bytes=max_total_bytes,
-            preservation=pres,
             video_access=video_access,
         )
+        game_cfg = resolve_game_config(game_cfg, agent_version="ingest-submission.py")
+        if pres_block.get("max_files") is not None:
+            game_cfg["max_files"] = int(pres_block["max_files"])
+        if pres_block.get("max_total_bytes") is not None:
+            game_cfg["max_total_bytes"] = int(pres_block["max_total_bytes"])
         if manifest.material_type or manifest.submitter or manifest.notes:
             game_cfg["submission"].update(
                 {

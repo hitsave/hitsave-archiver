@@ -1,5 +1,7 @@
 # Operator config — private checkout and examples
 
+Config SSOT map (paths, defaults, which file owns what): **[config-contract.md](./config-contract.md)**.
+
 Preservation Compose mounts a **private config directory** at `/config/secrets` and overlays `/config/preservation/database.yaml`. That directory is **not** committed to this public repo. Operators keep it in a separate checkout ([**hitsave-archiver-config**](https://github.com/hitsave/hitsave-archiver-config) for Hit Save, or any path you set with `HITSAVE_PRIVATE_CONFIG`).
 
 All **templates** to build that layout live **here**, under `config/**/*.example` (plus host path exports below).

@@ -12,7 +12,7 @@
 
 ## Never commit to the public archiver
 
-Real credentials live only in **hitsave-archiver-config** (mounted at `/config/secrets` and as `preservation/database.yaml`). Templates to create that tree: **[operator-config.md](./operator-config.md)** (`config/secrets/*.example`, `config/preservation/database.yaml.example`, `config/host.env.example`).
+Real credentials live only in **hitsave-archiver-config** (mounted at `/config/secrets` and as `preservation/database.yaml`). Templates to create that tree: **[operator-config.md](./operator-config.md)** (`config/secrets/*.example`, `config/preservation/database.yaml.example`, `config/host.env.example`). Committed policy YAML (paths, limits, upload targets): **[config-contract.md](./config-contract.md)**.
 
 Gitignored on the public archiver clone (operator batch configs):
 
