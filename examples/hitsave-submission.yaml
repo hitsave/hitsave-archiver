@@ -1,0 +1,7 @@
+# Optional manifest at the root of a submission zip (alongside game folders/files).
+# Helps archivists set a stable game_key and Omeka title without operator flags.
+game_key: mygame-press-2026
+omeka_item_title: "My Game — press and marketing materials"
+material_type: press
+submitter: archivist@example.org
+notes: Received from publisher; includes high-res box art.

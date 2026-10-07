@@ -1,0 +1,94 @@
+# Preservation ingest stack (Postgres ledger, ClamAV, ingest worker, Omeka DIP uploader, status UI).
+# Secrets and operator database.yaml: sibling private repo hitsave-archiver-config (see README).
+name: hitsave-preservation
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - config/preservation/generated.env
+    volumes:
+      - ledger_data:/var/lib/postgresql/data
+      - ./schema:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    volumes:
+      - clamav_data:/var/lib/clamav
+      - ./config/clamav/clamd.conf:/etc/clamav/clamd.conf:ro
+      - ${HOST_PRESS_MATERIAL:-./data/press-material}:/data/press-material:ro
+      - ${HOST_SUBMISSIONS:-./data/submissions}:/data/submissions:ro
+
+  ingest-worker:
+    build:
+      context: .
+      dockerfile: ingest-worker/Dockerfile
+    volumes:
+      - ./config:/config:ro
+      - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/secrets:/config/secrets:ro
+      - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/preservation/database.yaml:/config/preservation/database.yaml:ro
+      - ./fixtures:/fixtures
+      - ${HOST_PRESS_MATERIAL:-./data/press-material}:/data/press-material:ro
+      - ${HOST_SUBMISSIONS:-./data/submissions}:/data/submissions
+      - ${HOST_OUTPUT:-./data/output}:/output
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clamav:
+        condition: service_started
+
+  omeka-uploader:
+    build:
+      context: .
+      dockerfile: ingest-worker/Dockerfile
+    entrypoint: ["python", "/app/scripts/upload-dip-omeka-api.py"]
+    environment:
+      HITSAVE_CONFIG_ROOT: /config
+    volumes:
+      - ./config:/config:ro
+      - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/secrets:/config/secrets:ro
+      - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/preservation/database.yaml:/config/preservation/database.yaml:ro
+      - ${HOST_OUTPUT:-./data/output}:/output:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  status-web:
+    build:
+      context: .
+      dockerfile: status-web/Dockerfile
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./config:/config:ro
+      - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/preservation/database.yaml:/config/preservation/database.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  fixity-cron:
+    build:
+      context: .
+      dockerfile: ingest-worker/Dockerfile
+    entrypoint: ["python", "/app/scripts/fixity-check.py"]
+    profiles: ["fixity"]
+    volumes:
+      - ./config/preservation:/config/preservation:ro
+      - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/preservation/database.yaml:/config/preservation/database.yaml:ro
+      - ${HOST_OUTPUT:-./data/output}:/output:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  ledger_data:
+  clamav_data:

@@ -1,0 +1,86 @@
+# Portable submission intake (zip → unpack → same E-ARK AIP/DIP pipeline as press-material ingest).
+# Planned zip layout rules (folder vs filename vs quarantine): docs/submission-zip-layout-standard.md
+# Paths are inside the ingest-worker / ClamAV containers unless noted.
+paths:
+  root: /data/submissions
+  incoming: incoming
+  workspace: workspace
+  processed: processed
+  failed: failed
+  # Per-submission game YAML for ingest-game-folder.py (on output volume, writable).
+  game_config_dir: /output/submissions/game-configs
+
+limits:
+  max_zip_bytes: 5368709120
+  # Declared total in zip central directory (pre-extract).
+  max_uncompressed_bytes: 10737418240
+  # Actual bytes written during extract (zip bomb / liar metadata).
+  max_extracted_bytes: 10737418240
+  max_archive_members: 50000
+  max_path_length: 240
+  max_member_bytes: 536870912
+  max_manifest_bytes: 65536
+
+# Optional manifest at zip root (see examples/hitsave-submission.yaml).
+manifest_filenames:
+  - hitsave-submission.yaml
+  - hitsave-submission.yml
+
+security:
+  # Reject zip members that look like nested archives (still scanned as blobs if present).
+  reject_nested_archives: true
+  nested_archive_extensions:
+    - .zip
+    - .7z
+    - .rar
+    - .tar
+    - .tgz
+    - .gz
+    - .bz2
+    - .xz
+  # Empty list disables extension checks. Lowercase with leading dot.
+  allowed_extensions:
+    - .jpg
+    - .jpeg
+    - .png
+    - .gif
+    - .webp
+    - .bmp
+    - .tif
+    - .tiff
+    - .pdf
+    - .txt
+    - .md
+    - .rtf
+    - .doc
+    - .docx
+    - .xls
+    - .xlsx
+    - .ppt
+    - .pptx
+    - .csv
+    - .xml
+    - .yaml
+    - .yml
+    - .mp4
+    - .mov
+    - .avi
+    - .mkv
+    - .wmv
+    - .webm
+    - .mpg
+    - .mpeg
+    - .m4v
+    - .wav
+    - .mp3
+    - .psd
+    - .eps
+    - .svg
+
+preservation:
+  batch_key: portable-submissions
+  max_files: 5000
+  max_total_bytes: 5368709120
+  # Skip ffmpeg access copies for portable intake until operator review (see docs/portable-submissions.md).
+  video_access:
+    enabled: false

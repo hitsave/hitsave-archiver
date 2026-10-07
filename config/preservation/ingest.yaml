@@ -1,0 +1,33 @@
+# Preservation ingest worker (paths inside containers).
+# Portable zip intake: config/preservation/submissions.yaml and docs/portable-submissions.md
+paths:
+  press_material_root: /data/press-material
+  output_root: /output
+  dip_subdir: dip
+  aip_subdir: aip
+  processed_subdir: processed
+  quarantine_subdir: quarantine
+
+clamav:
+  host: clamav
+  port: 3310
+  connect_timeout_seconds: 120
+
+preservation:
+  repository_code: hitsave
+  agent_name: HitSave archive ingest
+  agent_version: ingest-game-folder.py
+
+database:
+  config_file: /config/preservation/database.yaml
+
+# E-ARK AIPs: one S3 prefix per game (unpacked package root). Enable wasabi in private ops config if needed.
+wasabi:
+  enabled: false
+  # Live credentials: private repo → mounted at /config/secrets/ (see README).
+  credentials_file: secrets/wasabi-credentials.yaml
+  endpoint: https://s3.us-east-1.wasabisys.com
+  region: us-east-1
+  bucket: your-aip-bucket-name
+  prefix: press-material/
+  verify_upload: true

@@ -1,0 +1,8 @@
+server:
+  host: 0.0.0.0
+  port: 8090
+database:
+  config_file: /config/preservation/database.yaml
+omeka:
+  public_admin_base: http://127.0.0.1:8088/admin
+  public_site_base: http://127.0.0.1:8088/s/hitsave-test

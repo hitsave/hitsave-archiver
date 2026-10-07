@@ -1,0 +1,8 @@
+# Ledger Postgres (preservation stack). Copy to database.yaml (gitignored).
+# Optional overrides: database.local.yaml (gitignored), merged by sync-preservation-config.py
+postgres:
+  host: postgres
+  port: 5432
+  database: hitsave_ledger
+  user: hitsave
+  password: change_me_postgres_password

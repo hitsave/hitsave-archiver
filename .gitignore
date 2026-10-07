@@ -1,0 +1,17 @@
+.cursor/
+config/omeka-test/generated.env
+config/omeka-test/settings.yaml
+config/omeka-test/settings.local.yaml
+config/omeka-test/database.ini
+config/preservation/generated.env
+config/preservation/database.local.yaml
+config/preservation/generated/
+fixtures/dips/.staging/
+fixtures/submissions-security/bombs/*.zip
+.ci/submissions/
+.ci/output/
+__pycache__/
+*.py[cod]
+# Rebuild with scripts/build-fixture-dips.sh / create-dip-from-press-pilot.sh
+fixtures/dips/built/large-sample.tar
+fixtures/dips/built/pilot-wog1.tar

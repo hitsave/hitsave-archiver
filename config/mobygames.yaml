@@ -1,0 +1,13 @@
+# MobyGames API (optional). Copy mobygames-credentials.yaml from example.
+mobygames:
+  # Appended to the auto-generated “… from MobyGames.” sentence (API terms).
+  attribution_suffix: "Data by MobyGames.com"
+  enabled: true
+  api_base: https://api.mobygames.com/v1
+  credentials_file: secrets/mobygames-credentials.yaml
+  min_request_interval_seconds: 1.1
+  # earliest_platform: one /games/{id}/platforms/{pid} call; all: merge companies from every platform.
+  company_platform_scope: earliest_platform
+  # Test stack: record failures but still upload to Omeka.
+  block_on_failure: false
+  search_title_from: folder_name

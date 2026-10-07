@@ -1,0 +1,63 @@
+name: submission-security
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/submission_common.py"
+      - "scripts/ingest-submission.py"
+      - "scripts/test-submission-security-fixtures.sh"
+      - "scripts/fetch-submission-security-bombs.sh"
+      - "scripts/generate-submission-security-fixtures.py"
+      - "config/preservation/submissions.yaml"
+      - "config/clamav/**"
+      - "fixtures/submissions-security/**"
+      - "docker-compose.yml"
+      - "docker-compose.ci.yml"
+      - "ingest-worker/**"
+      - ".github/workflows/submission-security.yml"
+  pull_request:
+    paths:
+      - "scripts/submission_common.py"
+      - "scripts/ingest-submission.py"
+      - "scripts/test-submission-security-fixtures.sh"
+      - "scripts/fetch-submission-security-bombs.sh"
+      - "scripts/generate-submission-security-fixtures.py"
+      - "config/preservation/submissions.yaml"
+      - "config/clamav/**"
+      - "fixtures/submissions-security/**"
+      - "docker-compose.yml"
+      - "docker-compose.ci.yml"
+      - "ingest-worker/**"
+      - ".github/workflows/submission-security.yml"
+
+jobs:
+  fixtures:
+    runs-on: ubuntu-latest
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch EICAR and zip-slip samples
+        run: |
+          set -euo pipefail
+          FIX=fixtures/submissions-security
+          curl -fsSL -o "$FIX/eicar_com.zip" https://secure.eicar.org/eicar_com.zip
+          curl -fsSL -o "$FIX/zip-slip.zip" \
+            https://raw.githubusercontent.com/snyk/zip-slip-vulnerability/master/archives/zip-slip.zip
+          curl -fsSL -o "$FIX/zip-slip-traversal.zip" \
+            https://files.hexaqa.com/archive/zip-slip-traversal.zip
+          python3 <<'PY'
+          import zipfile
+          from pathlib import Path
+          root = Path("fixtures/submissions-security")
+          inner = root / "eicar_com.zip"
+          with zipfile.ZipFile(root / "eicarcom2.zip", "w") as zf:
+              zf.write(inner, arcname="eicar_com.zip")
+          PY
+
+      - name: Run submission security fixtures (in Docker)
+        run: |
+          export HITSAVE_PRIVATE_CONFIG="$PWD/.ci/private-config"
+          ./scripts/test-submission-security-fixtures.sh

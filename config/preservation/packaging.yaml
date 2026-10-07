@@ -1,0 +1,48 @@
+# Normative packaging for Hit Save press ingest (see docs/preservation-packaging-standard.md).
+#
+# Status: builders are catching up; validators apply to target output, not all legacy pilots.
+
+preservation:
+  # Primary standards (E-ARK / DILCIS CSIP family).
+  aip_profile: E-ARK-AIP
+  dip_profile: E-ARK-DIP
+  csip_version: "2.2.0"
+
+  spec_urls:
+    csip: https://earkcsip.dilcis.eu/
+    aip: https://aip.openpreservation.org/
+    dip: https://dip.openpreservation.org/
+    cs_premis: https://citspremis.dilcis.eu/specification/
+
+  # LoC standards used inside METS (same stack as Archivematica).
+  mets_version: "1.12"
+  premis_version: "3.0"
+  mets_profile_csip: https://earkcsip.dilcis.eu/profile/CSIP.xml
+  mets_profile_aip: https://earkaip.dilcis.eu/profile/E-ARK-AIP.xml
+  mets_profile_dip: https://earkdip.dilcis.eu/profile/E-ARK-DIP.xml
+  content_information_type: MIXED
+  representation_id: rep1
+  schemas_dir_in_repo: packaging/e-ark-schemas
+
+  # US peer mapping (documentation only — we do not claim Archivematica output).
+  archivematica_alignment:
+    aip: "METS + representations/objects under CSIP; comparable to Archivematica AIP METS story"
+    dip: "METS + fileSec/structMap; Omeka ingests serialized DIP .tar"
+    bagit_rfc8493: "Optional interchange/export wrapper around an E-ARK AIP directory (not the primary Wasabi layout)"
+
+  # Game-folder ingest is internal; formal E-ARK SIP is deferred until external producers exist.
+  sip_profile: deferred
+
+storage:
+  wasabi:
+    # Unpacked CSIP package root (METS.xml at package root), not BagIt-only mirror.
+    layout: unpacked_csip_root
+    key_pattern: "{prefix}/{game_key}/"
+
+validation:
+  primary_tool: eark-validator
+  primary_tool_url: https://github.com/E-ARK-Software/eark-validator
+  alternate_tool: commons-ip
+  alternate_tool_url: https://keeps.github.io/commons-ip/
+  online_service_url: https://seal.e-ark-foundation.eu/earchiving-validation-service/
+  test_corpus_url: https://github.com/DILCISBoard/eark-ip-test-corpus

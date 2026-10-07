@@ -1,0 +1,36 @@
+# CI / dev laptop overrides (no /tank paths). Use:
+#   CI=1 docker compose -f docker-compose.yml -f docker-compose.ci.yml ...
+services:
+  ingest-worker:
+    volumes:
+      - ./config:/config:ro
+      - ${HITSAVE_PRIVATE_CONFIG:-./.ci/private-config}/secrets:/config/secrets:ro
+      - ${HITSAVE_PRIVATE_CONFIG:-./.ci/private-config}/preservation/database.yaml:/config/preservation/database.yaml:ro
+      - ./fixtures:/fixtures
+      - ${SUBMISSIONS_ROOT:-./.ci/submissions}:/data/submissions
+      - ${OUTPUT_ROOT:-./.ci/output}:/output
+
+  omeka-uploader:
+    volumes:
+      - ./config:/config:ro
+      - ${HITSAVE_PRIVATE_CONFIG:-./.ci/private-config}/secrets:/config/secrets:ro
+      - ${HITSAVE_PRIVATE_CONFIG:-./.ci/private-config}/preservation/database.yaml:/config/preservation/database.yaml:ro
+      - ${OUTPUT_ROOT:-./.ci/output}:/output:ro
+
+  status-web:
+    volumes:
+      - ./config:/config:ro
+      - ${HITSAVE_PRIVATE_CONFIG:-./.ci/private-config}/preservation/database.yaml:/config/preservation/database.yaml:ro
+
+  fixity-cron:
+    volumes:
+      - ./config/preservation:/config/preservation:ro
+      - ${HITSAVE_PRIVATE_CONFIG:-./.ci/private-config}/preservation/database.yaml:/config/preservation/database.yaml:ro
+      - ${OUTPUT_ROOT:-./.ci/output}:/output:ro
+
+  clamav:
+    volumes:
+      - clamav_data:/var/lib/clamav
+      - ./config/clamav/clamd.conf:/etc/clamav/clamd.conf:ro
+      - ${SUBMISSIONS_ROOT:-./.ci/submissions}:/data/submissions:ro
+      - ./.ci/empty:/data/press-material:ro

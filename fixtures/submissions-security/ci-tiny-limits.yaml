@@ -1,0 +1,38 @@
+# Tight limits for CI extract-cap fixture only (see extract-bytes-cap.zip).
+paths:
+  root: /data/submissions
+  incoming: incoming
+  workspace: workspace
+  processed: processed
+  failed: failed
+  game_config_dir: /output/submissions/game-configs
+
+limits:
+  max_zip_bytes: 5368709120
+  max_uncompressed_bytes: 10737418240
+  max_extracted_bytes: 2048
+  max_archive_members: 50000
+  max_path_length: 240
+  max_member_bytes: 536870912
+  max_manifest_bytes: 65536
+
+manifest_filenames:
+  - hitsave-submission.yaml
+  - hitsave-submission.yml
+
+security:
+  reject_nested_archives: true
+  nested_archive_extensions:
+    - .zip
+    - .7z
+    - .rar
+  allowed_extensions:
+    - .jpg
+    - .txt
+
+preservation:
+  batch_key: portable-submissions
+  max_files: 5000
+  max_total_bytes: 5368709120
+  video_access:
+    enabled: false
