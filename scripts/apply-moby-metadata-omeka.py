@@ -94,7 +94,13 @@ def main() -> None:
             )
             continue
         fields = apply_moby_metadata_to_item(
-            session, base, creds, int(item_id), metadata_json, moby_cfg
+            session,
+            base,
+            creds,
+            int(item_id),
+            metadata_json,
+            moby_cfg,
+            game_key=game_key,
         )
         results.append(
             {

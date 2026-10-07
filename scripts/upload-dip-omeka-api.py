@@ -24,7 +24,7 @@ CONFIG_ROOT = Path(os.environ.get("HITSAVE_CONFIG_ROOT", str(REPO_ROOT / "config
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from moby_omeka_fields import append_moby_fields_to_payload  # noqa: E402
 from moby_resolve import uses_moby_catalog_data  # noqa: E402
-from normalize_display_title import normalize_display_title  # noqa: E402
+from normalize_display_title import catalog_item_title, normalize_display_title  # noqa: E402
 from preservation_common import resolve_game_config  # noqa: E402
 
 
@@ -90,6 +90,80 @@ def uri_value(property_id: int, value: str) -> dict:
     return {"property_id": property_id, "type": "uri", "@id": value}
 
 
+def item_rdf_value_properties(item_body: dict) -> dict[str, list]:
+    """RDF value properties on an item (dcterms:*, bibo:*, …), for merge-before-PATCH."""
+    out: dict[str, list] = {}
+    for key, rows in item_body.items():
+        if not key or key.startswith("o:") or key.startswith("@"):
+            continue
+        if ":" not in key or not isinstance(rows, list) or not rows:
+            continue
+        if not isinstance(rows[0], dict):
+            continue
+        if "@value" in rows[0] or "@id" in rows[0] or "property_id" in rows[0]:
+            out[key] = rows
+    return out
+
+
+def patch_item_rdf_values(
+    session: requests.Session,
+    base: str,
+    creds: dict,
+    item_id: int,
+    updates: dict[str, list],
+    *,
+    item_body: dict | None = None,
+) -> dict[str, list]:
+    """
+    PATCH RDF property values without dropping other properties.
+
+    Omeka S treats all value properties as one unit: any PATCH that sets one
+    dcterms:/bibo: property replaces the full value set unless existing values
+    are merged in (see Omeka REST API partial update notes).
+    """
+    if not updates:
+        return {}
+    if item_body is None:
+        get_url = api_url(base, f"items/{item_id}", creds)
+        resp = session.get(get_url, headers={"Accept": "application/ld+json"}, timeout=120)
+        if not resp.ok:
+            raise RuntimeError(f"GET item {item_id} failed ({resp.status_code}): {resp.text[:800]}")
+        item_body = resp.json()
+    existing = item_rdf_value_properties(item_body)
+    payload = {**existing, **updates}
+    patch_url = api_url(base, f"items/{item_id}", creds)
+    patch = session.patch(
+        patch_url,
+        headers={"Accept": "application/ld+json", "Content-Type": "application/json"},
+        json=payload,
+        timeout=120,
+    )
+    if not patch.ok:
+        raise RuntimeError(f"Item values PATCH failed ({patch.status_code}): {patch.text[:2000]}")
+    return payload
+
+
+def resolve_omeka_item_title(game_key: str, metadata_json: dict | None) -> str:
+    matches = list((CONFIG_ROOT / "preservation/generated").rglob(f"{game_key}.yaml"))
+    if matches:
+        gcfg = load_yaml(matches[0])
+        title = (gcfg.get("omeka_item_title") or "").strip()
+        if title:
+            return catalog_item_title(title)
+    meta = metadata_json or {}
+    search = (meta.get("search_title") or "").strip()
+    if search:
+        return catalog_item_title(search)
+    return catalog_item_title(game_key.replace("-", " "))
+
+
+def item_has_dcterms_title(item_body: dict) -> bool:
+    for row in item_body.get("dcterms:title") or []:
+        if (row.get("@value") or "").strip():
+            return True
+    return bool((item_body.get("o:title") or "").strip())
+
+
 def item_has_dip_media(session: requests.Session, base: str, creds: dict, item_id: int) -> bool:
     url = api_url(base, f"items/{item_id}", creds)
     resp = session.get(url, headers={"Accept": "application/ld+json"}, timeout=120)
@@ -98,6 +172,8 @@ def item_has_dip_media(session: requests.Session, base: str, creds: dict, item_i
     body = resp.json()
     title_rows = body.get("dcterms:title") or []
     has_title = any((row.get("@value") or "").strip() for row in title_rows)
+    if not has_title and (body.get("o:title") or "").strip():
+        has_title = True
     media = body.get("o:media") or []
     return has_title and len(media) > 0
 
@@ -164,8 +240,16 @@ def apply_moby_metadata_to_item(
     item_id: int,
     metadata_json: dict,
     moby_cfg: dict,
+    *,
+    game_key: str | None = None,
 ) -> list[str]:
-    """PATCH Moby catalog fields onto an existing Omeka item (partial update)."""
+    """PATCH Moby catalog fields onto an existing Omeka item (merge RDF values first)."""
+    get_url = api_url(base, f"items/{item_id}", creds)
+    resp = session.get(get_url, headers={"Accept": "application/ld+json"}, timeout=120)
+    if not resp.ok:
+        raise RuntimeError(f"GET item {item_id} failed ({resp.status_code}): {resp.text[:800]}")
+    item_body = resp.json()
+
     extra: dict[str, list] = {}
     append_moby_fields_to_payload(
         extra,
@@ -178,17 +262,13 @@ def apply_moby_metadata_to_item(
         uri_value=uri_value,
         resolve_property_id=resolve_property_id,
     )
+    if game_key and not item_has_dcterms_title(item_body):
+        title = resolve_omeka_item_title(game_key, metadata_json)
+        title_pid = resolve_property_id(session, base, creds, "dcterms:title")
+        extra["dcterms:title"] = [literal_value(title_pid, title)]
     if not extra:
         return []
-    url = api_url(base, f"items/{item_id}", creds)
-    resp = session.patch(
-        url,
-        headers={"Accept": "application/ld+json", "Content-Type": "application/json"},
-        json=extra,
-        timeout=120,
-    )
-    if not resp.ok:
-        raise RuntimeError(f"Moby metadata PATCH failed ({resp.status_code}): {resp.text[:2000]}")
+    patch_item_rdf_values(session, base, creds, item_id, extra, item_body=item_body)
     return sorted(extra.keys())
 
 
@@ -241,7 +321,7 @@ def main() -> None:
     ingest_cfg = load_yaml(CONFIG_ROOT / "preservation/ingest.yaml")
     db_cfg = load_yaml(Path(ingest_cfg["database"]["config_file"]))["postgres"]
 
-    title = normalize_display_title(game_cfg.get("omeka_item_title") or game_key)
+    title = catalog_item_title(game_cfg.get("omeka_item_title") or game_key)
     base = api_cfg["base_url"]
     session = requests.Session()
 
@@ -279,6 +359,7 @@ def main() -> None:
                     int(row[0]),
                     metadata_json,
                     moby_cfg,
+                    game_key=game_key,
                 )
             print(
                 json.dumps(

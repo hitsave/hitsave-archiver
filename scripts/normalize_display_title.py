@@ -14,6 +14,15 @@ def normalize_name_fragment(name: str) -> str:
     return text.strip()
 
 
+def catalog_item_title(title: str) -> str:
+    """Public Omeka title: game name only (drop em-dash batch/pilot suffixes)."""
+    title = title.strip()
+    if not title or TITLE_SUFFIX_SEP not in title:
+        return normalize_display_title(title) if title else title
+    main = title.split(TITLE_SUFFIX_SEP, 1)[0].strip()
+    return normalize_name_fragment(main) if main else normalize_display_title(title)
+
+
 def normalize_display_title(title: str) -> str:
     """
     Normalize a full Omeka item title, preserving an em-dash suffix (batch labels, pilots).

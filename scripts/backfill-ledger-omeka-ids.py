@@ -127,16 +127,19 @@ def main() -> None:
             if isinstance(metadata_json, str):
                 metadata_json = json.loads(metadata_json)
             meta = metadata_json or {}
-            candidates = [
-                meta.get("moby_title"),
-                meta.get("search_title"),
-            ]
+            candidates: list[str | None] = []
             cfg_matches = list((CONFIG_ROOT / "preservation/generated").rglob(f"{game_key}.yaml"))
             if cfg_matches:
                 gcfg = load_yaml(cfg_matches[0])
                 candidates.append(gcfg.get("omeka_item_title"))
                 candidates.append(Path(gcfg.get("source_game_folder", "")).name)
-            candidates.append(game_key.replace("-", " "))
+            candidates.extend(
+                [
+                    meta.get("search_title"),
+                    game_key.replace("-", " "),
+                    meta.get("moby_title"),
+                ]
+            )
             match_item = None
             for cand in candidates:
                 if not cand:
