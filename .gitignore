@@ -1,11 +1,16 @@
 .cursor/
 config/omeka-test/generated.env
+config/omeka-test/local.config.php
 config/omeka-test/settings.yaml
 config/omeka-test/settings.local.yaml
 config/omeka-test/database.ini
 config/preservation/generated.env
 config/preservation/database.local.yaml
 config/preservation/generated/
+config/preservation/batch.yml
+config/preservation/game.yml
+config/preservation/batch-*.yaml
+config/omeka-test/pilot-game.yaml
 fixtures/dips/.staging/
 fixtures/submissions-security/bombs/*.zip
 .ci/submissions/

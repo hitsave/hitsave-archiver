@@ -41,7 +41,7 @@ def slug_key(batch_key: str, folder_name: str) -> str:
 
 
 def main() -> None:
-    batch_path = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "config/preservation/batch-repcopies-t.yaml"
+    batch_path = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "config/preservation/batch.yml"
     batch = yaml.safe_load(batch_path.read_text())
     batch_key = batch["batch_key"]
     container_parent = Path(batch["source_parent"])

@@ -119,7 +119,7 @@ def upsert_ledger(
 
 def main() -> None:
     ingest_cfg_path = Path("/config/preservation/ingest.yaml")
-    game_cfg_path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("/config/preservation/pilot-game.yaml")
+    game_cfg_path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("/config/preservation/game.yml")
 
     if not ingest_cfg_path.is_file():
         raise SystemExit(f"Missing {ingest_cfg_path}")

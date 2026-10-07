@@ -3,7 +3,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-BATCH="${1:-config/preservation/batch-repcopies-t.yaml}"
+BATCH="${1:-config/preservation/batch.yml}"
+if [[ ! -f "$BATCH" ]]; then
+  echo "Copy config/preservation/batch.yml.example to $BATCH and edit paths." >&2
+  exit 1
+fi
 
 python3 scripts/sync-preservation-config.py
 python3 scripts/sync-docker-config.py

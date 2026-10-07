@@ -1,0 +1,33 @@
+# Copy to batch.yml (gitignored) and edit paths for a one-off or scale ingest.
+# Expand: python3 scripts/batch-expand-preservation.py config/preservation/batch.yml
+# Run:    bash scripts/run-batch-preservation-omeka.sh config/preservation/batch.yml
+#
+# Source is read-only; outputs go under /output only (see output.*).
+
+batch_key: my-batch-key
+# Host path for batch-expand on the operator machine:
+host_source_parent: /path/to/press-material/Representation_Copies/T
+# Path inside the ingest-worker container (must match HOST_PRESS_MATERIAL bind):
+source_parent: /data/press-material/Representation_Copies/T
+
+select:
+  min_bytes: 1048576
+  max_bytes: 524288000
+  limit: 25
+  sort_by: size # size | name
+
+output:
+  dip_dir: /output/dip/batch/my-batch-key
+  aip_dir: /output/aip/batch/my-batch-key
+  staging_dir: /output/.staging/batch/my-batch-key
+
+# Appended to each folder name for Omeka item titles (use "" for folder name only).
+omeka_item_title_suffix: ""
+
+max_files: 5000
+max_total_bytes: 5368709120
+
+preservation:
+  repository_code: hitsave
+  agent_name: HitSave archive ingest
+  agent_version: build-dip-e-ark.py

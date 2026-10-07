@@ -15,4 +15,8 @@ fi
 docker compose up -d postgres clamav
 echo "Waiting for Postgres..."
 sleep 5
-docker compose run --rm ingest-worker /config/preservation/pilot-game.yaml
+if [[ ! -f config/preservation/game.yml ]]; then
+  echo "Copy config/preservation/game.yml.example to config/preservation/game.yml" >&2
+  exit 1
+fi
+docker compose run --rm ingest-worker /config/preservation/game.yml

@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-BATCH="${1:-config/preservation/batch-repcopies-t.yaml}"
+BATCH="${1:-config/preservation/batch.yml}"
 BATCH_KEY="$(python3 -c "import yaml; from pathlib import Path; print(yaml.safe_load(Path('$BATCH').read_text())['batch_key'])")"
 
 bash scripts/ensure-local-config.sh

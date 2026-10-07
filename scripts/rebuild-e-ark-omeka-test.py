@@ -31,9 +31,11 @@ def config_in_container(cfg_path: Path) -> str:
 
 
 def resolve_game_config(game_key: str) -> Path:
-    pilot = CONFIG / "preservation/pilot-game.yaml"
-    if game_key == "pilot-wog1" and pilot.is_file():
-        return pilot
+    single = CONFIG / "preservation/game.yml"
+    if single.is_file():
+        data = load_yaml(single)
+        if str(data.get("game_key") or "") == game_key:
+            return single
     matches = sorted((CONFIG / "preservation/generated").rglob(f"{game_key}.yaml"))
     if len(matches) == 1:
         return matches[0]
