@@ -12,8 +12,6 @@ import xml.sax.saxutils as xml_escape
 from dataclasses import dataclass
 from pathlib import Path
 
-import os
-
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,13 +44,6 @@ from preservation_common import (  # noqa: E402
 )
 from normalize_display_title import normalize_display_title  # noqa: E402
 
-def _omeka_test_settings_path() -> Path:
-    if os.environ.get("HITSAVE_OMEKA_SETTINGS"):
-        return Path(os.environ["HITSAVE_OMEKA_SETTINGS"])
-    return ROOT.parent / "hitsave-omeka-test" / "config" / "omeka-test" / "settings.yaml"
-
-
-DEFAULT_SETTINGS = _omeka_test_settings_path()
 DEFAULT_VIDEO_EXTENSIONS = [
     "mov",
     "avi",
@@ -88,12 +79,6 @@ def load_video_access_cfg(game_cfg: dict) -> dict:
         "copy_mp4_without_transcode": True,
         "extensions": list(DEFAULT_VIDEO_EXTENSIONS),
     }
-    if DEFAULT_SETTINGS.is_file():
-        settings = yaml.safe_load(DEFAULT_SETTINGS.read_text()) or {}
-        dip = settings.get("dip_viewer") or {}
-        file_cfg = dip.get("video_access") or {}
-        if isinstance(file_cfg, dict):
-            defaults.update(file_cfg)
     override = game_cfg.get("video_access") or {}
     if isinstance(override, dict):
         defaults.update(override)
