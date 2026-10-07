@@ -47,6 +47,35 @@ def folder_bytes(path: Path) -> int:
     return total
 
 
+def load_ingest_paths(cfg_root: Path) -> dict:
+    ingest_path = cfg_root / "preservation" / "ingest.yaml"
+    data = yaml.safe_load(ingest_path.read_text()) or {}
+    return data.get("paths") or {}
+
+
+def resolve_source_parent(batch: dict, cfg_root: Path) -> Path:
+    """Folder to scan: press_material_root + source_subpath (see ingest.yaml)."""
+    paths = load_ingest_paths(cfg_root)
+    press_root = Path(paths.get("press_material_root", "/data/press-material"))
+    if batch.get("source_subpath") is not None:
+        sub = str(batch["source_subpath"]).strip().strip("/")
+        if not sub:
+            raise SystemExit("source_subpath must not be empty")
+        return press_root / sub
+    if batch.get("source_parent"):
+        legacy = Path(batch["source_parent"])
+        try:
+            legacy.relative_to(press_root)
+        except ValueError as exc:
+            raise SystemExit(
+                f"source_parent must be under press_material_root ({press_root}); use source_subpath instead."
+            ) from exc
+        return legacy
+    raise SystemExit(
+        "batch.yml needs source_subpath (relative to paths.press_material_root in ingest.yaml)"
+    )
+
+
 def slug_key(batch_key: str, folder_name: str) -> str:
     base = re.sub(r"[^a-zA-Z0-9]+", "-", folder_name.strip()).strip("-").lower()
     if not base:
@@ -60,11 +89,11 @@ def main() -> None:
     batch_path = Path(sys.argv[1]) if len(sys.argv) > 1 else default_batch
     batch = yaml.safe_load(batch_path.read_text())
     batch_key = batch["batch_key"]
-    source_parent = Path(batch["source_parent"])
+    source_parent = resolve_source_parent(batch, cfg_root)
     if not source_parent.is_dir():
         raise SystemExit(
             f"Source parent not found: {source_parent}\n"
-            "Run via ingest-worker so /data/press-material is mounted (see scripts/batch-expand-preservation.sh)."
+            "Run via ingest-worker so press-material is mounted (see scripts/batch-expand-preservation.sh)."
         )
 
     sel = batch.get("select") or {}
