@@ -7,7 +7,7 @@ Public preservation machinery for [HitSave](https://hitsave.org): press-material
 Related public repos:
 
 - [`hitsave-archive-theme`](https://github.com/jonasrosland/hitsave-archive-theme) — Omeka S theme (Foundation overlay)
-- Omeka **OmekaDipViewer** module (planned split; see `docs/public-repos.md`)
+- [`omeka-dip-viewer`](https://github.com/jonasrosland/omeka-dip-viewer) — Omeka S DIP browse module
 
 ## Layout (two clones)
 
