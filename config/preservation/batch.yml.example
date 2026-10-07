@@ -5,9 +5,8 @@
 # Source is read-only; outputs go under /output only (see output.*).
 
 batch_key: my-batch-key
-# Host path for batch-expand on the operator machine:
-host_source_parent: /path/to/press-material/Representation_Copies/T
-# Path inside the ingest-worker container (must match HOST_PRESS_MATERIAL bind):
+# Press-material folder to scan (container path). batch-expand walks the matching host tree
+# using HOST_PRESS_MATERIAL + paths.press_material_root in config/preservation/ingest.yaml.
 source_parent: /data/press-material/Representation_Copies/T
 
 select:

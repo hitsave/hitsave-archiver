@@ -33,6 +33,29 @@ def folder_bytes(path: Path) -> int:
     return total
 
 
+def host_path_for_container(container_path: Path, batch: dict) -> Path:
+    """Map container press-material path to host path for directory scanning."""
+    override = batch.get("host_source_parent")
+    if override:
+        return Path(override)
+    host_root = os.environ.get("HOST_PRESS_MATERIAL")
+    if not host_root:
+        raise SystemExit(
+            "Set HOST_PRESS_MATERIAL (host bind for press-material; see config/host.env.example) "
+            "before running batch-expand, or set host_source_parent in batch.yml."
+        )
+    ingest = yaml.safe_load((ROOT / "config/preservation/ingest.yaml").read_text())
+    container_root = Path(ingest["paths"]["press_material_root"])
+    try:
+        rel = container_path.relative_to(container_root)
+    except ValueError as exc:
+        raise SystemExit(
+            f"source_parent must be under {container_root} (paths.press_material_root in ingest.yaml), "
+            f"got {container_path}"
+        ) from exc
+    return Path(host_root) / rel
+
+
 def slug_key(batch_key: str, folder_name: str) -> str:
     base = re.sub(r"[^a-zA-Z0-9]+", "-", folder_name.strip()).strip("-").lower()
     if not base:
@@ -45,7 +68,7 @@ def main() -> None:
     batch = yaml.safe_load(batch_path.read_text())
     batch_key = batch["batch_key"]
     container_parent = Path(batch["source_parent"])
-    parent = Path(batch.get("host_source_parent") or batch["source_parent"])
+    parent = host_path_for_container(container_parent, batch)
     if not parent.is_dir():
         raise SystemExit(f"Source parent not found: {parent}")
 
