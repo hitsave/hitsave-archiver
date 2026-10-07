@@ -6,8 +6,8 @@ Public preservation machinery for [HitSave](https://hitsave.org): press-material
 
 Related public repos:
 
-- [`hitsave-archive-theme`](https://github.com/jonasrosland/hitsave-archive-theme) — Omeka S theme (Foundation overlay)
-- [`omeka-dip-viewer`](https://github.com/jonasrosland/omeka-dip-viewer) — Omeka S DIP browse module
+- [`hitsave-archive-theme`](https://github.com/hitsave/hitsave-archive-theme) — Omeka S theme (Foundation overlay)
+- [`omeka-dip-viewer`](https://github.com/hitsave/omeka-dip-viewer) — Omeka S DIP browse module
 
 ## Layout (two clones)
 
@@ -21,7 +21,7 @@ Docker Compose mounts the private tree at `/config/secrets` and overlays `/confi
 ## Quick start (dev / CI)
 
 ```bash
-git clone https://github.com/jonasrosland/hitsave-archiver.git
+git clone https://github.com/hitsave/hitsave-archiver.git
 cd hitsave-archiver
 
 # Placeholder secrets for local/CI (real keys go in the private repo):

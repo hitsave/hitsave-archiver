@@ -4,10 +4,10 @@
 
 | Repo | Visibility | Contents |
 |------|------------|----------|
-| [**hitsave-archiver**](https://github.com/jonasrosland/hitsave-archiver) | Public | Ingest worker, E-ARK scripts, Compose stack, schema, CI fixtures |
-| [**hitsave-archiver-config**](https://github.com/jonasrosland/hitsave-archiver-config) | **Private** | Wasabi, Omeka API, MobyGames credentials; `preservation/database.yaml` |
-| [**hitsave-archive-theme**](https://github.com/jonasrosland/hitsave-archive-theme) | Public | Foundation overlay theme build |
-| [**omeka-dip-viewer**](https://github.com/jonasrosland/omeka-dip-viewer) | Public | Omeka S module `OmekaDipViewer` — E-ARK DIP `.tar` browse (`omeka_dip_package`) |
+| [**hitsave-archiver**](https://github.com/hitsave/hitsave-archiver) | Public | Ingest worker, E-ARK scripts, Compose stack, schema, CI fixtures |
+| [**hitsave-archiver-config**](https://github.com/hitsave/hitsave-archiver-config) | **Private** | Wasabi, Omeka API, MobyGames credentials; `preservation/database.yaml` |
+| [**hitsave-archive-theme**](https://github.com/hitsave/hitsave-archive-theme) | Public | Foundation overlay theme build |
+| [**omeka-dip-viewer**](https://github.com/hitsave/omeka-dip-viewer) | Public | Omeka S module `OmekaDipViewer` — E-ARK DIP `.tar` browse (`omeka_dip_package`) |
 
 ## Never commit to the public archiver
 
