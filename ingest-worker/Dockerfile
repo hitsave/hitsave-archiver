@@ -11,7 +11,8 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY packaging/e-ark-schemas /app/packaging/e-ark-schemas
 
-COPY scripts/build-dip-e-ark.py \
+COPY scripts/batch-expand-preservation.py \
+    scripts/build-dip-e-ark.py \
     scripts/build-aip-e-ark.py \
     scripts/validate-e-ark-package.sh \
     scripts/preservation_common.py \

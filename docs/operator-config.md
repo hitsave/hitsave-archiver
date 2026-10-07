@@ -71,7 +71,7 @@ These stay in **your hitsave-archiver working tree**, not in the private repo. C
 | File | Example |
 |------|---------|
 | `config/preservation/game.yml` | [`config/preservation/game.yml.example`](../config/preservation/game.yml.example) |
-| `config/preservation/batch.yml` | [`config/preservation/batch.yml.example`](../config/preservation/batch.yml.example) (run `batch-expand` with `HOST_PRESS_MATERIAL` sourced from `host.env`) |
+| `config/preservation/batch.yml` | [`config/preservation/batch.yml.example`](../config/preservation/batch.yml.example) (expand via [`scripts/batch-expand-preservation.sh`](../scripts/batch-expand-preservation.sh) in ingest-worker) |
 
 Committed policy (no secrets): [`config/omeka-uploader.yaml`](../config/omeka-uploader.yaml), [`config/preservation/ingest.yaml`](../config/preservation/ingest.yaml), [`config/preservation/submissions.yaml`](../config/preservation/submissions.yaml).
 

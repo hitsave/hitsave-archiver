@@ -32,6 +32,7 @@ services:
       dockerfile: ingest-worker/Dockerfile
     volumes:
       - ./config:/config:ro
+      - ./config/preservation/generated:/config/preservation/generated
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/secrets:/config/secrets:ro
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/preservation/database.yaml:/config/preservation/database.yaml:ro
       - ./fixtures:/fixtures

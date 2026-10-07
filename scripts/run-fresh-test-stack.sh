@@ -10,7 +10,7 @@ BATCH_KEY="$(python3 -c "import yaml; from pathlib import Path; print(yaml.safe_
 
 bash scripts/ensure-local-config.sh
 python3 scripts/sync-preservation-config.py
-python3 scripts/batch-expand-preservation.py "$BATCH"
+bash scripts/batch-expand-preservation.sh "$BATCH"
 
 docker compose up -d postgres clamav status-web
 docker compose exec -T postgres psql -U hitsave -d hitsave_ledger < schema/002_moby_ledger.sql || true

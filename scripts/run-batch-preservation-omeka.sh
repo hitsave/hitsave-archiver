@@ -10,7 +10,7 @@ if [[ ! -f "$BATCH" ]]; then
 fi
 
 python3 scripts/sync-preservation-config.py
-python3 scripts/batch-expand-preservation.py "$BATCH"
+bash scripts/batch-expand-preservation.sh "$BATCH"
 
 PRIVATE="${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}"
 if [[ ! -f "$PRIVATE/secrets/omeka-api-credentials-local.yaml" ]]; then

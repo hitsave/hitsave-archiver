@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Expand a batch YAML into per-game preservation configs (no source moves)."""
+"""Expand a batch YAML into per-game preservation configs (no source moves).
+
+Run inside ingest-worker (same /data/press-material mount as ingest):
+  docker compose run --rm --entrypoint python ingest-worker \\
+    /app/scripts/batch-expand-preservation.py /config/preservation/batch.yml
+"""
 from __future__ import annotations
 
 import os
@@ -13,9 +18,18 @@ except ImportError:
     print("PyYAML required", file=sys.stderr)
     sys.exit(1)
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+APP_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(APP_ROOT / "scripts"))
 from normalize_display_title import normalize_display_title  # noqa: E402
+
+
+def config_root() -> Path:
+    env = os.environ.get("HITSAVE_CONFIG_ROOT")
+    if env:
+        return Path(env)
+    if Path("/config/preservation/ingest.yaml").is_file():
+        return Path("/config")
+    return APP_ROOT / "config"
 
 
 def folder_bytes(path: Path) -> int:
@@ -33,29 +47,6 @@ def folder_bytes(path: Path) -> int:
     return total
 
 
-def host_path_for_container(container_path: Path, batch: dict) -> Path:
-    """Map container press-material path to host path for directory scanning."""
-    override = batch.get("host_source_parent")
-    if override:
-        return Path(override)
-    host_root = os.environ.get("HOST_PRESS_MATERIAL")
-    if not host_root:
-        raise SystemExit(
-            "Set HOST_PRESS_MATERIAL (host bind for press-material; see config/host.env.example) "
-            "before running batch-expand, or set host_source_parent in batch.yml."
-        )
-    ingest = yaml.safe_load((ROOT / "config/preservation/ingest.yaml").read_text())
-    container_root = Path(ingest["paths"]["press_material_root"])
-    try:
-        rel = container_path.relative_to(container_root)
-    except ValueError as exc:
-        raise SystemExit(
-            f"source_parent must be under {container_root} (paths.press_material_root in ingest.yaml), "
-            f"got {container_path}"
-        ) from exc
-    return Path(host_root) / rel
-
-
 def slug_key(batch_key: str, folder_name: str) -> str:
     base = re.sub(r"[^a-zA-Z0-9]+", "-", folder_name.strip()).strip("-").lower()
     if not base:
@@ -64,13 +55,17 @@ def slug_key(batch_key: str, folder_name: str) -> str:
 
 
 def main() -> None:
-    batch_path = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "config/preservation/batch.yml"
+    cfg_root = config_root()
+    default_batch = cfg_root / "preservation/batch.yml"
+    batch_path = Path(sys.argv[1]) if len(sys.argv) > 1 else default_batch
     batch = yaml.safe_load(batch_path.read_text())
     batch_key = batch["batch_key"]
-    container_parent = Path(batch["source_parent"])
-    parent = host_path_for_container(container_parent, batch)
-    if not parent.is_dir():
-        raise SystemExit(f"Source parent not found: {parent}")
+    source_parent = Path(batch["source_parent"])
+    if not source_parent.is_dir():
+        raise SystemExit(
+            f"Source parent not found: {source_parent}\n"
+            "Run via ingest-worker so /data/press-material is mounted (see scripts/batch-expand-preservation.sh)."
+        )
 
     sel = batch.get("select") or {}
     min_b = int(sel.get("min_bytes", 0))
@@ -79,7 +74,7 @@ def main() -> None:
     sort_by = sel.get("sort_by", "size")
 
     rows: list[tuple[int, Path]] = []
-    for child in sorted(parent.iterdir()):
+    for child in sorted(source_parent.iterdir()):
         if not child.is_dir() or child.name.startswith("."):
             continue
         size = folder_bytes(child)
@@ -103,13 +98,13 @@ def main() -> None:
     aip_dir = Path(out_cfg.get("aip_dir", f"/output/aip/batch/{batch_key}"))
     staging_root = Path(out_cfg.get("staging_dir", f"/output/.staging/batch/{batch_key}"))
 
-    gen_dir = ROOT / "config" / "preservation" / "generated" / batch_key
+    gen_dir = cfg_root / "preservation" / "generated" / batch_key
     gen_dir.mkdir(parents=True, exist_ok=True)
     manifest = []
 
     for size, child in chosen:
         game_key = slug_key(batch_key, child.name)
-        container_source = container_parent / child.name
+        container_source = source_parent / child.name
         raw_title = f"{child.name}{batch.get('omeka_item_title_suffix', '')}"
         title = normalize_display_title(raw_title)
         game_cfg = {
@@ -131,7 +126,7 @@ def main() -> None:
                 "game_key": game_key,
                 "folder_name": child.name,
                 "source_bytes": size,
-                "config": str(out_path.relative_to(ROOT)),
+                "config": f"config/preservation/generated/{batch_key}/{game_key}.yaml",
             }
         )
 

@@ -1,12 +1,11 @@
 # Copy to batch.yml (gitignored) and edit paths for a one-off or scale ingest.
-# Expand: python3 scripts/batch-expand-preservation.py config/preservation/batch.yml
+# Expand: ./scripts/batch-expand-preservation.sh config/preservation/batch.yml
 # Run:    bash scripts/run-batch-preservation-omeka.sh config/preservation/batch.yml
 #
 # Source is read-only; outputs go under /output only (see output.*).
 
 batch_key: my-batch-key
-# Press-material folder to scan (container path). batch-expand walks the matching host tree
-# using HOST_PRESS_MATERIAL + paths.press_material_root in config/preservation/ingest.yaml.
+# Press-material folder to scan (container path; same mount as ingest-worker).
 source_parent: /data/press-material/Representation_Copies/T
 
 select:
