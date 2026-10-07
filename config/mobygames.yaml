@@ -10,6 +10,9 @@ mobygames:
   company_platform_scope: earliest_platform
   # When Moby has no synopsis, use official ad blurbs (API or platform release text when present).
   fetch_ad_blurbs_api: true
+  fetch_ad_blurbs_html: true
+  # Optional Netscape cookie jar for curl (export from browser if Cloudflare blocks the host).
+  page_cookie_jar: secrets/mobygames-cookies.txt
   ad_blurb_min_chars: 80
   # Test stack: record failures but still upload to Omeka.
   block_on_failure: false

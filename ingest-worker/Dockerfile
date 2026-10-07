@@ -1,7 +1,7 @@
 FROM python:3.12-slim-bookworm
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libpq5 ffmpeg \
+    && apt-get install -y --no-install-recommends curl libpq5 ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -22,7 +22,9 @@ COPY scripts/batch-expand-preservation.py \
     scripts/read-config-yaml.py \
     scripts/upload-dip-omeka-api.py \
     scripts/moby_resolve.py \
+    scripts/moby_page_scrape.py \
     scripts/moby_omeka_fields.py \
+    scripts/apply-moby-ad-blurbs-from-web.py \
     scripts/moby_enrich_game.py \
     scripts/apply-moby-metadata-omeka.py \
     scripts/backfill-ledger-omeka-ids.py \

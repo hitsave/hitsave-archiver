@@ -237,11 +237,25 @@ def _ad_blurb_from_api_payload(data: Any) -> tuple[str, str]:
     return best, best_source
 
 
+def _moby_page_cookie_jar(moby_cfg: dict) -> Path | None:
+    rel = moby_cfg.get("page_cookie_jar")
+    if not rel:
+        return None
+    path = Path(str(rel))
+    if path.parts and path.parts[0] == "config":
+        path = Path("/config") / Path(*path.parts[1:])
+    elif not path.is_absolute():
+        path = Path("/config") / path
+    return path if path.is_file() else None
+
+
 def fetch_official_ad_blurb(
     client: "MobyClient",
     game_id: int,
     platform_ids: list[int],
     moby_cfg: dict | None = None,
+    *,
+    moby_url: str | None = None,
 ) -> tuple[str, str]:
     """Best-effort official ad blurb (Moby catalog or platform release text)."""
     moby_cfg = moby_cfg or {}
@@ -273,6 +287,20 @@ def fetch_official_ad_blurb(
                 source = f"MobyGames ({', '.join(countries)})"
             if len(desc) > len(best):
                 best, best_source = desc, source
+    if (
+        len(best) < min_chars
+        and moby_cfg.get("fetch_ad_blurbs_html", True)
+        and moby_url
+    ):
+        from moby_page_scrape import fetch_ad_blurb_from_web
+
+        text, source = fetch_ad_blurb_from_web(
+            moby_url,
+            cookie_jar=_moby_page_cookie_jar(moby_cfg),
+            min_chars=min_chars,
+        )
+        if len(text) > len(best):
+            best, best_source = text, source
     return best, best_source
 
 
@@ -280,7 +308,13 @@ def attach_official_ad_blurb(metadata: dict, client: "MobyClient", platform_ids:
     has_synopsis = bool((metadata.get("description") or "").strip())
     if has_synopsis:
         return
-    text, source = fetch_official_ad_blurb(client, int(metadata["moby_game_id"]), platform_ids, moby_cfg)
+    text, source = fetch_official_ad_blurb(
+        client,
+        int(metadata["moby_game_id"]),
+        platform_ids,
+        moby_cfg,
+        moby_url=metadata.get("moby_url"),
+    )
     if not text:
         return
     metadata["official_ad_blurb"] = text

@@ -32,7 +32,7 @@ Batch expand writes **minimal** per-game YAML under `config/preservation/generat
 | Copy | SSOT | Notes |
 |------|------|--------|
 | `clamd.conf` byte limits | `submissions.yaml` `limits.max_member_bytes` | ClamAV has no YAML import; tune both when changing submission caps |
-| `status-web.yaml` Omeka URLs | hitsave-omeka-test `settings.yaml` | Status UI only; keep URLs consistent manually |
+| `status-web.yaml` `omeka.public_url` / `site_slug` | hitsave-omeka-test `settings.yaml` `public_url` | Status UI Omeka links (LAN, not localhost) |
 | `omeka-uploader.yaml` `site_slug` | test Omeka settings | Same as above |
 
 ## Anti-patterns

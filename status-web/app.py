@@ -15,8 +15,21 @@ CONFIG = yaml.safe_load(Path("/config/status-web.yaml").read_text())
 DB = yaml.safe_load(Path(CONFIG["database"]["config_file"]).read_text())["postgres"]
 HOST = CONFIG["server"]["host"]
 PORT = int(CONFIG["server"]["port"])
-ADMIN = CONFIG["omeka"]["public_admin_base"].rstrip("/")
-SITE = CONFIG["omeka"]["public_site_base"].rstrip("/")
+
+
+def _omeka_link_bases(cfg: dict) -> tuple[str, str]:
+    omeka = cfg.get("omeka") or {}
+    if omeka.get("public_admin_base") and omeka.get("public_site_base"):
+        return (
+            str(omeka["public_admin_base"]).rstrip("/"),
+            str(omeka["public_site_base"]).rstrip("/"),
+        )
+    base = str(omeka.get("public_url") or "http://10.1.1.60:8088").rstrip("/")
+    slug = str(omeka.get("site_slug") or "hitsave-test").strip("/")
+    return f"{base}/admin", f"{base}/s/{slug}"
+
+
+ADMIN, SITE = _omeka_link_bases(CONFIG)
 
 
 def connect():
