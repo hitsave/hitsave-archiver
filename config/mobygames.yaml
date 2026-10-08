@@ -17,3 +17,5 @@ mobygames:
   # Test stack: record failures but still upload to Omeka.
   block_on_failure: false
   search_title_from: folder_name
+  # When API title search finds nothing: ddgs "{title} mobygames" → Moby URL → game id.
+  web_search_fallback: true

@@ -23,6 +23,7 @@ COPY scripts/batch-expand-preservation.py \
     scripts/upload-dip-omeka-api.py \
     scripts/moby_resolve.py \
     scripts/moby_page_scrape.py \
+    scripts/moby_web_search.py \
     scripts/moby_omeka_fields.py \
     scripts/apply-moby-ad-blurbs-from-web.py \
     scripts/moby_enrich_game.py \

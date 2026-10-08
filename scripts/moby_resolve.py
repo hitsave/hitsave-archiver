@@ -571,6 +571,22 @@ def resolve_for_game(
                 best = result
             if best is None or (best.status == "no_match" and result.moby_game_id):
                 best = result
+        if best is not None and best.status == "ambiguous":
+            return best
+        if moby_cfg.get("web_search_fallback", True) and (
+            best is None or best.status in ("no_match", "error")
+        ):
+            from moby_web_search import duckduckgo_moby_game_id
+
+            game_id, moby_url = duckduckgo_moby_game_id(search)
+            if game_id:
+                ddg_result = client.resolve_by_id(int(game_id), search)
+                if ddg_result.metadata_json is not None:
+                    ddg_result.metadata_json["moby_match_source"] = "duckduckgo"
+                    if moby_url:
+                        ddg_result.metadata_json.setdefault("moby_url", moby_url)
+                if ddg_result.status in ("ok", "incomplete", "ambiguous"):
+                    return ddg_result
         return best if best is not None else MobyResult("no_match", "moby_no_match", None, None, None, None)
     except RuntimeError as e:
         if "moby_credentials_missing" in str(e):
