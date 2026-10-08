@@ -10,3 +10,14 @@ api:
   item_set_title: Press and Marketing Materials
   production_item_set_id: 1459
   dip_ingester: omeka_dip_package
+
+# Redump GDrive intake: metadata-only catalog items (disc files on Wasabi).
+redump_catalog:
+  item_set_title: Redump disc dumps
+  is_public: true
+  storage_uri_base: http://10.1.1.60:8088/staff/redump
+  # Disc pages and SHA-1 search on redump.info only (never redump.org).
+  site_url: https://redump.info
+  disc_url: "{site}/disc/{disc_id}"
+  lookup_timeout_seconds: 30
+  # SHA-1 search + disc page scrape for title, alternates, Contents → description (SSOT)

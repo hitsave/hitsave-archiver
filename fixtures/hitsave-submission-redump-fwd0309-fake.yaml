@@ -1,0 +1,19 @@
+# Stub handoff for catalog-only test (no Wasabi upload). SSOT: redump.info disc 81693.
+game_key: redump-fwd0309
+material_type: disc_dump
+source_profile: redump
+moby_enrich: false
+wasabi:
+  bucket: hitsave-incoming
+  prefix: redump/redump-fwd0309/
+redump:
+  parsed:
+    checksums:
+      sha1: b464d8458c8fff6334f6082ce654724f58804b2f
+    fields:
+      System: DVD-Video
+      Media Type: DVD-5
+      Category: Coverdiscs
+      Region: Japan
+      Languages: Japanese
+      Disc Serial: FWD0309

@@ -34,6 +34,8 @@ COPY scripts/batch-expand-preservation.py \
     scripts/upload-aip-wasabi.py \
     scripts/submission_common.py \
     scripts/ingest-submission.py \
+    scripts/redump_info_lookup.py \
+    scripts/apply-redump-catalog-omeka.py \
     /app/scripts/
 
 ENTRYPOINT ["python", "/app/scripts/ingest-game-folder.py"]
