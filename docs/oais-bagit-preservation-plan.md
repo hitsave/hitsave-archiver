@@ -1,24 +1,20 @@
 # OAIS + BagIt preservation plan (Hit Save)
 
-**Status:** Approved direction (replaces E-ARK as the primary packaging target for press material).  
+**Status:** **Implemented** for new ingest (archiver + OmekaDipViewer 0.5). Historical sections below describe the migration; ignore `.tar` / E-ARK / FUSE steps.  
 **Audience:** Implementers, catalogers, and anyone asking “what standard do you use?”
 
 ---
 
-## 1. Summary
-
-Hit Save will preserve press material using **ISO 14721 (OAIS)** roles with **RFC 8493 BagIt** as the concrete package format:
+## 1. Summary (current)
 
 | OAIS role | Hit Save implementation |
 |-----------|-------------------------|
-| **SIP** | Game folder (or approved submission archive) at ingest, with documented submission provenance |
-| **AIP** | One **BagIt bag** per `game_key`, payload under **`data/`** |
-| **DIP** | **Same bag, same `.tar`** — logical access package = physical archival package (no second full copy on Wasabi) |
-| **Access** | **Omeka S** + **OmekaDipViewer** (updated to index BagIt `data/` instead of E-ARK METS) |
+| **SIP** | Game folder (or submission archive) at ingest |
+| **AIP / DIP** | One **BagIt bag** per package, payload under **`data/`** |
+| **Storage** | **Unpacked bag** on Wasabi (`press-material/{letter}/{package_id}/`) |
+| **Access** | **Omeka S** + **OmekaDipViewer** via **S3 API** (`metadata/inventory.json`) |
 
-**Storage:** Each bag is serialized as a **plain `.tar`** (no additional gzip/zstd layer). One object per game on Wasabi; Omeka references or mounts that object — **not** a separate DIP tree plus unpacked AIP.
-
-**E-ARK:** Legacy output remains on disk/Wasabi until re-ingested; **new and migrated press ingests** follow this plan. Do not invest in further E-ARK profile conformance.
+**E-ARK and single-object `.tar` uploads are removed** from the ingest path. Legacy bucket objects may remain until purged.
 
 ---
 

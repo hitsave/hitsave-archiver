@@ -15,12 +15,12 @@ def test_dip_package_renderer() -> None:
     assert media_is_dip_package(body, dip_ingester="omeka_dip_package")
 
 
-def test_external_tar_wasabi_counts_as_dip() -> None:
+def test_wasabi_s3_prefix_counts_as_dip() -> None:
     body = {
         "o:renderer": "omeka_dip_package",
         "data": {
-            "external_tar_path": "/hitsave-incoming/press-material/F/game.tar",
-            "dip_storage": "wasabi-incoming-mount",
+            "package_storage_prefix": "press-material/F/game-id",
+            "dip_storage": "wasabi-s3",
         },
     }
     assert media_is_dip_package(body, dip_ingester="omeka_dip_package")

@@ -11,12 +11,7 @@ api:
   production_item_set_id: 1459
   dip_ingester: omeka_dip_package
 
-# Legacy E-ARK: optional dip-access upload + external path patch (BagIt press uses Wasabi tar only).
-dip_wasabi:
-  apply_external_after_upload: true
-  config_file: preservation/dip-wasabi.yml.example
-
-# Unpacked E-ARK AIP on Wasabi (ledger aip_wasabi_prefix → s3://…); staff-only in Omeka.
+# Staff-only preservation URI on items (ledger package_storage_prefix → s3://…).
 aip_wasabi:
   apply_uri_after_upload: true
   uri_property: dcterms:relation

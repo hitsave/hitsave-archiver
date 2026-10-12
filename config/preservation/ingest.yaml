@@ -37,7 +37,7 @@ preservation:
 database:
   config_file: /config/preservation/database.yaml
 
-# E-ARK AIPs: unpacked package root under {prefix}{game_key}/ on Wasabi.
+# Unpacked BagIt prefixes under press-material/ (and dump layouts via ingest-kinds.yaml).
 wasabi:
   enabled: true
   credentials_file: secrets/wasabi-credentials.yaml
@@ -46,10 +46,3 @@ wasabi:
   bucket: hitsave-incoming
   prefix: press-material/
   verify_upload: true
-  # Omeka path for rclone mount of the whole bucket (archive folders = S3 prefixes).
-  omeka_mount_root: /hitsave-incoming
-
-# Legacy E-ARK: separate dip-access/ tar (ignored when packaging_mode is bagit).
-dip_wasabi:
-  enabled: true
-  config_file: preservation/dip-wasabi.yml.example

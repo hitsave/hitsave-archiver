@@ -1,10 +1,8 @@
-# Hit Save preservation packaging standard (tentative)
+# Hit Save preservation packaging standard (legacy E-ARK)
 
-**Decision (testing phase):** **Preservation = [E-ARK AIP](https://aip.openpreservation.org/) ([CSIP](https://earkcsip.dilcis.eu/)); access = [E-ARK DIP](https://dip.openpreservation.org/).**
+**Superseded for new ingest:** [oais-bagit-preservation-plan.md](./oais-bagit-preservation-plan.md) and `config/preservation/packaging.yaml` (BagIt only).
 
-Machine-readable pins: `config/preservation/packaging.yaml`.
-
-This document is the normative overview. Ingest builders are **`build-aip-e-ark.py`** and **`build-dip-e-ark.py`**; validate with **`scripts/validate-e-ark-package.sh`** before upload.
+This file is kept for historical context on the E-ARK pilot. **Do not use** the builders or validators referenced below — they were removed from the repository.
 
 ---
 

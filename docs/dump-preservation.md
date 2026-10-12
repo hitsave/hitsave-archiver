@@ -16,7 +16,7 @@ Legacy aliases (`game_dump`, `disc_dump`, `redump`) normalize to **`dump`**.
 
 | Kind | Wasabi layout | Moby | Redump |
 |------|---------------|------|--------|
-| `press_material` | `press-material/{sort_letter}/{package_id}.tar` | yes (`press_material`) | no |
+| `press_material` | `press-material/{sort_letter}/{package_id}/` (unpacked bag) | yes (`press_material`) | no |
 | `dump` | unpacked prefix (below) | yes (`game_catalog`) | when sidecar + SHA-1 |
 | `other` | same as press tar default | no | no |
 
@@ -71,7 +71,7 @@ Ledger: `dump_class = other`, `dump_system` / `dump_category` null.
 2. **`build-bagit-package.py`** — writes `wasabi_key` / staff URI into `metadata/submission.json` from the same classification.
 3. **`upload-dump-wasabi.py`** — syncs the unpacked bag tree to the computed prefix (no single `.tar` on Wasabi for dumps).
 
-Press ingest is unchanged: one **`.tar`** via **`upload-package-wasabi.py`**.
+Press ingest uses the same unpacked layout via **`upload-press-bag-wasabi.py`**.
 
 ## Catalog enrichment
 

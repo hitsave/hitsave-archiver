@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import json
-import mimetypes
 import os
-import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import urlencode
@@ -18,8 +16,6 @@ except ImportError as e:
     print(f"Missing dependency: {e}", file=sys.stderr)
     sys.exit(1)
 
-import os
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_ROOT = Path(os.environ.get("HITSAVE_CONFIG_ROOT", str(REPO_ROOT / "config")))
 
@@ -28,7 +24,7 @@ from ingest_kind import resolve_ingest_kind, resolve_omeka_moby_profile  # noqa:
 from moby_omeka_fields import append_moby_fields_to_payload  # noqa: E402
 from moby_resolve import moby_description_for_omeka, uses_moby_catalog_data  # noqa: E402
 from press_material_description import press_material_description  # noqa: E402
-from normalize_display_title import catalog_item_title, normalize_display_title  # noqa: E402
+from normalize_display_title import catalog_item_title  # noqa: E402
 from omeka_dip_media import find_dip_media_id_on_item  # noqa: E402
 from omeka_staff_metadata import apply_item_aip_uri  # noqa: E402
 from omeka_external_dip import (  # noqa: E402
@@ -227,94 +223,6 @@ def item_has_dip_package_media(
     )
 
 
-def add_dip_media_to_existing_item(
-    session: requests.Session,
-    base: str,
-    creds: dict,
-    *,
-    item_id: int,
-    tar_path: Path,
-    ingester: str,
-    is_public: bool,
-) -> tuple[int, int]:
-    """Attach a preservation .tar as omeka_dip_package media on an existing item."""
-    payload: dict = {
-        "o:ingester": ingester,
-        "o:item": {"o:id": item_id},
-        "o:is_public": is_public,
-    }
-    mime = mimetypes.guess_type(tar_path.name)[0] or "application/x-tar"
-    url = api_url(base, "media", creds)
-    with tar_path.open("rb") as handle:
-        resp = session.post(
-            url,
-            headers={"Accept": "application/ld+json"},
-            data={"data": json.dumps(payload)},
-            files={"file[0]": (tar_path.name, handle, mime)},
-            timeout=3600,
-        )
-    if not resp.ok:
-        raise RuntimeError(f"DIP media upload failed ({resp.status_code}): {resp.text[:2000]}")
-    body = resp.json()
-    media_id = int(body["o:id"])
-    return item_id, media_id
-
-
-def create_item_with_dip(
-    session: requests.Session,
-    base: str,
-    creds: dict,
-    *,
-    title: str,
-    site_id: int,
-    item_set_id: int,
-    is_public: bool,
-    title_property_id: int,
-    tar_path: Path,
-    ingester: str,
-    extra_values: dict[str, list] | None = None,
-) -> tuple[int, int]:
-    """One multipart POST /api/items with file[0] (see Omeka S REST API)."""
-    payload: dict = {
-        "dcterms:title": [literal_value(title_property_id, title)],
-        "o:is_public": is_public,
-        "o:site": [{"o:id": site_id}],
-        "o:item_set": [{"o:id": item_set_id}],
-        "o:media": [
-            {
-                "o:ingester": ingester,
-                "file_index": 0,
-                "o:is_public": is_public,
-            }
-        ],
-    }
-    if extra_values:
-        payload.update(extra_values)
-    mime = mimetypes.guess_type(tar_path.name)[0] or "application/x-tar"
-    url = api_url(base, "items", creds)
-    with tar_path.open("rb") as handle:
-        resp = session.post(
-            url,
-            headers={"Accept": "application/ld+json"},
-            data={"data": json.dumps(payload)},
-            files={"file[0]": (tar_path.name, handle, mime)},
-            timeout=3600,
-        )
-    if not resp.ok:
-        raise RuntimeError(f"Item+DIP upload failed ({resp.status_code}): {resp.text[:2000]}")
-
-    body = resp.json()
-    item_id = int(body["o:id"])
-    title_rows = body.get("dcterms:title") or []
-    if not any((row.get("@value") or "").strip() for row in title_rows):
-        raise RuntimeError(f"Item {item_id} created without dcterms:title in API response")
-    media_refs = body.get("o:media") or []
-    if not media_refs:
-        raise RuntimeError(f"Item {item_id} created without o:media in API response")
-    media_id = int(media_refs[0]["o:id"])
-    return item_id, media_id
-
-
 def apply_moby_metadata_to_item(
     session: requests.Session,
     base: str,
@@ -407,13 +315,12 @@ def main() -> None:
     db_cfg = load_yaml(Path(ingest_cfg["database"]["config_file"]))["postgres"]
     source_path = str(Path(game_cfg["source_game_folder"]).resolve())
     conn = pg_connect(db_cfg)
-    ledger_dip: str | None = None
     ledger_kind: str | None = None
     try:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT game_key, dip_path, ingest_kind
+                SELECT game_key, ingest_kind
                 FROM game_ingest
                 WHERE source_path = %s
                 ORDER BY updated_at DESC
@@ -424,8 +331,7 @@ def main() -> None:
             row = cur.fetchone()
         if row:
             game_key = str(row[0])
-            ledger_dip = row[1]
-            ledger_kind = row[2]
+            ledger_kind = row[1]
     finally:
         conn.close()
 
@@ -472,7 +378,6 @@ def main() -> None:
     item_set_id = resolve_item_set_id(session, base, creds, api_cfg["item_set_title"])
     is_public = bool(api_cfg.get("default_is_public", False))
 
-    external_dip: dict[str, str | int] | None = None
     package_storage_prefix = ""
     total_bytes = 0
     external_dip = resolve_bagit_external_dip(game_key, ingest_cfg)
