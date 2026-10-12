@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Ingest one game folder: ClamAV → E-ARK DIP tar → E-ARK AIP → ledger row."""
+"""Ingest one game folder: ClamAV → BagIt tar or E-ARK DIP/AIP → Wasabi → ledger."""
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -16,7 +17,7 @@ except ImportError as e:
 
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
-from preservation_common import resolve_game_config  # noqa: E402
+from preservation_common import packaging_mode, resolve_game_config  # noqa: E402
 from source_content_policy import (  # noqa: E402
     ContentPolicyError,
     check_source_content_policy,
@@ -85,15 +86,20 @@ def upsert_ledger(
     total_bytes: int | None = None,
     checksum_manifest_path: str | None = None,
     error_message: str | None = None,
+    package_format: str | None = None,
+    submission_source_id: str | None = None,
+    inventory_json: dict | None = None,
 ) -> None:
+    inv_param = json.dumps(inventory_json) if inventory_json is not None else None
     with conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO game_ingest (
                 game_key, source_path, status, dip_path, aip_bag_path, package_uuid,
-                file_count, total_bytes, checksum_manifest_path, error_message, updated_at
+                file_count, total_bytes, checksum_manifest_path, error_message,
+                package_format, submission_source_id, inventory_json, updated_at
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, NOW()
             )
             ON CONFLICT (game_key) DO UPDATE SET
                 source_path = EXCLUDED.source_path,
@@ -105,6 +111,9 @@ def upsert_ledger(
                 total_bytes = EXCLUDED.total_bytes,
                 checksum_manifest_path = EXCLUDED.checksum_manifest_path,
                 error_message = EXCLUDED.error_message,
+                package_format = COALESCE(EXCLUDED.package_format, game_ingest.package_format),
+                submission_source_id = COALESCE(EXCLUDED.submission_source_id, game_ingest.submission_source_id),
+                inventory_json = COALESCE(EXCLUDED.inventory_json, game_ingest.inventory_json),
                 updated_at = NOW()
             """,
             (
@@ -118,9 +127,162 @@ def upsert_ledger(
                 total_bytes,
                 checksum_manifest_path,
                 error_message,
+                package_format,
+                submission_source_id,
+                inv_param,
             ),
         )
     conn.commit()
+
+
+def read_bagit_metadata(bag_dir: Path) -> tuple[dict | None, dict | None, str | None]:
+    meta = bag_dir / "metadata"
+    submission = None
+    inventory = None
+    sub_path = meta / "submission.json"
+    inv_path = meta / "inventory.json"
+    if sub_path.is_file():
+        submission = json.loads(sub_path.read_text(encoding="utf-8"))
+    if inv_path.is_file():
+        inventory = json.loads(inv_path.read_text(encoding="utf-8"))
+    manifest = bag_dir / "manifest-sha256.txt"
+    checksum_path = str(manifest) if manifest.is_file() else None
+    return submission, inventory, checksum_path
+
+
+def run_bagit_ingest(
+    conn,
+    *,
+    game_cfg_path: Path,
+    game_cfg: dict,
+    ingest_cfg_path: Path,
+    ingest_cfg: dict,
+    source: Path,
+    game_key: str,
+) -> tuple[Path, Path, dict | None, dict | None, str | None]:
+    dip_path = Path(game_cfg["output_tar"]).resolve()
+    bag_dir = Path(game_cfg["bagit_bag_dir"]).resolve()
+
+    upsert_ledger(conn, game_key=game_key, source_path=str(source), status="building_bagit")
+    subprocess.run(
+        [sys.executable, str(SCRIPTS / "build-bagit-package.py"), str(game_cfg_path)],
+        check=True,
+    )
+
+    submission, inventory, checksum_path = read_bagit_metadata(bag_dir)
+    submission_source_id = None
+    if submission:
+        submission_source_id = submission.get("submission_source_id")
+
+    wasabi_cfg = ingest_cfg.get("wasabi") or {}
+    if wasabi_cfg.get("enabled", False):
+        upsert_ledger(conn, game_key=game_key, source_path=str(source), status="uploading_package")
+        subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPTS / "upload-package-wasabi.py"),
+                str(dip_path),
+                game_key,
+                str(ingest_cfg_path),
+            ],
+            check=True,
+        )
+    else:
+        print("Wasabi package upload skipped (wasabi.enabled is false or section missing)")
+
+    dip_wasabi_cfg = ingest_cfg.get("dip_wasabi") or {}
+    if dip_wasabi_cfg.get("enabled", False):
+        dip_cfg_rel = str(dip_wasabi_cfg.get("config_file", "preservation/dip-wasabi.yml.example"))
+        dip_cfg_path = Path("/config") / dip_cfg_rel
+        upsert_ledger(conn, game_key=game_key, source_path=str(source), status="uploading_dip_wasabi")
+        subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPTS / "upload-dip-wasabi.py"),
+                str(dip_path),
+                game_key,
+                str(dip_cfg_path),
+            ],
+            check=True,
+        )
+    else:
+        print("Wasabi DIP upload skipped (dip_wasabi.enabled is false or section missing)")
+
+    return dip_path, bag_dir, submission, inventory, checksum_path, submission_source_id
+
+
+def run_eark_ingest(
+    conn,
+    *,
+    game_cfg_path: Path,
+    ingest_cfg_path: Path,
+    ingest_cfg: dict,
+    source: Path,
+    game_key: str,
+    game_cfg: dict,
+) -> tuple[Path, Path, str | None, str | None, int | None, int | None]:
+    dip_path = Path(game_cfg["output_tar"]).resolve()
+    aip_bag = Path(game_cfg["aip_bag_dir"]).resolve()
+
+    upsert_ledger(conn, game_key=game_key, source_path=str(source), status="building_dip")
+    subprocess.run(
+        [sys.executable, str(SCRIPTS / "build-dip-e-ark.py"), str(game_cfg_path)],
+        check=True,
+    )
+
+    upsert_ledger(conn, game_key=game_key, source_path=str(source), status="building_aip")
+    subprocess.run(
+        [sys.executable, str(SCRIPTS / "build-aip-e-ark.py"), str(game_cfg_path)],
+        check=True,
+    )
+
+    wasabi_cfg = ingest_cfg.get("wasabi") or {}
+    if wasabi_cfg.get("enabled", False):
+        upsert_ledger(conn, game_key=game_key, source_path=str(source), status="uploading_aip")
+        subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPTS / "upload-aip-wasabi.py"),
+                str(aip_bag),
+                game_key,
+                str(ingest_cfg_path),
+            ],
+            check=True,
+        )
+    else:
+        print("Wasabi AIP upload skipped (wasabi.enabled is false or section missing)")
+
+    dip_wasabi_cfg = ingest_cfg.get("dip_wasabi") or {}
+    if dip_wasabi_cfg.get("enabled", False):
+        dip_cfg_rel = str(dip_wasabi_cfg.get("config_file", "preservation/dip-wasabi.yml.example"))
+        dip_cfg_path = Path("/config") / dip_cfg_rel
+        upsert_ledger(conn, game_key=game_key, source_path=str(source), status="uploading_dip_wasabi")
+        subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPTS / "upload-dip-wasabi.py"),
+                str(dip_path),
+                game_key,
+                str(dip_cfg_path),
+            ],
+            check=True,
+        )
+    else:
+        print("Wasabi DIP upload skipped (dip_wasabi.enabled is false or section missing)")
+
+    manifest_path = aip_bag / "metadata" / "other" / "checksums-sha256.txt"
+    package_uuid = None
+    root_mets = aip_bag / "METS.xml"
+    if root_mets.is_file():
+        import re
+
+        text = root_mets.read_text(encoding="utf-8", errors="replace")
+        match = re.search(r'\bOBJID="([^"]+)"', text)
+        if match:
+            package_uuid = match.group(1)
+
+    checksum_manifest_path = str(manifest_path) if manifest_path.is_file() else None
+    return dip_path, aip_bag, package_uuid, checksum_manifest_path, None, None
 
 
 def main() -> None:
@@ -142,6 +304,7 @@ def main() -> None:
     output_root = Path(paths["output_root"])
     ensure_dirs(
         output_root / paths["dip_subdir"],
+        output_root / paths.get("bag_subdir", "bag"),
         output_root / paths["aip_subdir"],
         output_root / paths["processed_subdir"],
         output_root / paths["quarantine_subdir"],
@@ -149,8 +312,7 @@ def main() -> None:
 
     source = Path(game_cfg["source_game_folder"]).resolve()
     game_key = game_cfg.get("game_key") or source.name
-    dip_path = Path(game_cfg["output_tar"]).resolve()
-    aip_bag = Path(game_cfg["aip_bag_dir"]).resolve()
+    mode = packaging_mode()
 
     clam = ingest_cfg["clamav"]
     clamd = wait_for_clamd(clam["host"], int(clam["port"]), int(clam.get("connect_timeout_seconds", 120)))
@@ -163,62 +325,40 @@ def main() -> None:
         upsert_ledger(conn, game_key=game_key, source_path=str(source), status="scanning")
         scan_tree(clamd, source)
 
-        upsert_ledger(conn, game_key=game_key, source_path=str(source), status="building_dip")
-        subprocess.run(
-            [sys.executable, str(SCRIPTS / "build-dip-e-ark.py"), str(game_cfg_path)],
-            check=True,
-        )
-
-        upsert_ledger(conn, game_key=game_key, source_path=str(source), status="building_aip")
-        subprocess.run(
-            [sys.executable, str(SCRIPTS / "build-aip-e-ark.py"), str(game_cfg_path)],
-            check=True,
-        )
-
-        wasabi_cfg = ingest_cfg.get("wasabi") or {}
-        if wasabi_cfg.get("enabled", False):
-            upsert_ledger(conn, game_key=game_key, source_path=str(source), status="uploading_aip")
-            subprocess.run(
-                [
-                    sys.executable,
-                    str(SCRIPTS / "upload-aip-wasabi.py"),
-                    str(aip_bag),
-                    game_key,
-                    str(ingest_cfg_path),
-                ],
-                check=True,
-            )
-        else:
-            print("Wasabi AIP upload skipped (wasabi.enabled is false or section missing)")
-
-        dip_wasabi_cfg = ingest_cfg.get("dip_wasabi") or {}
-        if dip_wasabi_cfg.get("enabled", False):
-            dip_cfg_rel = str(dip_wasabi_cfg.get("config_file", "preservation/dip-wasabi.yml.example"))
-            dip_cfg_path = Path("/config") / dip_cfg_rel
-            upsert_ledger(conn, game_key=game_key, source_path=str(source), status="uploading_dip_wasabi")
-            subprocess.run(
-                [
-                    sys.executable,
-                    str(SCRIPTS / "upload-dip-wasabi.py"),
-                    str(dip_path),
-                    game_key,
-                    str(dip_cfg_path),
-                ],
-                check=True,
-            )
-        else:
-            print("Wasabi DIP upload skipped (dip_wasabi.enabled is false or section missing)")
-
-        manifest_path = aip_bag / "metadata" / "other" / "checksums-sha256.txt"
         package_uuid = None
-        root_mets = aip_bag / "METS.xml"
-        if root_mets.is_file():
-            import re
+        file_count: int | None = None
+        total_bytes: int | None = None
+        checksum_manifest_path: str | None = None
+        submission_source_id: str | None = None
+        inventory_json: dict | None = None
+        package_format = mode
 
-            text = root_mets.read_text(encoding="utf-8", errors="replace")
-            match = re.search(r'\bOBJID="([^"]+)"', text)
-            if match:
-                package_uuid = match.group(1)
+        if mode == "bagit":
+            dip_path, bag_dir, _sub, inventory, checksum_manifest_path, submission_source_id = run_bagit_ingest(
+                conn,
+                game_cfg_path=game_cfg_path,
+                game_cfg=game_cfg,
+                ingest_cfg_path=ingest_cfg_path,
+                ingest_cfg=ingest_cfg,
+                source=source,
+                game_key=game_key,
+            )
+            aip_bag = bag_dir
+            inventory_json = inventory
+            if inventory and inventory.get("summary"):
+                file_count = int(inventory["summary"].get("file_count") or 0)
+                total_bytes = int(inventory["summary"].get("total_bytes") or 0)
+        else:
+            dip_path, aip_bag, package_uuid, checksum_manifest_path, file_count, total_bytes = run_eark_ingest(
+                conn,
+                game_cfg_path=game_cfg_path,
+                ingest_cfg_path=ingest_cfg_path,
+                ingest_cfg=ingest_cfg,
+                source=source,
+                game_key=game_key,
+                game_cfg=game_cfg,
+            )
+            package_format = "e-ark"
 
         moby = subprocess.run(
             [sys.executable, str(SCRIPTS / "moby_enrich_game.py"), str(game_cfg_path)],
@@ -235,12 +375,17 @@ def main() -> None:
             dip_path=str(dip_path),
             aip_bag_path=str(aip_bag),
             package_uuid=package_uuid,
-            checksum_manifest_path=str(manifest_path) if manifest_path.is_file() else None,
+            file_count=file_count,
+            total_bytes=total_bytes,
+            checksum_manifest_path=checksum_manifest_path,
             error_message=None,
+            package_format=package_format,
+            submission_source_id=submission_source_id,
+            inventory_json=inventory_json,
         )
-        print(f"Ingest complete: {game_key}")
-        print(f"  DIP: {dip_path}")
-        print(f"  AIP: {aip_bag}")
+        print(f"Ingest complete: {game_key} ({package_format})")
+        print(f"  Package tar: {dip_path}")
+        print(f"  Bag dir: {aip_bag}")
     except ContentPolicyError as e:
         upsert_ledger(
             conn,

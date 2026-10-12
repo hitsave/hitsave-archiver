@@ -76,6 +76,13 @@ def resolve_game_config(cfg: dict, *, agent_version: str | None = None) -> dict:
             stag_base = stag_base / batch_segment
         out["staging_dir"] = str(stag_base / game_key)
 
+    bag_sub = paths.get("bag_subdir", "bag")
+    if game_key and not out.get("bagit_bag_dir"):
+        bag_base = output_root / bag_sub
+        if batch_segment:
+            bag_base = bag_base / batch_segment
+        out["bagit_bag_dir"] = str(bag_base / game_key)
+
     if game_key and not out.get("aip_bag_dir"):
         aip_base = output_root / aip_sub
         if batch_segment:
@@ -94,15 +101,37 @@ def resolve_game_config(cfg: dict, *, agent_version: str | None = None) -> dict:
     return out
 
 
-def load_packaging_config() -> dict:
+def _packaging_yaml_path() -> Path:
     for path in (
         Path("/config/preservation/packaging.yaml"),
         ROOT / "config" / "preservation" / "packaging.yaml",
     ):
         if path.is_file():
-            data = yaml.safe_load(path.read_text()) or {}
-            return data.get("preservation") or {}
+            return path
     raise FileNotFoundError("packaging.yaml not found under /config/preservation/ or repo config/")
+
+
+def load_packaging_yaml_root() -> dict:
+    return yaml.safe_load(_packaging_yaml_path().read_text()) or {}
+
+
+def load_packaging_config() -> dict:
+    return load_packaging_yaml_root().get("preservation") or {}
+
+
+def wasabi_bagit_tar_key(game_key: str, wasabi_prefix: str) -> str:
+    """S3 object key for a BagIt tar from packaging.yaml storage.wasabi.key_pattern."""
+    storage = load_packaging_yaml_root().get("storage") or {}
+    wasabi = storage.get("wasabi") or {}
+    pattern = str(wasabi.get("key_pattern") or "{prefix}/{game_key}/{game_key}.tar")
+    prefix = wasabi_prefix.strip("/")
+    return pattern.format(prefix=prefix, game_key=game_key.strip("/"))
+
+
+def packaging_mode() -> str:
+    """Return 'bagit' or 'e-ark' (default e-ark for backward compatibility)."""
+    mode = str(load_packaging_config().get("packaging_mode") or "e-ark").strip().lower()
+    return mode if mode in ("bagit", "e-ark") else "e-ark"
 
 
 def should_skip(path: Path) -> bool:

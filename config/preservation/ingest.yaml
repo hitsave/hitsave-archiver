@@ -5,6 +5,7 @@ paths:
   press_material_root: /data/press-material
   output_root: /output
   dip_subdir: dip
+  bag_subdir: bag
   aip_subdir: aip
   processed_subdir: processed
   quarantine_subdir: quarantine

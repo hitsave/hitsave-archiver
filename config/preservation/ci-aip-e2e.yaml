@@ -1,4 +1,4 @@
-# Tiny press folder for CI / local E-ARK AIP builder checks (E2E/TestGame).
+# Tiny press folder for CI / local BagIt ingest checks (E2E/TestGame).
 source_game_folder: /data/press-material/E2E/TestGame
 game_key: ci-aip-e2e
 aip_bag_dir: /output/aip/ci-aip-e2e

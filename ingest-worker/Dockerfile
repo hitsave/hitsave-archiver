@@ -19,6 +19,10 @@ COPY packaging/e-ark-schemas /app/packaging/e-ark-schemas
 COPY scripts/batch-expand-preservation.py \
     scripts/build-dip-e-ark.py \
     scripts/build-aip-e-ark.py \
+    scripts/build-bagit-package.py \
+    scripts/upload-package-wasabi.py \
+    scripts/export-preservation-catalog.py \
+    scripts/submission_sources.py \
     scripts/validate-e-ark-package.sh \
     scripts/verify-packaging-profile-urls.py \
     scripts/preservation_common.py \

@@ -1,9 +1,18 @@
-# Normative packaging for Hit Save press ingest (see docs/preservation-packaging-standard.md).
-#
-# Status: builders are catching up; validators apply to target output, not all legacy pilots.
+# Normative packaging for Hit Save press ingest.
+# OAIS + BagIt (primary): docs/oais-bagit-preservation-plan.md
+# Legacy E-ARK: docs/preservation-packaging-standard.md
 
 preservation:
-  # Primary standards (E-ARK / DILCIS CSIP family).
+  # bagit | e-ark — press ingest uses bagit when set to bagit.
+  packaging_mode: bagit
+
+  bagit:
+    bagit_version: "1.0"
+    payload_dir: data
+    metadata_dir: metadata
+    manifest_algorithm: sha256
+
+  # Primary standards (E-ARK / DILCIS CSIP family) — legacy e-ark mode only.
   aip_profile: E-ARK-AIP
   dip_profile: E-ARK-DIP
   csip_version: "2.2.0"
@@ -46,9 +55,9 @@ preservation:
 
 storage:
   wasabi:
-    # Unpacked CSIP package root (METS.xml at package root), not BagIt-only mirror.
-    layout: unpacked_csip_root
-    key_pattern: "{prefix}/{game_key}/"
+    # bagit_tar: one {game_key}.tar per game; e-ark: unpacked tree under prefix/
+    layout: bagit_tar
+    key_pattern: "{prefix}/{game_key}/{game_key}.tar"
 
 validation:
   primary_tool: eark-validator
