@@ -10,7 +10,7 @@ services:
       - ${SUBMISSIONS_ROOT:-./.ci/submissions}:/data/submissions
       - ${OUTPUT_ROOT:-./.ci/output}:/output
 
-  omeka-uploader:
+  omeka-catalog:
     volumes:
       - ./config:/config:ro
       - ${HITSAVE_PRIVATE_CONFIG:-./.ci/private-config}/secrets:/config/secrets:ro

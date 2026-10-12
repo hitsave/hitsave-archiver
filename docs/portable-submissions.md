@@ -1,6 +1,6 @@
 # Portable submissions (zip intake)
 
-Archivists without access to `/tank2/press-material` can deliver **zip** packages (games, press kits, or other digital material). The stack unpacks them under a dedicated submissions volume and runs the **same BagIt ingest** as on-site press material: ClamAV → `build-bagit-package.py` → Wasabi (when enabled) → optional Moby enrich → Omeka upload.
+Archivists without access to `/tank2/press-material` can deliver **zip** packages (games, press kits, or other digital material). The stack unpacks them under a dedicated submissions volume and runs the **same BagIt ingest** as on-site press material: ClamAV → `build-bagit-package.py` → Wasabi (when enabled) → optional Moby enrich → Omeka catalog registration.
 
 Policy and limits: [`config/preservation/submissions.yaml`](../config/preservation/submissions.yaml).
 
@@ -74,7 +74,7 @@ docker compose run --rm --entrypoint python ingest-worker \
   /app/scripts/ingest-submission.py /data/submissions/incoming/materials.zip --skip-ingest
 ```
 
-4. **Omeka DIP upload** (unchanged): after ingest completes, use `upload-dip-omeka-api.py` / batch Omeka scripts with the ledger `game_key`.
+4. **Omeka DIP catalog registration**: after ingest completes, use `register-dip-omeka-api.py` or `register-manifest-dips-omeka.sh` with the ledger `game_key`.
 
 ## Security model
 
@@ -127,7 +127,7 @@ Generated game config picks **`max_files`** and **`max_total_bytes`** from [`con
 
 ### Downstream risk
 
-Ingest does not open files in Omeka or a browser. After **Omeka DIP upload**, staff and public viewers are a separate trust boundary—treat new submissions like any other untrusted user content until reviewed.
+Ingest does not open files in Omeka or a browser. After **Omeka DIP catalog registration**, staff and public viewers are a separate trust boundary—treat new submissions like any other untrusted user content until reviewed.
 
 ### Regression tests
 

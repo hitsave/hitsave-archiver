@@ -147,6 +147,21 @@ def _load_yaml(path: Path) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
 
+def load_omeka_catalog_config(config_root: Path) -> dict:
+    """Omeka REST registration settings (omeka-catalog.yaml; omeka-uploader.yaml is deprecated)."""
+    for name in ("omeka-catalog.yaml", "omeka-uploader.yaml"):
+        path = config_root / name
+        if path.is_file():
+            return _load_yaml(path)
+    raise FileNotFoundError(f"Missing omeka-catalog.yaml under {config_root}")
+
+
+def apply_staff_aip_uri_after_register(aip_cfg: dict) -> bool:
+    return bool(
+        aip_cfg.get("apply_uri_after_register", aip_cfg.get("apply_uri_after_upload", False))
+    )
+
+
 def ledger_aip_wasabi_prefix(db_cfg: dict, game_key: str) -> str | None:
     if psycopg is None:
         raise RuntimeError("psycopg required")
@@ -274,9 +289,9 @@ def apply_item_aip_uri(
     api: type[OmekaItemApi],
 ) -> str | None:
     """Apply configured staff-only s3:// AIP URI from the ledger onto an Omeka item."""
-    uploader_cfg = _load_yaml(config_root / "omeka-uploader.yaml")
-    aip_cfg = uploader_cfg.get("aip_wasabi") or {}
-    if not aip_cfg.get("apply_uri_after_upload", False):
+    catalog_cfg = load_omeka_catalog_config(config_root)
+    aip_cfg = catalog_cfg.get("aip_wasabi") or {}
+    if not apply_staff_aip_uri_after_register(aip_cfg):
         return None
     wasabi = ingest_cfg.get("wasabi") or {}
     bucket = str(wasabi.get("bucket") or "").strip()

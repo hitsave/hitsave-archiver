@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ingest a portable submission zip: safe unpack → ClamAV → E-ARK DIP/AIP (via ingest-game-folder)."""
+"""Ingest a portable submission zip: safe unpack → ClamAV → BagIt ingest (via ingest-game-folder)."""
 from __future__ import annotations
 
 import argparse

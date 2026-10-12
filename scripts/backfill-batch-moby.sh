@@ -14,7 +14,7 @@ for g in m['games']:
     print(g['config'])
 ")
 
-docker compose build ingest-worker omeka-uploader >/dev/null
+docker compose build ingest-worker omeka-catalog >/dev/null
 docker compose up -d postgres >/dev/null
 
 for cfg in "${CONFIGS[@]}"; do
@@ -28,7 +28,7 @@ echo "=== apply Moby metadata to Omeka (F batch items with Moby metadata) ==="
 mapfile -t PKG_KEYS < <(docker compose exec -T postgres psql -U hitsave -d hitsave_ledger -tAc \
   "SELECT game_key FROM game_ingest WHERE source_path LIKE '%Representation_Copies/F/%' AND omeka_item_id IS NOT NULL AND metadata_json IS NOT NULL ORDER BY game_key;" </dev/null)
 if ((${#PKG_KEYS[@]} > 0)); then
-  docker compose run --rm -T --entrypoint python omeka-uploader \
+  docker compose run --rm -T --entrypoint python omeka-catalog \
     /app/scripts/apply-moby-metadata-omeka.py "${PKG_KEYS[@]}" </dev/null
 else
   echo "No F-batch Omeka rows with Moby metadata to patch."

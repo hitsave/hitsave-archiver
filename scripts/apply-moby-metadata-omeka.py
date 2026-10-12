@@ -27,9 +27,9 @@ _LEGACY_OMEKA_INGEST_KIND = "press_material"
 from moby_resolve import uses_moby_catalog_data  # noqa: E402
 
 
-def _upload_api_module():
-    path = REPO_ROOT / "scripts" / "upload-dip-omeka-api.py"
-    spec = importlib.util.spec_from_file_location("upload_dip_omeka_api", path)
+def _register_dip_api_module():
+    path = REPO_ROOT / "scripts" / "register-dip-omeka-api.py"
+    spec = importlib.util.spec_from_file_location("register_dip_omeka_api", path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"Cannot load {path}")
     mod = importlib.util.module_from_spec(spec)
@@ -43,12 +43,12 @@ def main() -> None:
     if not apply_all and not keys:
         raise SystemExit("Usage: apply-moby-metadata-omeka.py [--all] [game_key ...]")
 
-    upload = _upload_api_module()
-    load_yaml = upload.load_yaml
-    pg_connect = upload.pg_connect
-    apply_moby_metadata_to_item = upload.apply_moby_metadata_to_item
+    register_api = _register_dip_api_module()
+    load_yaml = register_api.load_yaml
+    pg_connect = register_api.pg_connect
+    apply_moby_metadata_to_item = register_api.apply_moby_metadata_to_item
 
-    api_cfg = load_yaml(CONFIG_ROOT / "omeka-uploader.yaml")["api"]
+    api_cfg = load_yaml(CONFIG_ROOT / "omeka-catalog.yaml")["api"]
     cred_rel = Path(api_cfg["credentials_file"])
     if cred_rel.parts and cred_rel.parts[0] == "config":
         cred_rel = Path(*cred_rel.parts[1:])

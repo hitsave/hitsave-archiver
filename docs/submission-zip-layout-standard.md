@@ -9,7 +9,7 @@ Goal: **standardize on zip as the archivist delivery format** and decide unambig
 | Term | Meaning |
 |------|---------|
 | **Archive base name** | Zip filename without `.zip` (e.g. `Pac-Man_CDX` from `Pac-Man_CDX.zip`) |
-| **Game folder** | Directory whose contents become `source_game_folder` for AIP/DIP |
+| **Game folder** | Directory whose contents become `source_game_folder` for BagIt ingest |
 | **Game name** | Human title / slug source — manifest, folder name, or archive base name |
 | **Quarantine** | Reject with explicit reason; zip → `failed/` (or future `quarantine/`); no ingest |
 
@@ -66,13 +66,13 @@ Use archive base name when restaging (rule 3):
 | Today | Planned |
 |-------|---------|
 | Any error → `failed/` + `error.txt` | **Quarantine** = layout/content policy (operator review, maybe return to archivist) |
-| | **Failed** = virus, zip bomb, I/O, E-ARK/Wasabi errors |
+| | **Failed** = virus, zip bomb, I/O, BagIt/Wasabi errors |
 
 Config sketch (not wired yet):
 
 ```yaml
 layout:
-  mode: standard   # standard | legacy (today)
+  mode: standard
   restage_loose_files: true
   generic_archive_names:
     - materials

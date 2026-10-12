@@ -22,7 +22,6 @@ COPY scripts/batch-expand-preservation.py \
     scripts/purge-wasabi-prefix.py \
     scripts/export-preservation-catalog.py \
     scripts/submission_sources.py \
-    scripts/verify-packaging-profile-urls.py \
     scripts/preservation_common.py \
     scripts/ingest_kind.py \
     scripts/dump_redump.py \
@@ -43,7 +42,7 @@ COPY scripts/batch-expand-preservation.py \
     scripts/omeka_external_dip.py \
     scripts/dip_mount_preflight.py \
     scripts/omeka_staff_metadata.py \
-    scripts/upload-dip-omeka-api.py \
+    scripts/register-dip-omeka-api.py \
     scripts/press_material_description.py \
     scripts/moby_omeka_fields.py \
     scripts/apply-moby-metadata-omeka.py \

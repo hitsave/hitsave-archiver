@@ -42,7 +42,7 @@ def attach_external_dip_media(
     api_url: Callable[[str, str, dict], str],
     merge_media_data_json: Callable[[int, dict[str, Any]], None] | None = None,
 ) -> int:
-    """POST omeka_dip_package media (no file upload)."""
+    """POST omeka_dip_package media row (Wasabi prefix only; no Omeka stored file)."""
     data: dict[str, Any] = {
         "dip_storage": dip_storage,
         "dip_wasabi_uri": s3_uri,

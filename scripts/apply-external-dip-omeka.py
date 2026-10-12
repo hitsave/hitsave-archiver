@@ -24,6 +24,7 @@ from omeka_dip_media import find_dip_media_id_on_item, media_is_dip_package  # n
 from moby_resolve import uses_moby_catalog_data  # noqa: E402
 from omeka_staff_metadata import (  # noqa: E402
     apply_item_aip_uri,
+    load_omeka_catalog_config,
     strip_public_wasabi_bibo_uri,
     strip_wasabi_s3_from_relation,
 )
@@ -36,11 +37,11 @@ def load_yaml(path: Path) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
 
-def _upload_api_module():
+def _register_dip_api_module():
     import importlib.util
 
-    path = SCRIPTS / "upload-dip-omeka-api.py"
-    spec = importlib.util.spec_from_file_location("upload_dip_omeka_api", path)
+    path = SCRIPTS / "register-dip-omeka-api.py"
+    spec = importlib.util.spec_from_file_location("register_dip_omeka_api", path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"Cannot load {path}")
     mod = importlib.util.module_from_spec(spec)
@@ -99,17 +100,17 @@ def resolve_omeka_mariadb_container() -> str:
     env = os.environ.get("OMEKA_MARIADB_CONTAINER", "").strip()
     if env:
         return env
-    uploader = load_yaml(CONFIG_ROOT / "omeka-uploader.yaml")
-    db = uploader.get("omeka_mariadb") or {}
+    catalog_cfg = load_omeka_catalog_config(CONFIG_ROOT)
+    db = catalog_cfg.get("omeka_mariadb") or {}
     return str(db.get("container") or "").strip()
 
 
 def merge_media_data_json(media_id: int, merged: dict[str, Any]) -> None:
     container = resolve_omeka_mariadb_container()
-    uploader = load_yaml(CONFIG_ROOT / "omeka-uploader.yaml")
+    catalog_cfg = load_omeka_catalog_config(CONFIG_ROOT)
     database = str(
         os.environ.get("OMEKA_MARIADB_DATABASE")
-        or (uploader.get("omeka_mariadb") or {}).get("database")
+        or (catalog_cfg.get("omeka_mariadb") or {}).get("database")
         or "omeka_s"
     ).strip()
     if not container:
@@ -204,13 +205,13 @@ def main() -> None:
             p.stat().st_size for p in args.bag_dir.rglob("*") if p.is_file()
         )
 
-    uploader_cfg = load_yaml(CONFIG_ROOT / "omeka-uploader.yaml")
-    api_cfg = uploader_cfg.get("api") or {}
+    catalog_cfg = load_omeka_catalog_config(CONFIG_ROOT)
+    api_cfg = catalog_cfg.get("api") or {}
     cred_path = CONFIG_ROOT / str(api_cfg.get("credentials_file", "secrets/omeka-api-credentials-local.yaml"))
     creds = load_yaml(cred_path)
     base = str(api_cfg["base_url"]).rstrip("/")
 
-    api = _upload_api_module()
+    api = _register_dip_api_module()
     session = requests.Session()
 
     metadata_json: dict | None = None
@@ -240,7 +241,7 @@ def main() -> None:
         if not check.ok or not media_is_dip_package(check.json(), dip_ingester=dip_ingester):
             raise RuntimeError(
                 f"Item {item_id} has no omeka_dip_package media; "
-                f"ledger omeka_media_id={media_id} — run upload-dip-omeka-api to attach one"
+                f"ledger omeka_media_id={media_id} — run register-dip-omeka-api to attach one"
             )
 
     patch_media_external_dip(

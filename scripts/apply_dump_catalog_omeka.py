@@ -37,9 +37,9 @@ from preservation_common import load_ingest_config, resolve_game_config  # noqa:
 CONFIG_ROOT = Path(__import__("os").environ.get("HITSAVE_CONFIG_ROOT", str(REPO_ROOT / "config")))
 
 
-def _upload_api_module():
-    path = SCRIPTS / "upload-dip-omeka-api.py"
-    spec = importlib.util.spec_from_file_location("upload_dip_omeka_api", path)
+def _register_dip_api_module():
+    path = SCRIPTS / "register-dip-omeka-api.py"
+    spec = importlib.util.spec_from_file_location("register_dip_omeka_api", path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"Cannot load {path}")
     mod = importlib.util.module_from_spec(spec)
@@ -100,7 +100,7 @@ def apply_dump_catalog(
     handoff_path: Path | None = None,
     patch_item_id: int | None = None,
 ) -> dict[str, Any]:
-    api = _upload_api_module()
+    api = _register_dip_api_module()
     game_cfg = resolve_game_config(load_yaml(game_cfg_path), agent_version="apply-dump-catalog-omeka.py")
     if resolve_ingest_kind(game_cfg) != "dump":
         raise RuntimeError(f"ingest_kind must be dump for {game_cfg_path}")
@@ -148,7 +148,7 @@ def apply_dump_catalog(
             ledger_aip = row[3]
             ledger_prefix = row[4]
 
-    uploader_cfg = load_yaml(CONFIG_ROOT / "omeka-uploader.yaml")
+    uploader_cfg = load_yaml(CONFIG_ROOT / "omeka-catalog.yaml")
     api_cfg = uploader_cfg.get("api") or {}
     dump_cfg = dump_catalog_config(uploader_cfg)
     cred_path = CONFIG_ROOT / str(api_cfg.get("credentials_file", "secrets/omeka-api-credentials-local.yaml"))

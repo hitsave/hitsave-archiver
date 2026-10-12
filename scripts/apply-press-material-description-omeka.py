@@ -23,9 +23,9 @@ import importlib.util  # noqa: E402
 from press_material_description import press_material_description  # noqa: E402
 
 
-def _upload_api():
-    path = REPO_ROOT / "scripts" / "upload-dip-omeka-api.py"
-    spec = importlib.util.spec_from_file_location("upload_dip_omeka_api", path)
+def _register_dip_api():
+    path = REPO_ROOT / "scripts" / "register-dip-omeka-api.py"
+    spec = importlib.util.spec_from_file_location("register_dip_omeka_api", path)
     mod = importlib.util.module_from_spec(spec)
     assert spec and spec.loader
     spec.loader.exec_module(mod)
@@ -37,14 +37,14 @@ def main() -> None:
     if not keys:
         raise SystemExit("Usage: apply-press-material-description-omeka.py <game_key> [...]")
 
-    upload = _upload_api()
-    api_cfg = upload.load_yaml(CONFIG_ROOT / "omeka-uploader.yaml")["api"]
+    register_api = _register_dip_api()
+    api_cfg = register_api.load_yaml(CONFIG_ROOT / "omeka-catalog.yaml")["api"]
     cred_path = CONFIG_ROOT / "secrets" / "omeka-api-credentials-local.yaml"
     if not cred_path.is_file():
         cred_path = CONFIG_ROOT / api_cfg["credentials_file"]
-    creds = upload.load_yaml(cred_path)
-    ingest_cfg = upload.load_yaml(CONFIG_ROOT / "preservation/ingest.yaml")
-    db_cfg = upload.load_yaml(Path(ingest_cfg["database"]["config_file"]))["postgres"]
+    creds = register_api.load_yaml(cred_path)
+    ingest_cfg = register_api.load_yaml(CONFIG_ROOT / "preservation/ingest.yaml")
+    db_cfg = register_api.load_yaml(Path(ingest_cfg["database"]["config_file"]))["postgres"]
 
     session = requests.Session()
     base = api_cfg["base_url"]

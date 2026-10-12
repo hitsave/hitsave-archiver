@@ -1,11 +1,11 @@
-# Omeka S REST API (omeka-uploader container). Not used by the Omeka web app itself.
+# Omeka S REST API (omeka-catalog compose service). Not used by the Omeka web app itself.
 # Visibility + ARK behavior on prod: hitsave-omeka-test docs/omeka-production.md
 api:
-  # Uploader runs in Docker; local test stack listens on host :8088.
+  # Catalog register runs in Docker; local test stack listens on host :8088.
   base_url: http://host.docker.internal:8088/api
   credentials_file: secrets/omeka-api-credentials-local.yaml
   site_slug: hitsave-test
-  # Test E2E: anonymous browse; prod uploads use private config overlay when needed.
+  # Test E2E: anonymous browse; prod uses private config overlay when needed.
   default_is_public: true
   item_set_title: Press and Marketing Materials
   production_item_set_id: 1459
@@ -13,7 +13,7 @@ api:
 
 # Staff-only preservation URI on items (ledger package_storage_prefix → s3://…).
 aip_wasabi:
-  apply_uri_after_upload: true
+  apply_uri_after_register: true
   uri_property: dcterms:relation
   uri_is_public: false
 
@@ -21,7 +21,7 @@ omeka_mariadb:
   container: hitsave-omeka-test-mariadb-1
   database: omeka_s
 
-# Omeka app container (mount preflight via docker exec; requires /var/run/docker.sock on uploader).
+# Omeka app container (mount preflight via docker exec; requires /var/run/docker.sock on omeka-catalog).
 omeka_app:
   container: hitsave-omeka-test-omeka-1
 

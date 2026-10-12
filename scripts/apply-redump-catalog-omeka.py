@@ -22,9 +22,9 @@ import importlib.util  # noqa: E402
 CONFIG_ROOT = Path(__import__("os").environ.get("HITSAVE_CONFIG_ROOT", str(REPO_ROOT / "config")))
 
 
-def _upload_api_module():
-    path = SCRIPTS / "upload-dip-omeka-api.py"
-    spec = importlib.util.spec_from_file_location("upload_dip_omeka_api", path)
+def _register_dip_api_module():
+    path = SCRIPTS / "register-dip-omeka-api.py"
+    spec = importlib.util.spec_from_file_location("register_dip_omeka_api", path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"Cannot load {path}")
     mod = importlib.util.module_from_spec(spec)
@@ -155,7 +155,7 @@ def main() -> None:
     patch_item_id = int(sys.argv[3]) if len(sys.argv) == 4 else None
     manifest = load_yaml(manifest_path)
 
-    uploader_cfg = load_yaml(CONFIG_ROOT / "omeka-uploader.yaml")
+    uploader_cfg = load_yaml(CONFIG_ROOT / "omeka-catalog.yaml")
     api_cfg = uploader_cfg.get("api") or {}
     redump_cfg = dump_catalog_config(uploader_cfg)
     cred_path = CONFIG_ROOT / str(api_cfg.get("credentials_file", "secrets/omeka-api-credentials-local.yaml"))
@@ -169,7 +169,7 @@ def main() -> None:
         redump_cfg.get("storage_uri_base", "http://10.1.1.60:8088/staff/redump")
     )
 
-    api = _upload_api_module()
+    api = _register_dip_api_module()
     session = requests.Session()
     site_id = api.resolve_site_id(session, base, creds, site_slug)
     if patch_item_id is not None:

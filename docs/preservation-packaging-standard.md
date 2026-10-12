@@ -20,4 +20,4 @@ Unpacked bag trees only — one prefix per package. Press: `press-material/{sort
 
 ## Omeka
 
-OmekaDipViewer loads **`metadata/inventory.json`** from the Wasabi prefix and streams files under **`data/`** via S3. Registration is API-only (`upload-dip-omeka-api.py`).
+OmekaDipViewer loads **`metadata/inventory.json`** from the Wasabi prefix and streams files under **`data/`** via S3. Registration is API-only (`register-dip-omeka-api.py`).

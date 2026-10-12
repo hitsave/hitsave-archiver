@@ -13,7 +13,7 @@ Compose expects `HITSAVE_PRIVATE_CONFIG` (default sibling `../hitsave-archiver-c
 
 ## Docker
 
-Use `docker compose` (ingest worker, uploader, CI fixtures). Do not run preservation scripts with bare host Python when the stack defines the runtime.
+Use `docker compose` (ingest worker, omeka-catalog, CI fixtures). Do not run preservation scripts with bare host Python when the stack defines the runtime.
 
 After changing `ingest-worker/` or submission security code, run:
 

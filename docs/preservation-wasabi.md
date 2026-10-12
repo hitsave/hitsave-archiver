@@ -21,4 +21,4 @@ Omeka reads packages via S3 API — see [dip-wasabi-s3.md](./dip-wasabi-s3.md).
 
 With `wasabi.enabled: true`, `ingest-game-folder.py` runs ClamAV → BagIt build → Wasabi sync → ledger `complete` with `package_storage_prefix` and `inventory_json`.
 
-Upload to Omeka is a separate step: `docker compose run --rm omeka-uploader <game_key> …`.
+Register in Omeka is a separate step: `docker compose run --rm omeka-catalog <game_key> …`.

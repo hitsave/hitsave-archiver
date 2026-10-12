@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Resume batch ingest + Omeka upload (uploader skips rows that verify in Omeka).
-#   --ingest-only   Run ingest-worker only (no Omeka upload).
+# Resume batch ingest + Omeka catalog register (omeka-catalog skips rows already in Omeka).
+#   --ingest-only   Run ingest-worker only (no Omeka catalog register).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -22,7 +22,7 @@ for g in m['games']:
     print(g['config'])
 ")
 
-docker compose build ingest-worker omeka-uploader >/dev/null
+docker compose build ingest-worker omeka-catalog >/dev/null
 
 ledger_status() {
   local cfg="$1"
@@ -55,12 +55,12 @@ for cfg in "${CONFIGS[@]}"; do
       fi
       pkg_key="$(docker compose run --rm --entrypoint python ingest-worker \
         /app/scripts/batch_ledger.py game_key "/config/preservation/$rel" 2>/dev/null | tr -d '[:space:]' || true)"
-      echo "=== omeka upload: ${pkg_key:-$key} ==="
-      if ! docker compose run --rm -T omeka-uploader "/config/preservation/${cfg#config/preservation/}" </dev/null; then
-        echo "=== omeka upload failed (continuing batch): $key ===" >&2
+      echo "=== omeka catalog register: ${pkg_key:-$key} ==="
+      if ! docker compose run --rm -T omeka-catalog "/config/preservation/${cfg#config/preservation/}" </dev/null; then
+        echo "=== omeka catalog register failed (continuing batch): $key ===" >&2
       fi
     else
-      echo "=== omeka upload skipped: $key (ledger status=${status:-none}) ==="
+      echo "=== omeka catalog register skipped: $key (ledger status=${status:-none}) ==="
     fi
   fi
 done

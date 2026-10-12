@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Re-run omeka-uploader (skip path) to apply staff AIP s3 URIs on existing items.
+# Re-run omeka-catalog to apply staff AIP s3 URIs on existing Omeka items.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -19,7 +19,7 @@ mapfile -t KEYS < <(
 )
 
 echo "Applying staff AIP URI for ${#KEYS[@]} ledger rows (${PREFIX}*)"
-docker compose build omeka-uploader >/dev/null
+docker compose build omeka-catalog >/dev/null
 
 for key in "${KEYS[@]}"; do
   key="$(echo "$key" | tr -d ' ')"
@@ -29,7 +29,7 @@ for key in "${KEYS[@]}"; do
     continue
   fi
   echo "=== staff AIP: $key ==="
-  if ! docker compose run --rm -T omeka-uploader "$key" "/config/preservation/${cfg#config/preservation/}" </dev/null; then
+  if ! docker compose run --rm -T omeka-catalog "$key" "/config/preservation/${cfg#config/preservation/}" </dev/null; then
     echo "=== failed (continuing): $key ===" >&2
   fi
 done

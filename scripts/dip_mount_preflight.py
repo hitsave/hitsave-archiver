@@ -62,13 +62,13 @@ def head_wasabi_bagit_txt(
 def assert_bagit_external_dip_available(
     *,
     ingest_cfg: dict,
-    uploader_cfg: dict,
+    catalog_cfg: dict | None = None,
     config_root: Path,
     package_storage_prefix: str = "",
     expected_bytes: int = 0,
 ) -> int:
     """Verify unpacked BagIt prefix exists on Wasabi."""
-    _ = uploader_cfg
+    _ = catalog_cfg
     prefix = str(package_storage_prefix).strip("/")
     if not prefix:
         raise DipNotAvailableError("package_storage_prefix is required for BagIt Omeka attach")

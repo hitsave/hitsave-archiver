@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create Omeka catalog items; BagIt press packages use Wasabi S3 prefix only (no file upload)."""
+"""Register Omeka catalog items and S3-backed omeka_dip_package media via REST (no Omeka file storage)."""
 from __future__ import annotations
 
 import json
@@ -26,7 +26,7 @@ from moby_resolve import moby_description_for_omeka, uses_moby_catalog_data  # n
 from press_material_description import press_material_description  # noqa: E402
 from normalize_display_title import catalog_item_title  # noqa: E402
 from omeka_dip_media import find_dip_media_id_on_item  # noqa: E402
-from omeka_staff_metadata import apply_item_aip_uri  # noqa: E402
+from omeka_staff_metadata import apply_item_aip_uri, load_omeka_catalog_config  # noqa: E402
 from omeka_external_dip import (  # noqa: E402
     attach_external_dip_media,
     create_item_without_media,
@@ -291,8 +291,8 @@ def update_ledger(conn, game_key: str, item_id: int, media_id: int) -> None:
 def main() -> None:
     if len(sys.argv) < 2:
         raise SystemExit(
-            "Usage: upload-dip-omeka-api.py <game_key> [path/to/game.yaml]\n"
-            "       upload-dip-omeka-api.py path/to/game.yaml  (ledger resolves package_id)"
+            "Usage: register-dip-omeka-api.py <game_key> [path/to/game.yaml]\n"
+            "       register-dip-omeka-api.py path/to/game.yaml  (ledger resolves package_id)"
         )
 
     game_cfg_path: Path | None = None
@@ -308,7 +308,7 @@ def main() -> None:
                 raise SystemExit(f"Expected one generated config for {game_key}, found {len(matches)}")
             game_cfg_path = matches[0]
 
-    game_cfg = resolve_game_config(load_yaml(game_cfg_path), agent_version="upload-dip-omeka-api.py")
+    game_cfg = resolve_game_config(load_yaml(game_cfg_path), agent_version="register-dip-omeka-api.py")
     omeka_profile = resolve_omeka_moby_profile(game_cfg=game_cfg, config_root=CONFIG_ROOT)
 
     ingest_cfg = load_yaml(CONFIG_ROOT / "preservation/ingest.yaml")
@@ -348,8 +348,8 @@ def main() -> None:
         print(json.dumps(result, indent=2))
         return
 
-    uploader_cfg = load_yaml(CONFIG_ROOT / "omeka-uploader.yaml")
-    api_cfg = uploader_cfg["api"]
+    catalog_cfg = load_omeka_catalog_config(CONFIG_ROOT)
+    api_cfg = catalog_cfg["api"]
     cred_rel = Path(api_cfg["credentials_file"])
     if cred_rel.parts and cred_rel.parts[0] == "config":
         cred_rel = Path(*cred_rel.parts[1:])
@@ -385,7 +385,7 @@ def main() -> None:
     conn = pg_connect(db_cfg)
     metadata_json = None
     inventory_json = None
-    ledger_item_id_for_upload: int | None = None
+    ledger_item_id_existing: int | None = None
     try:
         with conn.cursor() as cur:
             cur.execute(
@@ -498,7 +498,7 @@ def main() -> None:
                 )
             )
             return
-        ledger_item_id_for_upload = existing_item_id
+        ledger_item_id_existing = existing_item_id
     finally:
         conn.close()
 
@@ -537,15 +537,15 @@ def main() -> None:
     try:
         assert_bagit_external_dip_available(
             ingest_cfg=ingest_cfg,
-            uploader_cfg=uploader_cfg,
+            catalog_cfg=catalog_cfg,
             config_root=CONFIG_ROOT,
             package_storage_prefix=package_storage_prefix,
         )
     except DipNotAvailableError as e:
-        raise SystemExit(f"BagIt DIP not available for Omeka upload: {e}") from e
+        raise SystemExit(f"BagIt DIP not available for Omeka catalog registration: {e}") from e
 
-    if ledger_item_id_for_upload:
-        item_id = ledger_item_id_for_upload
+    if ledger_item_id_existing:
+        item_id = ledger_item_id_existing
         if extra:
             patch_item_rdf_values(session, base, creds, item_id, extra)
         media_id = attach_external_dip_media(
@@ -606,7 +606,9 @@ def main() -> None:
         conn.close()
 
     if not item_has_dip_package_media(session, base, creds, item_id, dip_ingester):
-        raise RuntimeError(f"Post-upload verification failed for item {item_id} (no DIP package media)")
+        raise RuntimeError(
+            f"Post-register verification failed for item {item_id} (no DIP package media)"
+        )
 
     if metadata_json and uses_moby_catalog_data(metadata_json):
         apply_moby_metadata_to_item(

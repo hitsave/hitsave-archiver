@@ -98,14 +98,14 @@ def wasabi_from_row(row: dict) -> tuple[str | None, str | None]:
 def build_catalog(rows: list[dict], *, repository_code: str) -> dict:
     games = []
     for row in rows:
-        fmt = row.get("package_format") or "e-ark"
+        fmt = row.get("package_format") or "bagit"
         inventory = row.get("inventory_json")
         if isinstance(inventory, str):
             inventory = json.loads(inventory)
         bucket, key = wasabi_from_row(row)
         package = {
             "format": fmt,
-            "tar_sha256": row.get("package_tar_sha256"),
+            "payload_sha256": row.get("package_tar_sha256"),
             "wasabi_bucket": bucket,
             "wasabi_key": key,
         }

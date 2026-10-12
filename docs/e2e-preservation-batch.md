@@ -33,7 +33,7 @@ Generated per-game YAML lives under `config/preservation/generated/<batch_key>/`
 
 Single-game pilot (committed): `config/preservation/pilot-game.yaml` → ledger `game_key` `pilot-wog1`.
 
-## Full E2E: ingest + Omeka upload
+## Full E2E: ingest + Omeka catalog registration
 
 Test Omeka must be running (`run-omeka-test.sh` in **hitsave-omeka-test**).
 
@@ -42,10 +42,10 @@ cd hitsave-archiver
 docker compose up -d postgres clamav
 bash scripts/run-batch-resume-omeka.sh config/preservation/batch-my-run.yml
 docker compose run --rm -T ingest-worker /config/preservation/pilot-game.yaml </dev/null
-docker compose run --rm -T omeka-uploader pilot-wog1 /config/preservation/pilot-game.yaml </dev/null
+docker compose run --rm -T omeka-catalog pilot-wog1 /config/preservation/pilot-game.yaml </dev/null
 ```
 
-`run-batch-resume-omeka.sh` skips **ingest** when ledger `status=complete`, then runs **omeka-uploader** only when ingest finished `complete` (quarantine/failed rows are skipped). Ingest or Omeka errors **log and continue** to the next game in the manifest.
+`run-batch-resume-omeka.sh` skips **ingest** when ledger `status=complete`, then runs **omeka-catalog** only when ingest finished `complete` (quarantine/failed rows are skipped). Ingest or Omeka errors **log and continue** to the next game in the manifest.
 
 **Content policy:** With `content_policy.enforce: true` in [`ingest.yaml`](../config/preservation/ingest.yaml) (default), booru-style filenames **abort ingest** and write under `$HOST_OUTPUT/quarantine/<game_key>/`. Moby `no_match` is recorded on the ledger only (`mobygames.block_on_failure: false`). Set `enforce: false` only for permissive test runs (warn in logs, no quarantine).
 
@@ -55,16 +55,16 @@ docker compose run --rm -T omeka-uploader pilot-wog1 /config/preservation/pilot-
 bash scripts/run-batch-resume-omeka.sh --ingest-only config/preservation/batch-my-run.yml
 ```
 
-## Upload only (ingest already complete)
+## Catalog register only (ingest already complete)
 
 When ledger rows are **`complete`** and Wasabi has the bag prefix, upload Omeka items only:
 
 ```bash
-bash scripts/upload-manifest-dips-omeka.sh config/preservation/batch-my-run.yml
-bash scripts/upload-manifest-dips-omeka.sh --pilot
+bash scripts/register-manifest-dips-omeka.sh config/preservation/batch-my-run.yml
+bash scripts/register-manifest-dips-omeka.sh --pilot
 ```
 
-Log: `.generated/upload-manifest-dips-omeka.log` (override with `HITSAVE_UPLOAD_LOG`).
+Log: `.generated/register-manifest-dips-omeka.log` (override with `HITSAVE_REGISTER_LOG`).
 
 **Note:** `docker compose run` must use `-T` and `</dev/null>` so Compose does not consume the manifest stdin (see script).
 

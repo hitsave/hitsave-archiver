@@ -32,7 +32,7 @@ for key in "${KEYS[@]}"; do
 done
 
 echo "Applying Moby fields to Omeka…"
-docker compose run --rm -T --entrypoint python omeka-uploader \
+docker compose run --rm -T --entrypoint python omeka-catalog \
   /app/scripts/apply-moby-metadata-omeka.py --all </dev/null
 
 docker compose exec -T postgres psql -U hitsave -d hitsave_ledger -c \

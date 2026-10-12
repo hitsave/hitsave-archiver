@@ -1,4 +1,4 @@
-"""File format identification (PRONOM via Siegfried) for E-ARK PREMIS objects."""
+"""File format identification (PRONOM via Siegfried) for BagIt metadata sidecars."""
 from __future__ import annotations
 
 import json
