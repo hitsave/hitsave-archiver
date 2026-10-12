@@ -6,10 +6,11 @@ Preservation behavior reads committed YAML under `config/`. Operator copies (`ga
 
 | Topic | File | What belongs here |
 |-------|------|-------------------|
-| Container paths, ingest defaults, agent metadata | [`config/preservation/ingest.yaml`](../config/preservation/ingest.yaml) | `paths.*`, `defaults.max_files`, `defaults.max_total_bytes`, `preservation.repository_code`, ClamAV host/port |
+| Container paths, ingest defaults, agent metadata | [`config/preservation/ingest.yaml`](../config/preservation/ingest.yaml) | `paths.*`, `defaults.max_files`, `content_policy.*` (booru blockers, `enforce`), ClamAV host/port |
+| MobyGames enrichment | [`config/mobygames.yaml`](../config/mobygames.yaml) | Optional `block_on_failure` (default false — no_match is not a ingest blocker) |
 | E-ARK profiles, METS, validation tools | [`config/preservation/packaging.yaml`](../config/preservation/packaging.yaml) | Profiles, schema dir, validator URLs — not runtime paths |
 | Portable zip limits, allowlists | [`config/preservation/submissions.yaml`](../config/preservation/submissions.yaml) | `limits.*`, `security.*`, submission-only `preservation.video_access` |
-| Omeka REST upload target | [`config/omeka-uploader.yaml`](../config/omeka-uploader.yaml) | API base URL, site slug, item set, dip ingester name |
+| Omeka REST upload target | [`config/omeka-uploader.yaml`](../config/omeka-uploader.yaml) | API base URL, site slug, `aip_wasabi` staff URI (`is_public: false`), external DIP mount |
 | ClamAV scan caps (aligned with submissions) | [`config/clamav/clamd.conf`](../config/clamav/clamd.conf) | Must stay in sync with `submissions.yaml` `limits.max_member_bytes` / `max_archive_members` — see [`config/clamav/README.md`](../config/clamav/README.md) |
 | Private credentials | **hitsave-archiver-config** (from `config/secrets/*.example`) | Wasabi, Omeka API, Moby, ledger DB |
 | Test Omeka admin URL / site slug | **hitsave-omeka-test** `config/omeka-test/settings.yaml` | Must match `omeka-uploader.yaml` `site_slug` and API base when uploading to test |

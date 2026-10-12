@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import mimetypes
 import shutil
+import subprocess
 import sys
 import uuid
 import xml.sax.saxutils as xml_escape
@@ -14,13 +15,24 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
+from format_identification import (  # noqa: E402
+    FormatHit,
+    identify_directory,
+    load_format_identification_config,
+    siegfried_version,
+)
 from preservation_common import (  # noqa: E402
     file_grp_cit_attrs,
     iso_now,
     load_packaging_config,
     mets_file_element,
     new_id,
-    premis_event_file,
+    package_objid,
+    premis3_document,
+    premis_agent_fragment,
+    premis_digiprov_md_ref,
+    premis_event_fragment,
+    premis_file_object_fragment,
     resolve_game_config,
     sha256_file,
     should_skip,
@@ -28,6 +40,9 @@ from preservation_common import (  # noqa: E402
 
 sys.path.insert(0, str(ROOT / "scripts"))
 from normalize_display_title import normalize_display_title  # noqa: E402
+
+VALIDATE_SCRIPT = ROOT / "scripts" / "validate-e-ark-package.sh"
+PREMIS3_NAME = "PREMIS3.xml"
 
 
 @dataclass
@@ -112,13 +127,118 @@ def mets_file_from_record(rec: FileRecord, href: str, created: str) -> str:
     )
 
 
+def validate_package(package_root: Path) -> None:
+    script = Path("/app/scripts/validate-e-ark-package.sh")
+    if not script.is_file():
+        script = VALIDATE_SCRIPT
+    if not script.is_file():
+        raise SystemExit("validate-e-ark-package.sh not found")
+    subprocess.run(["bash", str(script), str(package_root)], check=True)
+
+
+def write_rep_premis3(
+    premis_path: Path,
+    *,
+    data_files: list[FileRecord],
+    format_hits: dict[str, FormatHit],
+    created: str,
+    agent_name: str,
+    agent_version: str,
+    fmt_cfg: dict,
+) -> None:
+    pronom_registry = str(fmt_cfg.get("pronom_registry_name") or "PRONOM")
+    parts: list[str] = []
+    for rec in data_files:
+        hit = format_hits.get(rec.rel, FormatHit(None, None, None))
+        parts.append(
+            premis_file_object_fragment(
+                object_uuid=rec.object_uuid,
+                filepath=f"data/{rec.rel}",
+                size=rec.size,
+                sha256=rec.sha256,
+                pronom_key=hit.pronom_key,
+                format_name=hit.format_name or rec.mime,
+                format_version=hit.format_version,
+                pronom_registry_name=pronom_registry,
+            )
+        )
+        digest_event_id = str(uuid.uuid4())
+        parts.append(
+            premis_event_fragment(
+                event_id=digest_event_id,
+                event_type="message digest calculation",
+                event_time=created,
+                outcome="success",
+                detail=f"SHA-256 {rec.sha256} for data/{rec.rel}",
+                agent_name=agent_name,
+                agent_version=agent_version,
+                linking_object=rec.object_uuid,
+                linking_object_role="source",
+            )
+        )
+    parts.append(
+        premis_agent_fragment(
+            agent_id="hitsave-ingest",
+            agent_name=f"{agent_name} {agent_version}",
+        )
+    )
+    if fmt_cfg.get("enabled", False):
+        sf_bin = str(fmt_cfg.get("binary") or "sf")
+        parts.append(
+            premis_agent_fragment(
+                agent_id="siegfried",
+                agent_name=f"Siegfried {siegfried_version(sf_bin)}",
+            )
+        )
+    premis_path.parent.mkdir(parents=True, exist_ok=True)
+    premis_path.write_text(premis3_document(body="\n".join(parts)), encoding="utf-8")
+
+
+def write_root_premis3(
+    premis_path: Path,
+    *,
+    created: str,
+    package_uuid: str,
+    source: Path,
+    file_count: int,
+    agent_name: str,
+    agent_version: str,
+    repository_code: str,
+) -> None:
+    ingest_event_id = str(uuid.uuid4())
+    body = "\n".join(
+        [
+            premis_event_fragment(
+                event_id=ingest_event_id,
+                event_type="ingestion",
+                event_time=created,
+                outcome="success",
+                detail=(
+                    f"Ingested {file_count} files from {source} into E-ARK AIP ({repository_code})"
+                ),
+                agent_name=agent_name,
+                agent_version=agent_version,
+                linking_object=package_uuid,
+            ),
+            premis_agent_fragment(
+                agent_id="hitsave-ingest",
+                agent_name=f"{agent_name} {agent_version}",
+            ),
+        ]
+    )
+    premis_path.parent.mkdir(parents=True, exist_ok=True)
+    premis_path.write_text(premis3_document(body=body), encoding="utf-8")
+
+
 def write_rep_mets(
     rep_mets_path: Path,
     *,
     rep_id: str,
     title: str,
     data_files: list[FileRecord],
-    premis_refs: list[tuple[str, str, str]],
+    premis_href: str,
+    premis_path: Path,
+    digiprov_id: str,
     packaging: dict,
     created: str,
 ) -> str:
@@ -130,17 +250,17 @@ def write_rep_mets(
         file_rows.append(mets_file_from_record(rec, href, created))
     files_xml = "\n".join(file_rows)
     data_grp_id = new_id("uuid")
-    premis_xml = ""
-    adm_ids = []
-    for digiprov_id, href, premis_path in premis_refs:
-        adm_ids.append(digiprov_id)
-        p = Path(premis_path)
-        pcs = sha256_file(p).upper()
-        premis_xml += f"""        <digiprovMD ID="{digiprov_id}" STATUS="CURRENT">
-            <mdRef LOCTYPE="URL" MDTYPE="PREMIS" xlink:type="simple" xlink:href="{xml_escape.escape(href)}" MIMETYPE="application/xml" SIZE="{p.stat().st_size}" CREATED="{created}" CHECKSUM="{pcs}" CHECKSUMTYPE="SHA-256"/>
+    md_ref = premis_digiprov_md_ref(
+        href=premis_href,
+        premis_path=premis_path,
+        created=created,
+        label="Digital provenance metadata (PREMIS)",
+    )
+    premis_xml = f"""        <digiprovMD ID="{digiprov_id}" STATUS="CURRENT">
+            {md_ref}
         </digiprovMD>
 """
-    admid = " ".join(adm_ids)
+    admid = digiprov_id
     profile = packaging.get("mets_profile_csip", "https://earkcsip.dilcis.eu/profile/CSIP.xml")
     cit = packaging.get("content_information_type", "MIXED")
     data_grp_cit = file_grp_cit_attrs("Data")
@@ -203,8 +323,10 @@ def build_aip(
     max_bytes: int,
 ) -> tuple[str, Path]:
     packaging = load_packaging_config()
+    fmt_cfg = load_format_identification_config()
     rep_id = packaging.get("representation_id", "rep1")
     created = iso_now()
+    objid = package_objid(package_uuid)
     if package_root.exists():
         shutil.rmtree(package_root)
     package_root.mkdir(parents=True)
@@ -221,46 +343,34 @@ def build_aip(
     agent_version = preservation.get("agent_version", "build-aip-e-ark.py")
     repo = preservation.get("repository_code", "hitsave")
 
-    pres_dir = package_root / "metadata" / "preservation"
-    pres_dir.mkdir(parents=True, exist_ok=True)
-    ingest_event_id = str(uuid.uuid4())
-    ingest_path = pres_dir / f"{ingest_event_id}.xml"
-    ingest_path.write_text(
-        premis_event_file(
-            event_id=ingest_event_id,
-            event_type="ingestion",
-            event_time=created,
-            outcome="success",
-            detail=f"Ingested {len(data_files)} files from {source} into E-ARK AIP ({repo})",
-            agent_name=agent_name,
-            agent_version=agent_version,
-            linking_object=package_uuid,
-        ),
-        encoding="utf-8",
+    format_hits = identify_directory(rep_data, fmt_cfg)
+
+    root_premis_path = package_root / "metadata" / "preservation" / PREMIS3_NAME
+    write_root_premis3(
+        root_premis_path,
+        created=created,
+        package_uuid=package_uuid,
+        source=source,
+        file_count=len(data_files),
+        agent_name=agent_name,
+        agent_version=agent_version,
+        repository_code=repo,
     )
 
-    rep_premis: list[tuple[str, str, str]] = []
-    rep_pres_dir = package_root / "representations" / rep_id / "metadata" / "preservation"
-    rep_pres_dir.mkdir(parents=True, exist_ok=True)
-    for rec in data_files:
-        ev_id = str(uuid.uuid4())
-        rel_path = rep_pres_dir / f"{ev_id}.xml"
-        rel_path.write_text(
-            premis_event_file(
-                event_id=ev_id,
-                event_type="message digest calculation",
-                event_time=created,
-                outcome="success",
-                detail=f"SHA-256 {rec.sha256} for {rec.rel}",
-                agent_name=agent_name,
-                agent_version=agent_version,
-                linking_object=rec.object_uuid,
-            ),
-            encoding="utf-8",
-        )
-        digiprov_id = new_id("uuid")
-        href = f"metadata/preservation/{ev_id}.xml"
-        rep_premis.append((digiprov_id, href, str(rel_path)))
+    rep_premis_path = (
+        package_root / "representations" / rep_id / "metadata" / "preservation" / PREMIS3_NAME
+    )
+    write_rep_premis3(
+        rep_premis_path,
+        data_files=data_files,
+        format_hits=format_hits,
+        created=created,
+        agent_name=agent_name,
+        agent_version=agent_version,
+        fmt_cfg=fmt_cfg,
+    )
+    rep_digiprov_id = new_id("uuid")
+    rep_premis_href = f"metadata/preservation/{PREMIS3_NAME}"
 
     rep_mets_path = package_root / "representations" / rep_id / "METS.xml"
     rep_file_id, rep_mets_rec = write_rep_mets(
@@ -268,7 +378,9 @@ def build_aip(
         rep_id=rep_id,
         title=title,
         data_files=data_files,
-        premis_refs=rep_premis,
+        premis_href=rep_premis_href,
+        premis_path=rep_premis_path,
+        digiprov_id=rep_digiprov_id,
         packaging=packaging,
         created=created,
     )
@@ -281,7 +393,7 @@ def build_aip(
         f"""<?xml version="1.0" encoding="UTF-8"?>
 <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
   <dc:title>{title_esc}</dc:title>
-  <dc:identifier>{xml_escape.escape(package_uuid)}</dc:identifier>
+  <dc:identifier>{xml_escape.escape(objid)}</dc:identifier>
   <dc:source>{xml_escape.escape(str(source))}</dc:source>
 </metadata>
 """,
@@ -339,9 +451,13 @@ def build_aip(
     dmd_id = new_id("uuid")
     amd_id = new_id("uuid")
     digiprov_id = new_id("uuid")
-    ingest_href = f"metadata/preservation/{ingest_event_id}.xml"
-    ingest_size = ingest_path.stat().st_size
-    ingest_cs = sha256_file(ingest_path).upper()
+    root_premis_href = f"metadata/preservation/{PREMIS3_NAME}"
+    root_md_ref = premis_digiprov_md_ref(
+        href=root_premis_href,
+        premis_path=root_premis_path,
+        created=created,
+        label="Digital provenance metadata (PREMIS)",
+    )
 
     struct_id = new_id("uuid")
     root_div_id = new_id("uuid")
@@ -359,7 +475,7 @@ def build_aip(
       xmlns="http://www.loc.gov/METS/"
       xmlns:csip="https://DILCIS.eu/XML/METS/CSIPExtensionMETS"
       xmlns:xlink="http://www.w3.org/1999/xlink"
-      OBJID="{xml_escape.escape(package_uuid)}"
+      OBJID="{xml_escape.escape(objid)}"
       LABEL="{title_esc}"
       TYPE="Other"
       csip:OTHERTYPE="PressMaterial"
@@ -377,7 +493,7 @@ def build_aip(
     </dmdSec>
     <amdSec ID="{amd_id}">
         <digiprovMD ID="{digiprov_id}" STATUS="CURRENT">
-            <mdRef LOCTYPE="URL" MDTYPE="PREMIS" xlink:type="simple" xlink:href="{ingest_href}" MIMETYPE="application/xml" SIZE="{ingest_size}" CREATED="{created}" CHECKSUM="{ingest_cs}" CHECKSUMTYPE="SHA-256"/>
+            {root_md_ref}
         </digiprovMD>
     </amdSec>
     <fileSec ID="{new_id('uuid')}">
@@ -392,7 +508,7 @@ def build_aip(
         </fileGrp>
     </fileSec>
     <structMap ID="{struct_id}" TYPE="PHYSICAL" LABEL="CSIP">
-        <div ID="{root_div_id}" LABEL="{xml_escape.escape(package_uuid)}">
+        <div ID="{root_div_id}" LABEL="{xml_escape.escape(objid)}">
             <div ID="{meta_div_id}" DMDID="{dmd_id}" ADMID="{digiprov_id}" LABEL="Metadata"/>
             <div ID="{schema_div_id}" LABEL="Schemas">
                 <fptr FILEID="{schema_grp_id}"/>
@@ -411,7 +527,7 @@ def build_aip(
 </mets>
 """
     (package_root / "METS.xml").write_text(root_mets, encoding="utf-8")
-    return package_uuid, checksum_path
+    return objid, checksum_path
 
 
 def main() -> None:
@@ -440,6 +556,7 @@ def main() -> None:
         max_files=max_files,
         max_bytes=max_bytes,
     )
+    validate_package(package_root)
     print(f"E-ARK AIP: {package_root}")
     print(f"  OBJID: {pkg_id}")
     print(f"  Files: {checksum_path}")

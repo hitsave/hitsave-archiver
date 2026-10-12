@@ -24,17 +24,32 @@ for g in m['games']:
 
 docker compose build ingest-worker omeka-uploader >/dev/null
 
+ledger_status() {
+  docker compose exec -T postgres psql -U hitsave -d hitsave_ledger -tAc \
+    "SELECT status FROM game_ingest WHERE game_key='${1}' LIMIT 1" 2>/dev/null | tr -d ' ' || true
+}
+
 for cfg in "${CONFIGS[@]}"; do
   key="$(python3 -c "import yaml; print(yaml.safe_load(open('$cfg'))['game_key'])")"
-  status="$(docker compose exec -T postgres psql -U hitsave -d hitsave_ledger -tAc \
-    "SELECT status FROM game_ingest WHERE game_key='${key}' LIMIT 1" 2>/dev/null | tr -d ' ' || true)"
-  if [[ "$status" != "complete" ]]; then
+  status="$(ledger_status "$key")"
+  if [[ "$status" != "complete" && "$status" != "quarantine" ]]; then
     echo "=== ingest: $key ==="
-    docker compose run --rm -T ingest-worker "/config/preservation/${cfg#config/preservation/}" </dev/null
+    if ! docker compose run --rm -T ingest-worker "/config/preservation/${cfg#config/preservation/}" </dev/null; then
+      echo "=== ingest failed (continuing batch): $key ===" >&2
+    fi
+    status="$(ledger_status "$key")"
+  elif [[ "$status" == "quarantine" ]]; then
+    echo "=== ingest skipped (quarantine): $key ==="
   fi
   if [[ "$INGEST_ONLY" -eq 0 ]]; then
-    echo "=== omeka upload: $key ==="
-    docker compose run --rm -T omeka-uploader "$key" "/config/preservation/${cfg#config/preservation/}" </dev/null
+    if [[ "$status" == "complete" ]]; then
+      echo "=== omeka upload: $key ==="
+      if ! docker compose run --rm -T omeka-uploader "$key" "/config/preservation/${cfg#config/preservation/}" </dev/null; then
+        echo "=== omeka upload failed (continuing batch): $key ===" >&2
+      fi
+    else
+      echo "=== omeka upload skipped: $key (ledger status=${status:-none}) ==="
+    fi
   fi
 done
 

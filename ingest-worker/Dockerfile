@@ -1,7 +1,12 @@
 FROM python:3.12-slim-bookworm
 
+ARG SIEGFRIED_VERSION=1.11.9
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl libpq5 ffmpeg \
+    && apt-get install -y --no-install-recommends curl libpq5 ffmpeg docker.io unzip ca-certificates \
+    && curl -fsSL -o /tmp/siegfried.deb \
+       "https://github.com/richardlehane/siegfried/releases/download/v${SIEGFRIED_VERSION}/siegfried_${SIEGFRIED_VERSION}-1_amd64.deb" \
+    && apt-get install -y --no-install-recommends /tmp/siegfried.deb \
+    && rm -f /tmp/siegfried.deb \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -15,11 +20,15 @@ COPY scripts/batch-expand-preservation.py \
     scripts/build-dip-e-ark.py \
     scripts/build-aip-e-ark.py \
     scripts/validate-e-ark-package.sh \
+    scripts/verify-packaging-profile-urls.py \
     scripts/preservation_common.py \
+    scripts/format_identification.py \
+    scripts/source_content_policy.py \
     scripts/normalize_display_title.py \
     scripts/ingest-game-folder.py \
     scripts/fixity-check.py \
     scripts/read-config-yaml.py \
+    scripts/omeka_staff_metadata.py \
     scripts/upload-dip-omeka-api.py \
     scripts/moby_resolve.py \
     scripts/moby_page_scrape.py \
@@ -36,6 +45,8 @@ COPY scripts/batch-expand-preservation.py \
     scripts/ingest-submission.py \
     scripts/redump_info_lookup.py \
     scripts/apply-redump-catalog-omeka.py \
+    scripts/upload-dip-wasabi.py \
+    scripts/apply-external-dip-omeka.py \
     /app/scripts/
 
 ENTRYPOINT ["python", "/app/scripts/ingest-game-folder.py"]

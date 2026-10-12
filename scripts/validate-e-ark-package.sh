@@ -11,6 +11,11 @@ if [[ ! -d "$ROOT" ]]; then
 fi
 
 ABS="$(cd "$ROOT" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if command -v python3 >/dev/null 2>&1; then
+  python3 "$SCRIPT_DIR/verify-packaging-profile-urls.py"
+fi
 
 run_validator() {
   local out

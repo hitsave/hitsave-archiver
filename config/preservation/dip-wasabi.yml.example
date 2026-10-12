@@ -1,0 +1,12 @@
+# Pilot: DIP .tar on Wasabi + read-only mount on Omeka (see docs/dip-wasabi-external-mount.md).
+# Copy to dip-wasabi.yml in this directory (gitignored operator overlay) or merge into private ops config.
+dip_wasabi:
+  credentials_file: secrets/wasabi-credentials.yaml
+  endpoint: https://s3.us-east-2.wasabisys.com
+  region: us-east-2
+  bucket: hitsave-incoming
+  # Object keys: {prefix}{game_key}/{game_key}.tar
+  prefix: dip-access/
+  verify_upload: true
+  # Path inside the Omeka container (bind-mount from host rclone mount).
+  omeka_mount_root: /dip-wasabi

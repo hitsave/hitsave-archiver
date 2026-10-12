@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import os
+import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import urlencode
@@ -25,6 +27,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from moby_omeka_fields import append_moby_fields_to_payload  # noqa: E402
 from moby_resolve import uses_moby_catalog_data  # noqa: E402
 from normalize_display_title import catalog_item_title, normalize_display_title  # noqa: E402
+from omeka_staff_metadata import apply_item_aip_uri  # noqa: E402
 from preservation_common import resolve_game_config  # noqa: E402
 
 
@@ -86,8 +89,11 @@ def literal_value(property_id: int, value: str) -> dict:
     return {"property_id": property_id, "type": "literal", "@value": value}
 
 
-def uri_value(property_id: int, value: str) -> dict:
-    return {"property_id": property_id, "type": "uri", "@id": value}
+def uri_value(property_id: int, value: str, *, is_public: bool | None = None) -> dict:
+    row: dict = {"property_id": property_id, "type": "uri", "@id": value}
+    if is_public is not None:
+        row["is_public"] = is_public
+    return row
 
 
 def item_rdf_value_properties(item_body: dict) -> dict[str, list]:
@@ -272,6 +278,37 @@ def apply_moby_metadata_to_item(
     return sorted(extra.keys())
 
 
+class OmekaItemApi:
+    api_url = staticmethod(api_url)
+    resolve_property_id = staticmethod(resolve_property_id)
+    patch_item_rdf_values = staticmethod(patch_item_rdf_values)
+
+
+def apply_external_dip_wasabi(game_key: str, dip_path: Path) -> None:
+    uploader_cfg = load_yaml(CONFIG_ROOT / "omeka-uploader.yaml")
+    dip_cfg = uploader_cfg.get("dip_wasabi") or {}
+    if not dip_cfg.get("apply_external_after_upload", False):
+        return
+    rel = str(dip_cfg.get("config_file", "preservation/dip-wasabi.yml.example"))
+    cfg_path = CONFIG_ROOT / rel
+    cmd = [
+        sys.executable,
+        str(REPO_ROOT / "scripts" / "apply-external-dip-omeka.py"),
+        game_key,
+        str(dip_path),
+        "--dip-wasabi-config",
+        str(cfg_path),
+        "--skip-upload",
+    ]
+    env = os.environ.copy()
+    mariadb = uploader_cfg.get("omeka_mariadb") or {}
+    if mariadb.get("container"):
+        env.setdefault("OMEKA_MARIADB_CONTAINER", str(mariadb["container"]))
+    if mariadb.get("database"):
+        env.setdefault("OMEKA_MARIADB_DATABASE", str(mariadb["database"]))
+    subprocess.run(cmd, check=True, env=env)
+
+
 def update_ledger(conn, game_key: str, item_id: int, media_id: int) -> None:
     with conn.cursor() as cur:
         cur.execute(
@@ -335,10 +372,25 @@ def main() -> None:
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT omeka_item_id, omeka_media_id, metadata_json, moby_status, block_reason FROM game_ingest WHERE game_key = %s",
+                """
+                SELECT omeka_item_id, omeka_media_id, metadata_json, moby_status, block_reason, status
+                FROM game_ingest WHERE game_key = %s
+                """,
                 (game_key,),
             )
             row = cur.fetchone()
+        if row and row[5] and row[5] != "complete":
+            print(
+                json.dumps(
+                    {
+                        "game_key": game_key,
+                        "skipped": True,
+                        "reason": f"ledger status {row[5]!r} (ingest must be complete)",
+                    },
+                    indent=2,
+                )
+            )
+            return
         if row:
             metadata_json = row[2]
             if isinstance(metadata_json, str):
@@ -361,6 +413,17 @@ def main() -> None:
                     moby_cfg,
                     game_key=game_key,
                 )
+            apply_external_dip_wasabi(game_key, dip_path)
+            staff_aip = apply_item_aip_uri(
+                session,
+                base,
+                creds,
+                game_key,
+                int(row[0]),
+                ingest_cfg=ingest_cfg,
+                config_root=CONFIG_ROOT,
+                api=OmekaItemApi,
+            )
             print(
                 json.dumps(
                     {
@@ -369,6 +432,7 @@ def main() -> None:
                         "omeka_item_id": row[0],
                         "omeka_media_id": row[1],
                         "moby_fields_applied": moby_applied,
+                        "staff_aip_uri": staff_aip,
                     },
                     indent=2,
                 )
@@ -414,6 +478,18 @@ def main() -> None:
     if not item_has_dip_media(session, base, creds, item_id):
         raise RuntimeError(f"Post-upload verification failed for item {item_id}")
 
+    apply_external_dip_wasabi(game_key, dip_path)
+    staff_aip = apply_item_aip_uri(
+        session,
+        base,
+        creds,
+        game_key,
+        item_id,
+        ingest_cfg=ingest_cfg,
+        config_root=CONFIG_ROOT,
+        api=OmekaItemApi,
+    )
+
     print(
         json.dumps(
             {
@@ -422,6 +498,7 @@ def main() -> None:
                 "omeka_media_id": media_id,
                 "dip": str(dip_path),
                 "tar_bytes": dip_path.stat().st_size,
+                "staff_aip_uri": staff_aip,
             },
             indent=2,
         )

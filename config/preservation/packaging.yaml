@@ -15,14 +15,25 @@ preservation:
     cs_premis: https://citspremis.dilcis.eu/specification/
 
   # LoC standards used inside METS (same stack as Archivematica).
+  # METS @PROFILE: verify with scripts/verify-packaging-profile-urls.py
+  # AIP: spec AIPM2 + profile testXML use earkdip URL as the *identifier* (often 404 over HTTP).
+  #      Profile *document* is published on earkaip (+ DILCISBoard/E-ARK-AIP git) — hosting mismatch.
   mets_version: "1.12"
   premis_version: "3.0"
-  mets_profile_csip: https://earkcsip.dilcis.eu/profile/CSIP.xml
-  mets_profile_aip: https://earkaip.dilcis.eu/profile/E-ARK-AIP.xml
-  mets_profile_dip: https://earkdip.dilcis.eu/profile/E-ARK-DIP.xml
+  mets_profile_csip: https://earkcsip.dilcis.eu/profile/E-ARK-CSIP-v2-2-0.xml
+  mets_profile_aip: https://earkdip.dilcis.eu/profile/E-ARK-AIP-v2-2-0.xml
+  mets_profile_aip_document: https://earkaip.dilcis.eu/profile/E-ARK-AIP-v2-2-0.xml
+  mets_profile_dip: https://earkdip.dilcis.eu/profile/E-ARK-DIP-v2-2-0.xml
   content_information_type: MIXED
   representation_id: rep1
   schemas_dir_in_repo: packaging/e-ark-schemas
+
+  # PRONOM / format registry via Siegfried (standard eArchiving tool).
+  format_identification:
+    enabled: true
+    tool: siegfried
+    binary: sf
+    pronom_registry_name: PRONOM
 
   # US peer mapping (documentation only — we do not claim Archivematica output).
   archivematica_alignment:

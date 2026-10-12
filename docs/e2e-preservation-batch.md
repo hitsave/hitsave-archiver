@@ -45,7 +45,9 @@ docker compose run --rm -T ingest-worker /config/preservation/pilot-game.yaml </
 docker compose run --rm -T omeka-uploader pilot-wog1 /config/preservation/pilot-game.yaml </dev/null
 ```
 
-`run-batch-resume-omeka.sh` skips **ingest** when ledger `status=complete`, then runs **omeka-uploader** (skips when the item already verifies in Omeka).
+`run-batch-resume-omeka.sh` skips **ingest** when ledger `status=complete`, then runs **omeka-uploader** only when ingest finished `complete` (quarantine/failed rows are skipped). Ingest or Omeka errors **log and continue** to the next game in the manifest.
+
+**Content policy:** With `content_policy.enforce: true` in [`ingest.yaml`](../config/preservation/ingest.yaml) (default), booru-style filenames **abort ingest** and write under `$HOST_OUTPUT/quarantine/<game_key>/`. Moby `no_match` is recorded on the ledger only (`mobygames.block_on_failure: false`). Set `enforce: false` only for permissive test runs (warn in logs, no quarantine).
 
 ### Ingest only (ledger / AIP, no new Omeka items)
 

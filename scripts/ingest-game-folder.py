@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 try:
@@ -18,6 +17,11 @@ except ImportError as e:
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 from preservation_common import resolve_game_config  # noqa: E402
+from source_content_policy import (  # noqa: E402
+    ContentPolicyError,
+    check_source_content_policy,
+    write_quarantine_details,
+)
 
 
 def load_yaml(path: Path) -> dict:
@@ -152,7 +156,10 @@ def main() -> None:
     clamd = wait_for_clamd(clam["host"], int(clam["port"]), int(clam.get("connect_timeout_seconds", 120)))
 
     conn = pg_connect(db_cfg)
+    quarantine_base = output_root / paths["quarantine_subdir"] / game_key
     try:
+        check_source_content_policy(source, ingest_cfg)
+
         upsert_ledger(conn, game_key=game_key, source_path=str(source), status="scanning")
         scan_tree(clamd, source)
 
@@ -182,7 +189,25 @@ def main() -> None:
                 check=True,
             )
         else:
-            print("Wasabi upload skipped (wasabi.enabled is false or section missing)")
+            print("Wasabi AIP upload skipped (wasabi.enabled is false or section missing)")
+
+        dip_wasabi_cfg = ingest_cfg.get("dip_wasabi") or {}
+        if dip_wasabi_cfg.get("enabled", False):
+            dip_cfg_rel = str(dip_wasabi_cfg.get("config_file", "preservation/dip-wasabi.yml.example"))
+            dip_cfg_path = Path("/config") / dip_cfg_rel
+            upsert_ledger(conn, game_key=game_key, source_path=str(source), status="uploading_dip_wasabi")
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPTS / "upload-dip-wasabi.py"),
+                    str(dip_path),
+                    game_key,
+                    str(dip_cfg_path),
+                ],
+                check=True,
+            )
+        else:
+            print("Wasabi DIP upload skipped (dip_wasabi.enabled is false or section missing)")
 
         manifest_path = aip_bag / "metadata" / "other" / "checksums-sha256.txt"
         package_uuid = None
@@ -216,6 +241,16 @@ def main() -> None:
         print(f"Ingest complete: {game_key}")
         print(f"  DIP: {dip_path}")
         print(f"  AIP: {aip_bag}")
+    except ContentPolicyError as e:
+        upsert_ledger(
+            conn,
+            game_key=game_key,
+            source_path=str(source),
+            status="quarantine",
+            error_message=str(e),
+        )
+        write_quarantine_details(quarantine_base, exc=e, matches=e.matches)
+        raise
     except Exception as e:
         upsert_ledger(
             conn,
@@ -224,9 +259,7 @@ def main() -> None:
             status="failed",
             error_message=str(e),
         )
-        quarantine = output_root / paths["quarantine_subdir"] / game_key
-        quarantine.mkdir(parents=True, exist_ok=True)
-        (quarantine / "error.txt").write_text(f"{datetime.now(timezone.utc).isoformat()}\n{e}\n", encoding="utf-8")
+        write_quarantine_details(quarantine_base, exc=e)
         raise
     finally:
         conn.close()

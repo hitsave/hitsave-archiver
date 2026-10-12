@@ -38,6 +38,7 @@ from preservation_common import (  # noqa: E402
     load_packaging_config,
     mets_file_element,
     new_id,
+    premis_digiprov_md_ref,
     premis_event_file,
     resolve_game_config,
     sha256_file,
@@ -271,7 +272,11 @@ def write_root_mets_dip(
     amd_id = new_id("uuid")
     digiprov_id = new_id("uuid")
     ingest_href = f"metadata/preservation/{ingest_path.name}"
-    ingest_cs = sha256_file(ingest_path).upper()
+    root_md_ref = premis_digiprov_md_ref(
+        href=ingest_href,
+        premis_path=ingest_path,
+        created=created,
+    )
 
     root_mets = f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <mets xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -296,7 +301,7 @@ def write_root_mets_dip(
     </dmdSec>
     <amdSec ID="{amd_id}">
         <digiprovMD ID="{digiprov_id}" STATUS="CURRENT">
-            <mdRef LOCTYPE="URL" MDTYPE="PREMIS" xlink:type="simple" xlink:href="{ingest_href}" MIMETYPE="application/xml" SIZE="{ingest_path.stat().st_size}" CREATED="{created}" CHECKSUM="{ingest_cs}" CHECKSUMTYPE="SHA-256"/>
+            {root_md_ref}
         </digiprovMD>
     </amdSec>
     <fileSec ID="{new_id('uuid')}">

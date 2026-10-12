@@ -132,6 +132,27 @@ Primary preservation storage remains **unpacked E-ARK AIP** on Wasabi unless pol
 
 Every new builder version should pass validation on at least one pilot game before merge/deploy.
 
+### 8.0 METS `@PROFILE` URLs (AIP is a special case)
+
+DILCIS pins **different** package types to **different** subdomains. For **AIP 2.2.0**, the situation is awkward:
+
+| Purpose | URL | HTTP today (2026) |
+|---------|-----|-------------------|
+| **METS `@PROFILE` on AIP root** (normative **AIPM2**, profile `testXML`) | `https://earkdip.dilcis.eu/profile/E-ARK-AIP-v2-2-0.xml` | **404** (identifier only — do not use as download URL) |
+| **Profile document** (rules + examples; same file as [DILCISBoard/E-ARK-AIP](https://github.com/DILCISBoard/E-ARK-AIP/tree/master/profile)) | `https://earkaip.dilcis.eu/profile/E-ARK-AIP-v2-2-0.xml` | **200** |
+| CSIP (representation METS) | `https://earkcsip.dilcis.eu/profile/E-ARK-CSIP-v2-2-0.xml` | **200** |
+| DIP | `https://earkdip.dilcis.eu/profile/E-ARK-DIP-v2-2-0.xml` | **200** |
+
+The profile XML on **earkaip** literally requires `@PROFILE` to be the **earkdip** URL above, while its own `<URI>` and the spec examples disagree (e.g. `earkcsip` in some examples — also 404). Treat **earkdip** as the **METS attribute value**; fetch the profile from **earkaip** or git when implementing validators.
+
+`packaging.yaml` sets `mets_profile_aip` (identifier) and `mets_profile_aip_document` (HTTP mirror).
+
+```bash
+python3 scripts/verify-packaging-profile-urls.py
+```
+
+`validate-e-ark-package.sh` runs this when `python3` is available. **`eark-validator` 1.x does not yet ship AIP schematron rules**, so it will not enforce AIPM2’s exact `@PROFILE` string — do not rely on it alone for AIP profile conformance.
+
 ### 8.1 Primary: eark-validator (Python)
 
 ```bash
@@ -183,7 +204,7 @@ Clone [DILCISBoard/eark-ip-test-corpus](https://github.com/DILCISBoard/eark-ip-t
 | Component | Standard target | Current code |
 |-----------|-----------------|--------------|
 | Wasabi upload | Unpacked package root | `upload-aip-wasabi.py` (E-ARK root: `METS.xml`, `representations/rep1/data/…`) |
-| AIP builder | E-ARK AIP + CSIP | **`build-aip-e-ark.py`** via `ingest-game-folder.py`; pilot **`pilot-wog1`** passes **`validate-e-ark-package.sh`** |
+| AIP builder | E-ARK AIP + CSIP | **`build-aip-e-ark.py`** (`@PROFILE` on **`earkaip.dilcis.eu`** — run **`verify-packaging-profile-urls.py`** before **`validate-e-ark-package.sh`**) |
 | DIP builder | E-ARK DIP | **`build-dip-e-ark.py`** (root `METS.xml` + `representations/rep1/data`, `.tar` for Omeka) |
 | Validation script | `validate-e-ark-package.sh` | **`eark-validator`** schema + schematron (ERROR-level) |
 | Omeka viewer | E-ARK DIP or documented profile | **`MetsParser`** indexes E-ARK `Data` + `access` fileGrps (legacy `objects/` still supported) |

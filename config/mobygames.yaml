@@ -14,7 +14,8 @@ mobygames:
   # Optional Netscape cookie jar for curl (export from browser if Cloudflare blocks the host).
   page_cookie_jar: secrets/mobygames-cookies.txt
   ad_blurb_min_chars: 80
-  # Test stack: record failures but still upload to Omeka.
+  # Legitimate press kits may have no Moby entry (cancelled games, obscure titles).
+  # Record moby_status / block_reason on the ledger; do not abort ingest.
   block_on_failure: false
   search_title_from: folder_name
   # When API title search finds nothing: ddgs "{title} mobygames" → Moby URL → game id.

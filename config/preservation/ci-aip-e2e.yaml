@@ -1,0 +1,7 @@
+# Tiny press folder for CI / local E-ARK AIP builder checks (E2E/TestGame).
+source_game_folder: /data/press-material/E2E/TestGame
+game_key: ci-aip-e2e
+aip_bag_dir: /output/aip/ci-aip-e2e
+max_files: 100
+max_total_bytes: 10485760
+omeka_item_title: "CI AIP E2E — TestGame"

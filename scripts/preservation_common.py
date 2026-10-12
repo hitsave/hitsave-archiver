@@ -11,6 +11,8 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 PREMIS_NS = "http://www.loc.gov/premis/v3"
+PREMIS_VERSION = "3.0"
+XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
 
 
 def load_ingest_config() -> dict:
@@ -145,6 +147,32 @@ def file_grp_cit_attrs(use: str) -> str:
     )
 
 
+def package_objid(identifier: str) -> str:
+    """METS OBJID with recommended urn:uuid: prefix when value is a bare UUID."""
+    value = identifier.strip()
+    if value.lower().startswith("urn:"):
+        return value
+    return f"urn:uuid:{value}"
+
+
+def premis_digiprov_md_ref(
+    *,
+    href: str,
+    premis_path: Path,
+    created: str,
+    label: str | None = None,
+) -> str:
+    """Single digiprovMD/mdRef for PREMIS 3 (AIPM6–7)."""
+    pcs = sha256_file(premis_path).upper()
+    label_attr = f' LABEL="{xml_escape.escape(label)}"' if label else ""
+    return (
+        f'<mdRef LOCTYPE="URL" xlink:type="simple" xlink:href="{xml_escape.escape(href)}" '
+        f'MDTYPE="PREMIS" MDTYPEVERSION="{PREMIS_VERSION}" MIMETYPE="text/xml" '
+        f'SIZE="{premis_path.stat().st_size}" CREATED="{created}" '
+        f'CHECKSUM="{pcs}" CHECKSUMTYPE="SHA-256"{label_attr}/>'
+    )
+
+
 def mets_file_element(
     *,
     file_id: str,
@@ -167,6 +195,121 @@ def mets_file_element(
             </file>"""
 
 
+def premis_event_fragment(
+    *,
+    event_id: str,
+    event_type: str,
+    event_time: str,
+    outcome: str,
+    detail: str,
+    agent_name: str,
+    agent_version: str,
+    linking_object: str | None = None,
+    linking_object_role: str = "outcome",
+) -> str:
+    detail_esc = xml_escape.escape(detail)
+    agent_esc = xml_escape.escape(f"{agent_name} {agent_version}")
+    linking = ""
+    if linking_object:
+        linking = f"""
+  <linkingObjectIdentifier>
+    <linkingObjectIdentifierType>UUID</linkingObjectIdentifierType>
+    <linkingObjectIdentifierValue>{xml_escape.escape(linking_object)}</linkingObjectIdentifierValue>
+    <linkingObjectRole>{xml_escape.escape(linking_object_role)}</linkingObjectRole>
+  </linkingObjectIdentifier>"""
+    return f"""  <event>
+    <eventIdentifier>
+      <eventIdentifierType>UUID</eventIdentifierType>
+      <eventIdentifierValue>{xml_escape.escape(event_id)}</eventIdentifierValue>
+    </eventIdentifier>
+    <eventType>{xml_escape.escape(event_type)}</eventType>
+    <eventDateTime>{xml_escape.escape(event_time)}</eventDateTime>
+    <eventDetailInformation>
+      <eventDetail>{detail_esc}</eventDetail>
+    </eventDetailInformation>
+    <eventOutcomeInformation>
+      <eventOutcome>{xml_escape.escape(outcome.upper())}</eventOutcome>
+    </eventOutcomeInformation>
+    <linkingAgentIdentifier>
+      <linkingAgentIdentifierType>preservation system</linkingAgentIdentifierType>
+      <linkingAgentIdentifierValue>{agent_esc}</linkingAgentIdentifierValue>
+    </linkingAgentIdentifier>{linking}
+  </event>"""
+
+
+def premis_file_object_fragment(
+    *,
+    object_uuid: str,
+    filepath: str,
+    size: int,
+    sha256: str,
+    pronom_key: str | None,
+    format_name: str | None,
+    format_version: str | None,
+    pronom_registry_name: str = "PRONOM",
+) -> str:
+    xml_id = f"id-{object_uuid}"
+    format_block = ""
+    if pronom_key or format_name:
+        designation = ""
+        if format_name:
+            version_part = (
+                f"\n          <formatVersion>{xml_escape.escape(format_version)}</formatVersion>"
+                if format_version
+                else ""
+            )
+            designation = f"""        <formatDesignation>
+          <formatName>{xml_escape.escape(format_name)}</formatName>{version_part}
+        </formatDesignation>"""
+        registry = ""
+        if pronom_key:
+            registry = f"""        <formatRegistry>
+          <formatRegistryName>{xml_escape.escape(pronom_registry_name)}</formatRegistryName>
+          <formatRegistryKey>{xml_escape.escape(pronom_key)}</formatRegistryKey>
+          <formatRegistryRole>identification</formatRegistryRole>
+        </formatRegistry>"""
+        format_block = f"""
+      <format>
+{designation}
+{registry}
+      </format>"""
+    return f"""  <object xsi:type="file" xmlID="{xml_escape.escape(xml_id)}">
+    <objectIdentifier>
+      <objectIdentifierType>UUID</objectIdentifierType>
+      <objectIdentifierValue>{xml_escape.escape(object_uuid)}</objectIdentifierValue>
+    </objectIdentifier>
+    <objectCharacteristics>
+      <compositionLevel>0</compositionLevel>
+      <fixity>
+        <messageDigestAlgorithm>SHA-256</messageDigestAlgorithm>
+        <messageDigest>{xml_escape.escape(sha256.lower())}</messageDigest>
+        <messageDigestOriginator>HitSave build-aip-e-ark.py</messageDigestOriginator>
+      </fixity>
+      <size>{size}</size>{format_block}
+    </objectCharacteristics>
+    <originalName>{xml_escape.escape(filepath)}</originalName>
+  </object>"""
+
+
+def premis_agent_fragment(*, agent_id: str, agent_name: str, agent_type: str = "software") -> str:
+    return f"""  <agent>
+    <agentIdentifier>
+      <agentIdentifierType>local</agentIdentifierType>
+      <agentIdentifierValue>{xml_escape.escape(agent_id)}</agentIdentifierValue>
+    </agentIdentifier>
+    <agentName>{xml_escape.escape(agent_name)}</agentName>
+    <agentType>{xml_escape.escape(agent_type)}</agentType>
+  </agent>"""
+
+
+def premis3_document(*, body: str) -> str:
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<premis xmlns="{PREMIS_NS}" xmlns:xsi="{XSI_NS}" version="{PREMIS_VERSION}" xsi:schemaLocation="{PREMIS_NS} schemas/premis-v3-0.xsd">
+{body}
+</premis>
+"""
+
+
 def premis_event_file(
     *,
     event_id: str,
@@ -178,6 +321,7 @@ def premis_event_file(
     agent_version: str,
     linking_object: str | None = None,
 ) -> str:
+    """Standalone event XML (legacy DIP builder)."""
     detail_esc = xml_escape.escape(detail)
     agent_esc = xml_escape.escape(f"{agent_name} {agent_version}")
     linking = ""
