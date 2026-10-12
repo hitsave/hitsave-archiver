@@ -1,6 +1,6 @@
 # Dump preservation (BagIt unpacked on Wasabi)
 
-Ingest kind **`dump`** covers preserved file dumps: Redump disc images (`.bin`/`.cue`/`.iso`), ROM sets, PC install trees, coverdiscs, and anything else that is not community **press material** (tar under `press-material/`).
+Ingest kind **`dump`** covers preserved file dumps: Redump disc images (`.bin`/`.cue`/`.iso`), ROM sets, PC install trees, coverdiscs, and anything else that is not community **press material** (unpacked bags under `press-material/`).
 
 Configuration SSOT: [`config/preservation/ingest-kinds.yaml`](../config/preservation/ingest-kinds.yaml).
 
@@ -18,7 +18,7 @@ Legacy aliases (`game_dump`, `disc_dump`, `redump`) normalize to **`dump`**.
 |------|---------------|------|--------|
 | `press_material` | `press-material/{sort_letter}/{package_id}/` (unpacked bag) | yes (`press_material`) | no |
 | `dump` | unpacked prefix (below) | yes (`game_catalog`) | when sidecar + SHA-1 |
-| `other` | same as press tar default | no | no |
+| `other` | same as press (unpacked bag) | no | no |
 
 ## Wasabi prefix layout
 
@@ -69,7 +69,7 @@ Ledger: `dump_class = other`, `dump_system` / `dump_category` null.
 
 1. **`ingest-game-folder.py`** — after ClamAV, **`dump_classify.classify_dump_sip()`** on the SIP folder; ledger columns `dump_class`, `dump_system`, `dump_category`, `package_storage_prefix`, `storage_layout = bagit_unpacked`.
 2. **`build-bagit-package.py`** — writes `wasabi_key` / staff URI into `metadata/submission.json` from the same classification.
-3. **`upload-dump-wasabi.py`** — syncs the unpacked bag tree to the computed prefix (no single `.tar` on Wasabi for dumps).
+3. **`upload-dump-wasabi.py`** — syncs the unpacked bag tree to the computed prefix.
 
 Press ingest uses the same unpacked layout via **`upload-press-bag-wasabi.py`**.
 

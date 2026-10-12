@@ -1,6 +1,6 @@
 # hitsave-archiver
 
-Public preservation machinery for [HitSave](https://hitsave.org): press-material and portable zip ingest, E-ARK AIP/DIP packaging, ClamAV scanning, optional Wasabi AIP upload, and Omeka S DIP upload via REST.
+Public preservation machinery for [HitSave](https://hitsave.org): press-material and portable zip ingest, RFC 8493 BagIt packaging, ClamAV scanning, Wasabi upload (unpacked bags), and Omeka S catalog upload via REST.
 
 **Credentials never belong in this repo.** Operator secrets use a separate checkout mounted at runtime; build it from `config/**/*.example` — see **[docs/operator-config.md](docs/operator-config.md)**, **[docs/config-contract.md](docs/config-contract.md)**, and [docs/public-repos.md](docs/public-repos.md).
 

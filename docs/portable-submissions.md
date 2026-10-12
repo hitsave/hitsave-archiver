@@ -1,6 +1,6 @@
 # Portable submissions (zip intake)
 
-Archivists without access to `/tank2/press-material` can deliver **zip** packages (games, press kits, or other digital material). The stack unpacks them under a dedicated submissions volume and runs the **same E-ARK pipeline** as on-site ingest: ClamAV → `build-dip-e-ark.py` → `build-aip-e-ark.py` → Wasabi (when enabled) → Moby enrich.
+Archivists without access to `/tank2/press-material` can deliver **zip** packages (games, press kits, or other digital material). The stack unpacks them under a dedicated submissions volume and runs the **same BagIt ingest** as on-site press material: ClamAV → `build-bagit-package.py` → Wasabi (when enabled) → optional Moby enrich → Omeka upload.
 
 Policy and limits: [`config/preservation/submissions.yaml`](../config/preservation/submissions.yaml).
 
@@ -67,7 +67,7 @@ docker compose run --rm --entrypoint python ingest-worker \
   --game-key mygame-2026 --title "My Game — press materials"
 ```
 
-Unpack-only (no AIP/DIP yet):
+Unpack-only (no ingest yet):
 
 ```bash
 docker compose run --rm --entrypoint python ingest-worker \
@@ -111,7 +111,7 @@ After extract, every file under the source tree must match **`security.allowed_e
 ### Malware scanning (ClamAV)
 
 1. **`scan_file`** on the `.zip` before extract (with **`ScanArchive yes`** in [`config/clamav/clamd.conf`](../config/clamav/clamd.conf) so nested archive bytes inside the zip are inspected).
-2. **`scan_tree`** on every extracted file in [`ingest-game-folder.py`](../scripts/ingest-game-folder.py) before AIP/DIP build.
+2. **`scan_tree`** on every extracted file in [`ingest-game-folder.py`](../scripts/ingest-game-folder.py) before BagIt build.
 
 ClamAV size/recursion limits on the daemon (`MaxFileSize`, `MaxScanSize`, `MaxRecursion`, `MaxFiles`) align with large press videos and submission caps. ClamAV is signature-based; zero-days and non-malware abuse can still pass.
 
@@ -123,11 +123,7 @@ docker compose up -d --force-recreate clamav
 
 ### Packaging caps (second line of defense)
 
-Generated game config picks **`max_files`** and **`max_total_bytes`** from [`config/preservation/ingest.yaml`](../config/preservation/ingest.yaml) `defaults` (see [config-contract.md](./config-contract.md)) so E-ARK builders refuse oversized trees even if zip checks were bypassed. Override only in `submissions.yaml` `preservation` when you need a stricter cap.
-
-### FFmpeg / video access copies
-
-Portable submissions set **`preservation.video_access.enabled: false`** so [`build-dip-e-ark.py`](../scripts/build-dip-e-ark.py) does not run **ffmpeg** on video files during ingest. Original video files still enter the AIP/DIP if allowed by extension. Re-enable per submission in the generated game YAML or in `submissions.yaml` after review.
+Generated game config picks **`max_files`** and **`max_total_bytes`** from [`config/preservation/ingest.yaml`](../config/preservation/ingest.yaml) `defaults` (see [config-contract.md](./config-contract.md)) so `build-bagit-package.py` refuses oversized trees even if zip checks were bypassed. Override only in `submissions.yaml` `preservation` when you need a stricter cap.
 
 ### Downstream risk
 

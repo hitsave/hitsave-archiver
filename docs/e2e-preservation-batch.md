@@ -8,7 +8,7 @@ Set in **`hitsave-archiver-config/host.env`** (from `config/host.env.example` in
 
 | Variable | Role |
 |----------|------|
-| `HOST_OUTPUT` | Host directory mounted as `/output` (AIP/DIP trees, including `dip/…`) |
+| `HOST_OUTPUT` | Host directory mounted as `/output` (BagIt bags under `bag/…`) |
 | `HOST_PRESS_MATERIAL` | Press material mounted read-only at `/data/press-material` |
 | `HITSAVE_PRIVATE_CONFIG` | Private config checkout (secrets, operator `database.yaml`) |
 
@@ -31,7 +31,7 @@ python3 scripts/sync-preservation-config.py
 
 Generated per-game YAML lives under `config/preservation/generated/<batch_key>/`.
 
-Single-game pilot (committed): `config/preservation/pilot-game.yaml` → `pilot-wog1.tar`.
+Single-game pilot (committed): `config/preservation/pilot-game.yaml` → ledger `game_key` `pilot-wog1`.
 
 ## Full E2E: ingest + Omeka upload
 
@@ -49,15 +49,15 @@ docker compose run --rm -T omeka-uploader pilot-wog1 /config/preservation/pilot-
 
 **Content policy:** With `content_policy.enforce: true` in [`ingest.yaml`](../config/preservation/ingest.yaml) (default), booru-style filenames **abort ingest** and write under `$HOST_OUTPUT/quarantine/<game_key>/`. Moby `no_match` is recorded on the ledger only (`mobygames.block_on_failure: false`). Set `enforce: false` only for permissive test runs (warn in logs, no quarantine).
 
-### Ingest only (ledger / AIP, no new Omeka items)
+### Ingest only (ledger + Wasabi, no new Omeka items)
 
 ```bash
 bash scripts/run-batch-resume-omeka.sh --ingest-only config/preservation/batch-my-run.yml
 ```
 
-## Upload only (DIP .tar already on disk)
+## Upload only (ingest already complete)
 
-When DIPs exist under `$HOST_OUTPUT/dip/…` and you only need Omeka items:
+When ledger rows are **`complete`** and Wasabi has the bag prefix, upload Omeka items only:
 
 ```bash
 bash scripts/upload-manifest-dips-omeka.sh config/preservation/batch-my-run.yml

@@ -7,11 +7,11 @@ Preservation behavior reads committed YAML under `config/`. Operator copies (`ga
 | Topic | File | What belongs here |
 |-------|------|-------------------|
 | Container paths, ingest defaults, agent metadata | [`config/preservation/ingest.yaml`](../config/preservation/ingest.yaml) | `paths.*`, `defaults.max_files`, `content_policy.*` (booru blockers, `enforce`), ClamAV host/port |
-| Ingest kind → catalog routing | [`config/preservation/ingest-kinds.yaml`](../config/preservation/ingest-kinds.yaml) | `press_material`, `dump`, `other`; Wasabi tar vs unpacked dumps — see [`dump-preservation.md`](./dump-preservation.md) |
+| Ingest kind → catalog routing | [`config/preservation/ingest-kinds.yaml`](../config/preservation/ingest-kinds.yaml) | `press_material`, `dump`, `other`; Wasabi unpacked prefixes — see [`dump-preservation.md`](./dump-preservation.md) |
 | MobyGames API | [`config/mobygames.yaml`](../config/mobygames.yaml) | API credentials path, ad blurb fetch; optional `block_on_failure` (default false) |
-| E-ARK profiles, METS, validation tools | [`config/preservation/packaging.yaml`](../config/preservation/packaging.yaml) | Profiles, schema dir, validator URLs — not runtime paths |
+| BagIt packaging | [`config/preservation/packaging.yaml`](../config/preservation/packaging.yaml) | BagIt dirs, Wasabi unpacked key pattern, validation |
 | Portable zip limits, allowlists | [`config/preservation/submissions.yaml`](../config/preservation/submissions.yaml) | `limits.*`, `security.*`, submission-only `preservation.video_access` |
-| Omeka REST upload target | [`config/omeka-uploader.yaml`](../config/omeka-uploader.yaml) | API base URL, site slug, `aip_wasabi` staff URI (`is_public: false`), external DIP mount |
+| Omeka REST upload target | [`config/omeka-uploader.yaml`](../config/omeka-uploader.yaml) | API base URL, site slug, `aip_wasabi` staff URI (`is_public: false`) |
 | ClamAV scan caps (aligned with submissions) | [`config/clamav/clamd.conf`](../config/clamav/clamd.conf) | Must stay in sync with `submissions.yaml` `limits.max_member_bytes` / `max_archive_members` — see [`config/clamav/README.md`](../config/clamav/README.md) |
 | Private credentials | **hitsave-archiver-config** (from `config/secrets/*.example`) | Wasabi, Omeka API, Moby, ledger DB |
 | Test Omeka admin URL / site slug | **hitsave-omeka-test** `config/omeka-test/settings.yaml` | Must match `omeka-uploader.yaml` `site_slug` and API base when uploading to test |
@@ -24,7 +24,7 @@ Preservation behavior reads committed YAML under `config/`. Operator copies (`ga
 - **`game_key`**, **`omeka_item_title`** — required for single-game ingest.
 - **`ingest_kind`** — **required** on every game YAML and on `batch.yml` for expand (see `ingest-kinds.yaml`).
 - **`batch_key`** — set on generated batch configs; output paths go under `…/batch/{batch_key}/`.
-- Derived unless overridden: `source_game_folder`, `output_tar`, `staging_dir`, `aip_bag_dir`, `max_files`, `max_total_bytes`, `preservation.*`.
+- Derived unless overridden: `source_game_folder`, `bagit_bag_dir`, `staging_dir`, `aip_bag_dir`, `max_files`, `max_total_bytes`, `preservation.*`.
 
 Examples: [`game.yml.example`](../config/preservation/game.yml.example), [`batch.yml.example`](../config/preservation/batch.yml.example).
 

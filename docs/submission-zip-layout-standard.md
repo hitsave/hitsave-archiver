@@ -2,7 +2,7 @@
 
 **Status:** design target — not fully implemented in `ingest-submission.py` yet. Today we only **unwrap a single top-level folder**; loose files at the zip root are ingested as-is if they pass the extension allowlist.
 
-Goal: **standardize on zip as the archivist delivery format** and decide unambiguously what the **game package** is before E-ARK ingest.
+Goal: **standardize on zip as the archivist delivery format** and decide unambiguously what the **game package** is before BagIt ingest.
 
 ## Terms
 

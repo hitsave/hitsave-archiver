@@ -9,7 +9,7 @@
 
 Compose expects `HITSAVE_PRIVATE_CONFIG` (default sibling `../hitsave-archiver-config`). Run `./scripts/ensure-local-config.sh` after clone.
 
-**Preservation direction:** OAIS + BagIt (single `.tar` AIP/DIP, payload under `data/`). See **`docs/oais-bagit-preservation-plan.md`** and **`config/preservation/submission-sources.yaml`**.
+**Preservation direction:** OAIS + BagIt (unpacked on Wasabi, payload under `data/`). See **`docs/oais-bagit-preservation-plan.md`** and **`config/preservation/submission-sources.yaml`**.
 
 ## Docker
 
