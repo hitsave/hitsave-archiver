@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ingest one game folder: ClamAV → BagIt tar or E-ARK DIP/AIP → Wasabi → ledger."""
+"""Ingest one game folder: ClamAV → BagIt → Wasabi → ledger."""
 from __future__ import annotations
 
 import json
@@ -17,7 +17,10 @@ except ImportError as e:
 
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
-from preservation_common import packaging_mode, resolve_game_config  # noqa: E402
+from package_ledger import resolve_package_identity  # noqa: E402
+from dump_classify import classify_dump_sip  # noqa: E402
+from ingest_kind import moby_enrich_enabled, resolve_ingest_kind, storage_profile_for_kind  # noqa: E402
+from preservation_common import resolve_game_config  # noqa: E402
 from source_content_policy import (  # noqa: E402
     ContentPolicyError,
     check_source_content_policy,
@@ -89,6 +92,16 @@ def upsert_ledger(
     package_format: str | None = None,
     submission_source_id: str | None = None,
     inventory_json: dict | None = None,
+    sip_fingerprint: str | None = None,
+    package_id: str | None = None,
+    title_slug: str | None = None,
+    sort_letter: str | None = None,
+    ingest_kind: str | None = None,
+    storage_layout: str | None = None,
+    package_storage_prefix: str | None = None,
+    dump_class: str | None = None,
+    dump_system: str | None = None,
+    dump_category: str | None = None,
 ) -> None:
     inv_param = json.dumps(inventory_json) if inventory_json is not None else None
     with conn.cursor() as cur:
@@ -97,16 +110,20 @@ def upsert_ledger(
             INSERT INTO game_ingest (
                 game_key, source_path, status, dip_path, aip_bag_path, package_uuid,
                 file_count, total_bytes, checksum_manifest_path, error_message,
-                package_format, submission_source_id, inventory_json, updated_at
+                package_format, submission_source_id, inventory_json,
+                sip_fingerprint, package_id, title_slug, sort_letter, ingest_kind,
+                storage_layout, package_storage_prefix, dump_class, dump_system, dump_category,
+                updated_at
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, NOW()
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
             )
             ON CONFLICT (game_key) DO UPDATE SET
                 source_path = EXCLUDED.source_path,
                 status = EXCLUDED.status,
                 dip_path = EXCLUDED.dip_path,
                 aip_bag_path = EXCLUDED.aip_bag_path,
-                package_uuid = EXCLUDED.package_uuid,
+                package_uuid = COALESCE(EXCLUDED.package_uuid, game_ingest.package_uuid),
                 file_count = EXCLUDED.file_count,
                 total_bytes = EXCLUDED.total_bytes,
                 checksum_manifest_path = EXCLUDED.checksum_manifest_path,
@@ -114,6 +131,18 @@ def upsert_ledger(
                 package_format = COALESCE(EXCLUDED.package_format, game_ingest.package_format),
                 submission_source_id = COALESCE(EXCLUDED.submission_source_id, game_ingest.submission_source_id),
                 inventory_json = COALESCE(EXCLUDED.inventory_json, game_ingest.inventory_json),
+                sip_fingerprint = COALESCE(EXCLUDED.sip_fingerprint, game_ingest.sip_fingerprint),
+                package_id = COALESCE(EXCLUDED.package_id, game_ingest.package_id),
+                title_slug = COALESCE(EXCLUDED.title_slug, game_ingest.title_slug),
+                sort_letter = COALESCE(EXCLUDED.sort_letter, game_ingest.sort_letter),
+                ingest_kind = COALESCE(EXCLUDED.ingest_kind, game_ingest.ingest_kind),
+                storage_layout = COALESCE(EXCLUDED.storage_layout, game_ingest.storage_layout),
+                package_storage_prefix = COALESCE(
+                    EXCLUDED.package_storage_prefix, game_ingest.package_storage_prefix
+                ),
+                dump_class = COALESCE(EXCLUDED.dump_class, game_ingest.dump_class),
+                dump_system = COALESCE(EXCLUDED.dump_system, game_ingest.dump_system),
+                dump_category = COALESCE(EXCLUDED.dump_category, game_ingest.dump_category),
                 updated_at = NOW()
             """,
             (
@@ -130,6 +159,16 @@ def upsert_ledger(
                 package_format,
                 submission_source_id,
                 inv_param,
+                sip_fingerprint,
+                package_id,
+                title_slug,
+                sort_letter,
+                ingest_kind,
+                storage_layout,
+                package_storage_prefix,
+                dump_class,
+                dump_system,
+                dump_category,
             ),
         )
     conn.commit()
@@ -159,8 +198,7 @@ def run_bagit_ingest(
     ingest_cfg: dict,
     source: Path,
     game_key: str,
-) -> tuple[Path, Path, dict | None, dict | None, str | None]:
-    dip_path = Path(game_cfg["output_tar"]).resolve()
+) -> tuple[Path, dict | None, dict | None, str | None, str | None]:
     bag_dir = Path(game_cfg["bagit_bag_dir"]).resolve()
 
     upsert_ledger(conn, game_key=game_key, source_path=str(source), status="building_bagit")
@@ -171,118 +209,60 @@ def run_bagit_ingest(
 
     submission, inventory, checksum_path = read_bagit_metadata(bag_dir)
     submission_source_id = None
+    package_uuid = None
     if submission:
         submission_source_id = submission.get("submission_source_id")
+        package_uuid = submission.get("package_uuid")
 
     wasabi_cfg = ingest_cfg.get("wasabi") or {}
+    kind = str(game_cfg.get("ingest_kind") or "")
     if wasabi_cfg.get("enabled", False):
-        upsert_ledger(conn, game_key=game_key, source_path=str(source), status="uploading_package")
-        subprocess.run(
-            [
-                sys.executable,
-                str(SCRIPTS / "upload-package-wasabi.py"),
-                str(dip_path),
-                game_key,
-                str(ingest_cfg_path),
-            ],
-            check=True,
-        )
+        if storage_profile_for_kind(kind) == "bagit_unpacked":
+            dump_clf = classify_dump_sip(source, package_id=game_key)
+            upsert_ledger(
+                conn,
+                game_key=game_key,
+                source_path=str(source),
+                status="uploading_package",
+                storage_layout="bagit_unpacked",
+                package_storage_prefix=dump_clf.package_storage_prefix,
+                dump_class=dump_clf.dump_class,
+                dump_system=dump_clf.dump_system,
+                dump_category=dump_clf.dump_category,
+            )
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPTS / "upload-dump-wasabi.py"),
+                    str(bag_dir),
+                    game_key,
+                    dump_clf.package_storage_prefix,
+                    str(ingest_cfg_path),
+                ],
+                check=True,
+            )
+        else:
+            upsert_ledger(
+                conn,
+                game_key=game_key,
+                source_path=str(source),
+                status="uploading_package",
+                storage_layout="bagit_unpacked",
+            )
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPTS / "upload-press-bag-wasabi.py"),
+                    str(bag_dir),
+                    game_key,
+                    str(ingest_cfg_path),
+                ],
+                check=True,
+            )
     else:
         print("Wasabi package upload skipped (wasabi.enabled is false or section missing)")
 
-    dip_wasabi_cfg = ingest_cfg.get("dip_wasabi") or {}
-    if dip_wasabi_cfg.get("enabled", False):
-        dip_cfg_rel = str(dip_wasabi_cfg.get("config_file", "preservation/dip-wasabi.yml.example"))
-        dip_cfg_path = Path("/config") / dip_cfg_rel
-        upsert_ledger(conn, game_key=game_key, source_path=str(source), status="uploading_dip_wasabi")
-        subprocess.run(
-            [
-                sys.executable,
-                str(SCRIPTS / "upload-dip-wasabi.py"),
-                str(dip_path),
-                game_key,
-                str(dip_cfg_path),
-            ],
-            check=True,
-        )
-    else:
-        print("Wasabi DIP upload skipped (dip_wasabi.enabled is false or section missing)")
-
-    return dip_path, bag_dir, submission, inventory, checksum_path, submission_source_id
-
-
-def run_eark_ingest(
-    conn,
-    *,
-    game_cfg_path: Path,
-    ingest_cfg_path: Path,
-    ingest_cfg: dict,
-    source: Path,
-    game_key: str,
-    game_cfg: dict,
-) -> tuple[Path, Path, str | None, str | None, int | None, int | None]:
-    dip_path = Path(game_cfg["output_tar"]).resolve()
-    aip_bag = Path(game_cfg["aip_bag_dir"]).resolve()
-
-    upsert_ledger(conn, game_key=game_key, source_path=str(source), status="building_dip")
-    subprocess.run(
-        [sys.executable, str(SCRIPTS / "build-dip-e-ark.py"), str(game_cfg_path)],
-        check=True,
-    )
-
-    upsert_ledger(conn, game_key=game_key, source_path=str(source), status="building_aip")
-    subprocess.run(
-        [sys.executable, str(SCRIPTS / "build-aip-e-ark.py"), str(game_cfg_path)],
-        check=True,
-    )
-
-    wasabi_cfg = ingest_cfg.get("wasabi") or {}
-    if wasabi_cfg.get("enabled", False):
-        upsert_ledger(conn, game_key=game_key, source_path=str(source), status="uploading_aip")
-        subprocess.run(
-            [
-                sys.executable,
-                str(SCRIPTS / "upload-aip-wasabi.py"),
-                str(aip_bag),
-                game_key,
-                str(ingest_cfg_path),
-            ],
-            check=True,
-        )
-    else:
-        print("Wasabi AIP upload skipped (wasabi.enabled is false or section missing)")
-
-    dip_wasabi_cfg = ingest_cfg.get("dip_wasabi") or {}
-    if dip_wasabi_cfg.get("enabled", False):
-        dip_cfg_rel = str(dip_wasabi_cfg.get("config_file", "preservation/dip-wasabi.yml.example"))
-        dip_cfg_path = Path("/config") / dip_cfg_rel
-        upsert_ledger(conn, game_key=game_key, source_path=str(source), status="uploading_dip_wasabi")
-        subprocess.run(
-            [
-                sys.executable,
-                str(SCRIPTS / "upload-dip-wasabi.py"),
-                str(dip_path),
-                game_key,
-                str(dip_cfg_path),
-            ],
-            check=True,
-        )
-    else:
-        print("Wasabi DIP upload skipped (dip_wasabi.enabled is false or section missing)")
-
-    manifest_path = aip_bag / "metadata" / "other" / "checksums-sha256.txt"
-    package_uuid = None
-    root_mets = aip_bag / "METS.xml"
-    if root_mets.is_file():
-        import re
-
-        text = root_mets.read_text(encoding="utf-8", errors="replace")
-        match = re.search(r'\bOBJID="([^"]+)"', text)
-        if match:
-            package_uuid = match.group(1)
-
-    checksum_manifest_path = str(manifest_path) if manifest_path.is_file() else None
-    return dip_path, aip_bag, package_uuid, checksum_manifest_path, None, None
+    return bag_dir, submission, inventory, checksum_path, submission_source_id, package_uuid
 
 
 def main() -> None:
@@ -295,7 +275,7 @@ def main() -> None:
         raise SystemExit(f"Missing game config: {game_cfg_path}")
 
     ingest_cfg = load_yaml(ingest_cfg_path)
-    game_cfg = resolve_game_config(load_yaml(game_cfg_path), agent_version="ingest-game-folder.py")
+    raw_game_cfg = load_yaml(game_cfg_path)
 
     db_path = Path(ingest_cfg["database"]["config_file"])
     db_cfg = load_yaml(db_path)["postgres"]
@@ -303,89 +283,134 @@ def main() -> None:
     paths = ingest_cfg["paths"]
     output_root = Path(paths["output_root"])
     ensure_dirs(
-        output_root / paths["dip_subdir"],
         output_root / paths.get("bag_subdir", "bag"),
         output_root / paths["aip_subdir"],
         output_root / paths["processed_subdir"],
         output_root / paths["quarantine_subdir"],
     )
 
-    source = Path(game_cfg["source_game_folder"]).resolve()
-    game_key = game_cfg.get("game_key") or source.name
-    mode = packaging_mode()
+    press_root = Path(paths["press_material_root"])
+    if raw_game_cfg.get("source_subpath") and not raw_game_cfg.get("source_game_folder"):
+        sub = str(raw_game_cfg["source_subpath"]).strip().strip("/")
+        raw_game_cfg["source_game_folder"] = str(press_root / sub)
+    source = Path(raw_game_cfg["source_game_folder"]).resolve()
+
+    conn = pg_connect(db_cfg)
+    identity = None
+    try:
+        catalog_title = str(raw_game_cfg.get("omeka_item_title") or source.name)
+        identity = resolve_package_identity(
+            conn,
+            source=source,
+            press_material_root=press_root,
+            omeka_item_title=catalog_title,
+        )
+        game_key = identity.package_id
+        package_uuid = identity.package_uuid
+        raw_game_cfg["game_key"] = game_key
+        kind = resolve_ingest_kind(raw_game_cfg)
+        dump_kwargs: dict = {}
+        if kind == "dump":
+            dump_clf = classify_dump_sip(source, package_id=identity.package_id)
+            dump_kwargs = {
+                "storage_layout": "bagit_unpacked",
+                "package_storage_prefix": dump_clf.package_storage_prefix,
+                "dump_class": dump_clf.dump_class,
+                "dump_system": dump_clf.dump_system,
+                "dump_category": dump_clf.dump_category,
+            }
+        upsert_ledger(
+            conn,
+            game_key=game_key,
+            source_path=str(source),
+            status="registered",
+            package_format="bagit",
+            submission_source_id=identity.submission_source_id,
+            sip_fingerprint=identity.sip_fingerprint,
+            package_id=identity.package_id,
+            title_slug=identity.title_slug,
+            sort_letter=identity.sort_letter,
+            package_uuid=package_uuid,
+            ingest_kind=kind,
+            **dump_kwargs,
+        )
+    except Exception:
+        conn.close()
+        raise
+
+    game_cfg = resolve_game_config(raw_game_cfg, agent_version="ingest-game-folder.py")
+    ingest_kind = game_cfg["ingest_kind"]
 
     clam = ingest_cfg["clamav"]
     clamd = wait_for_clamd(clam["host"], int(clam["port"]), int(clam.get("connect_timeout_seconds", 120)))
 
-    conn = pg_connect(db_cfg)
     quarantine_base = output_root / paths["quarantine_subdir"] / game_key
     try:
         check_source_content_policy(source, ingest_cfg)
-
-        upsert_ledger(conn, game_key=game_key, source_path=str(source), status="scanning")
-        scan_tree(clamd, source)
-
-        package_uuid = None
-        file_count: int | None = None
-        total_bytes: int | None = None
-        checksum_manifest_path: str | None = None
-        submission_source_id: str | None = None
-        inventory_json: dict | None = None
-        package_format = mode
-
-        if mode == "bagit":
-            dip_path, bag_dir, _sub, inventory, checksum_manifest_path, submission_source_id = run_bagit_ingest(
-                conn,
-                game_cfg_path=game_cfg_path,
-                game_cfg=game_cfg,
-                ingest_cfg_path=ingest_cfg_path,
-                ingest_cfg=ingest_cfg,
-                source=source,
-                game_key=game_key,
-            )
-            aip_bag = bag_dir
-            inventory_json = inventory
-            if inventory and inventory.get("summary"):
-                file_count = int(inventory["summary"].get("file_count") or 0)
-                total_bytes = int(inventory["summary"].get("total_bytes") or 0)
-        else:
-            dip_path, aip_bag, package_uuid, checksum_manifest_path, file_count, total_bytes = run_eark_ingest(
-                conn,
-                game_cfg_path=game_cfg_path,
-                ingest_cfg_path=ingest_cfg_path,
-                ingest_cfg=ingest_cfg,
-                source=source,
-                game_key=game_key,
-                game_cfg=game_cfg,
-            )
-            package_format = "e-ark"
-
-        moby = subprocess.run(
-            [sys.executable, str(SCRIPTS / "moby_enrich_game.py"), str(game_cfg_path)],
-            check=False,
-        )
-        if moby.returncode == 2:
-            raise RuntimeError("MobyGames metadata blocked this game (see ledger block_reason)")
 
         upsert_ledger(
             conn,
             game_key=game_key,
             source_path=str(source),
-            status="complete",
-            dip_path=str(dip_path),
-            aip_bag_path=str(aip_bag),
-            package_uuid=package_uuid,
-            file_count=file_count,
-            total_bytes=total_bytes,
-            checksum_manifest_path=checksum_manifest_path,
-            error_message=None,
-            package_format=package_format,
-            submission_source_id=submission_source_id,
-            inventory_json=inventory_json,
+            status="scanning",
+            ingest_kind=ingest_kind,
         )
-        print(f"Ingest complete: {game_key} ({package_format})")
-        print(f"  Package tar: {dip_path}")
-        print(f"  Bag dir: {aip_bag}")
+        scan_tree(clamd, source)
+
+        bag_dir, _sub, inventory, checksum_manifest_path, submission_source_id, package_uuid = run_bagit_ingest(
+            conn,
+            game_cfg_path=game_cfg_path,
+            game_cfg=game_cfg,
+            ingest_cfg_path=ingest_cfg_path,
+            ingest_cfg=ingest_cfg,
+            source=source,
+            game_key=game_key,
+        )
+        file_count: int | None = None
+        total_bytes: int | None = None
+        inventory_json: dict | None = inventory
+        if inventory and inventory.get("summary"):
+            file_count = int(inventory["summary"].get("file_count") or 0)
+            total_bytes = int(inventory["summary"].get("total_bytes") or 0)
+
+        if moby_enrich_enabled(game_cfg):
+            moby = subprocess.run(
+                [sys.executable, str(SCRIPTS / "moby_enrich_game.py"), str(game_cfg_path)],
+                check=False,
+            )
+            if moby.returncode == 2:
+                raise RuntimeError("MobyGames metadata blocked this game (see ledger block_reason)")
+
+        complete_kwargs: dict = {
+            "game_key": game_key,
+            "source_path": str(source),
+            "status": "complete",
+            "ingest_kind": ingest_kind,
+            "dip_path": str(bag_dir),
+            "aip_bag_path": str(bag_dir),
+            "package_uuid": package_uuid,
+            "file_count": file_count,
+            "total_bytes": total_bytes,
+            "checksum_manifest_path": checksum_manifest_path,
+            "error_message": None,
+            "package_format": "bagit",
+            "submission_source_id": submission_source_id,
+            "inventory_json": inventory_json,
+            "sip_fingerprint": identity.sip_fingerprint,
+            "package_id": identity.package_id,
+            "title_slug": identity.title_slug,
+            "sort_letter": identity.sort_letter,
+        }
+        upsert_ledger(conn, **complete_kwargs)
+        print(f"Ingest complete: {game_key} (bagit)")
+        print(f"  package_id: {identity.package_id}")
+        print(f"  sort_letter: {identity.sort_letter}")
+        print(f"  sip_fingerprint: {identity.sip_fingerprint[:16]}…")
+        if ingest_kind == "dump":
+            dump_clf = classify_dump_sip(source, package_id=identity.package_id)
+            print(f"  dump_class: {dump_clf.dump_class}")
+            print(f"  wasabi prefix: {dump_clf.package_storage_prefix}/")
+        print(f"  Bag dir: {bag_dir}")
     except ContentPolicyError as e:
         upsert_ledger(
             conn,

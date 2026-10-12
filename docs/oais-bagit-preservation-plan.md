@@ -105,33 +105,63 @@ Each game produces **one bag directory** before tarring. Payload lives only unde
 
 ### 5.1 `bag-info.txt` (human + agent readable)
 
-Example keys for press-material donation ingests:
+RFC 8493 **`External-Identifier`** is the sender-supplied identifier **for this bag** (one AIP), not for the whole donation. Hit Save uses other fields for donation-wide and SIP-local context.
+
+| Field | Implemented today | Target (package id design) |
+|-------|-------------------|----------------------------|
+| **`External-Identifier`** | **Submission / donation id** from `submission-sources.yaml` → `bag_info_external_identifier` (same value on every press bag from that donation, e.g. `hitsave-submission:press-material-community-2020-07-23`) | **Per-package persistent id**, e.g. `hitsave:package:01947c2a-8b3d-7a1e-b2c4-9d8e1f2a3b4c` (UUID v7) or the full `package_id` string (`tekken-7-01947c2a-…`) — must match ledger `package_id` and Wasabi object basename |
+| **`External-Description`** | One line: `game_key`, container `sip` path, `submission_date` | Same idea; may add `package_id`, `omeka_item_title` |
+| **`Internal-Sender-Identifier`** | Not written yet | Normalized SIP path relative to press root, e.g. `Representation_Copies/T/Tekken_7` (stable handle for humans; dedup uses `sip_fingerprint` in ledger) |
+| **`Bag-Group-Identifier`** (optional) | Not used | Donation id if we want RFC “set of bags” semantics on the shared submission record |
+
+Example **target** `bag-info.txt` for one game:
 
 ```text
 Bagging-Date: 2026-01-15
-Bag-Software: HitSave ingest-worker
+Bag-Software: HitSave build-bagit-package.py
 Bag-Software-Version: <from config>
-External-Identifier: hitsave-submission:press-material-community-2020-07-23
-External-Description: Community press-material donation received 2020-07-23; game_key=<game_key>
-Organization-Address: Hit Save
-Internal-Sender-Identifier: /tank2/press-material/<relative-path>
+External-Identifier: hitsave:package:01947c2a-8b3d-7a1e-b2c4-9d8e1f2a3b4c
+External-Description: Tekken 7; package_id=tekken-7-01947c2a-8b3d-7a1e-b2c4-9d8e1f2a3b4c; submission=2020-07-23
+Bag-Group-Identifier: hitsave-submission:press-material-community-2020-07-23
+Internal-Sender-Identifier: Representation_Copies/T/Tekken_7
 ```
 
 ### 5.2 `metadata/submission.json` (canonical machine record)
+
+**Implemented today** (`build-bagit-package.py`):
 
 ```json
 {
   "submission_source_id": "hitsave-submission:press-material-community-2020-07-23",
   "submission_type": "community_donation",
   "submission_date": "2020-07-23",
-  "sip_path": "/data/press-material/...",
-  "game_key": "example-game",
+  "sip_path": "/data/press-material/Representation_Copies/T/Tekken_7",
+  "game_key": "repcopies-b-full-tekken-7",
   "ingested_at": "ISO-8601",
   "repository_code": "hitsave"
 }
 ```
 
+**Target fields** (ledger remains source of truth at ingest; copied into the bag for offline/restore):
+
+| Field | Purpose |
+|-------|---------|
+| `package_id` | `{title_slug}-{uuid_v7}` — Wasabi basename, Omeka staff URI key |
+| `sip_fingerprint` | `sha256:` hex of canonical `submission_source_id\|relative_sip_path` — idempotent re-ingest |
+| `sort_letter` | Wasabi bucket under `press-material/` (from catalog title, e.g. `T`) |
+| `omeka_item_title` | Public catalog title |
+| `title_slug` | Human slug without batch prefix (e.g. `tekken-7`) |
+| `wasabi_key` | Full object key, e.g. `press-material/T/tekken-7-01947c2a-….tar` |
+
 `inventory.json`: one row per file under `data/` for archive-wide queries (e.g. count `.mp4` across bags via batch job over Wasabi or ledger exports).
+
+---
+
+## 5.1 Dumps (non–press material)
+
+Preserved **dumps** (Redump discs, ROM sets, install trees) use ingest kind **`dump`**, unpacked BagIt on Wasabi under **`dumps/{System}/{Category}/{package_id}/`**, with **`dumps/Others/{package_id}/`** when no Redump sidecar matches. Full normative doc: [`dump-preservation.md`](./dump-preservation.md).
+
+Press material below remains **one `.tar` per package** under `press-material/`.
 
 ---
 
@@ -139,16 +169,20 @@ Internal-Sender-Identifier: /tank2/press-material/<relative-path>
 
 ### 6.1 Intent
 
-- **One** Wasabi object per game: **`{prefix}{game_key}/{game_key}.tar`** (exact key pattern in config).
+- **One** Wasabi object per game (serialized bag tar only).
+- **Target key pattern:** `press-material/{sort_letter}/{package_id}.tar` (e.g. `press-material/T/tekken-7-01947c2a-8b3d-7a1e-b2c4-9d8e1f2a3b4c.tar`) — flat object per package, no `{package_id}/` prefix folder unless a future requirement adds a second object under the same package.
+- **No sidecar objects** on Wasabi for press BagIt: inventory, submission record, fixity manifests, and optional donor PDFs live **inside the tar**; cross-game queries use **Postgres** + **`export-preservation-catalog.py`** (git). Do not duplicate `inventory.json` or checksum files beside the tar unless a named non-bag consumer appears later.
 - Tar contains the **bag root** (`bagit.txt` at tar root, `data/` inside).
 - **No** separate `aip/` unpacked tree and `dip/` second tar with duplicate bytes.
 - **No** extra compression beyond tar (tar is an aggregation format only; files inside remain stored as-is).
 
+*(Legacy ingests may still use `{prefix}/{game_key}/{game_key}.tar` until re-packaged.)*
+
 ### 6.2 Omeka
 
 - Omeka item = catalog + search metadata (Moby, titles, donation provenance).
-- **One media** (or `external_tar_path`) points at the **same** `.tar` on Wasabi when using dip-wasabi mount, **or** media is uploaded once from that tar — still **one** Wasabi copy if upload is avoided via mount.
-- Prefer **mount + external path** (existing dip-wasabi pattern) to avoid duplicating the tar in Omeka’s volume.
+- **One Omeka media row** per package with **`external_tar_path`** pointing at the **same** `.tar` on the read-only Wasabi mount (`/hitsave-incoming/press-material/…`). **Do not** multipart-upload the tar into Omeka storage for BagIt press ingest.
+- DipViewer reads the mount path; canonical bytes exist only on Wasabi (from ingest `upload-package-wasabi.py`).
 
 ### 6.3 Policy statement (public)
 

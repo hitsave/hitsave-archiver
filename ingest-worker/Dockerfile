@@ -14,42 +14,52 @@ WORKDIR /app
 COPY ingest-worker/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-COPY packaging/e-ark-schemas /app/packaging/e-ark-schemas
-
 COPY scripts/batch-expand-preservation.py \
-    scripts/build-dip-e-ark.py \
-    scripts/build-aip-e-ark.py \
     scripts/build-bagit-package.py \
-    scripts/upload-package-wasabi.py \
+    scripts/dip_package_previews.py \
+    scripts/reset-batch-manifest-ledger.py \
+    scripts/upload-press-bag-wasabi.py \
+    scripts/purge-wasabi-prefix.py \
     scripts/export-preservation-catalog.py \
     scripts/submission_sources.py \
-    scripts/validate-e-ark-package.sh \
     scripts/verify-packaging-profile-urls.py \
     scripts/preservation_common.py \
+    scripts/ingest_kind.py \
+    scripts/dump_redump.py \
+    scripts/dump_classify.py \
+    scripts/dump_catalog_omeka.py \
+    scripts/upload-dump-wasabi.py \
+    scripts/apply_dump_catalog_omeka.py \
+    scripts/batch_ledger.py \
+    scripts/package_identity.py \
+    scripts/package_ledger.py \
     scripts/format_identification.py \
     scripts/source_content_policy.py \
     scripts/normalize_display_title.py \
     scripts/ingest-game-folder.py \
     scripts/fixity-check.py \
     scripts/read-config-yaml.py \
+    scripts/omeka_dip_media.py \
+    scripts/omeka_external_dip.py \
+    scripts/dip_mount_preflight.py \
     scripts/omeka_staff_metadata.py \
     scripts/upload-dip-omeka-api.py \
+    scripts/press_material_description.py \
+    scripts/moby_omeka_fields.py \
+    scripts/apply-moby-metadata-omeka.py \
+    scripts/apply-press-material-description-omeka.py \
     scripts/moby_resolve.py \
     scripts/moby_page_scrape.py \
     scripts/moby_web_search.py \
-    scripts/moby_omeka_fields.py \
     scripts/apply-moby-ad-blurbs-from-web.py \
     scripts/moby_enrich_game.py \
-    scripts/apply-moby-metadata-omeka.py \
     scripts/backfill-ledger-omeka-ids.py \
     scripts/dedupe-omeka-test-items.py \
     scripts/reset-batch-ledger.py \
-    scripts/upload-aip-wasabi.py \
     scripts/submission_common.py \
     scripts/ingest-submission.py \
     scripts/redump_info_lookup.py \
     scripts/apply-redump-catalog-omeka.py \
-    scripts/upload-dip-wasabi.py \
     scripts/apply-external-dip-omeka.py \
     /app/scripts/
 

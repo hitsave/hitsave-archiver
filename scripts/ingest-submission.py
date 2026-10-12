@@ -148,6 +148,7 @@ def main() -> None:
             manifest = SubmissionManifest(
                 game_key=inner.game_key or manifest.game_key,
                 omeka_item_title=inner.omeka_item_title or manifest.omeka_item_title,
+                ingest_kind=inner.ingest_kind or manifest.ingest_kind,
                 material_type=inner.material_type or manifest.material_type,
                 submitter=inner.submitter or manifest.submitter,
                 notes=inner.notes or manifest.notes,
@@ -165,10 +166,17 @@ def main() -> None:
         else:
             video_access = None
 
+        ingest_kind = manifest.ingest_kind or pres_block.get("ingest_kind")
+        if not ingest_kind or not str(ingest_kind).strip():
+            raise SystemExit(
+                "Set ingest_kind in the zip manifest (hitsave-submission.yaml) or "
+                "preservation.ingest_kind in submissions.yaml; see ingest-kinds.yaml"
+            )
         game_cfg = build_game_config(
             source_game_folder=source_folder,
             game_key=game_key,
             omeka_item_title=omeka_title,
+            ingest_kind=str(ingest_kind).strip(),
             paths=ingest_cfg["paths"],
             batch_key=batch_key,
             video_access=video_access,

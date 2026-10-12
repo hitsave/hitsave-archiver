@@ -1,0 +1,7 @@
+# BagIt demo / QA: Tekken 7 press kit (package_id assigned at ingest).
+ingest_kind: press_material
+source_subpath: Representation_Copies/T/Tekken_7
+omeka_item_title: Tekken 7
+batch_key: repcopies-b-full
+max_files: 5000
+max_total_bytes: 5368709120

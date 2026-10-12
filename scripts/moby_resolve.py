@@ -38,6 +38,27 @@ def uses_moby_catalog_data(metadata_json: dict | None) -> bool:
     return bool(metadata_json and metadata_json.get("moby_game_id"))
 
 
+def normalize_moby_omeka_profile(raw: str | None) -> str:
+    profile = str(raw or "none").strip().casefold().replace("-", "_")
+    if profile in ("press_material", "game_catalog"):
+        return profile
+    return "none"
+
+
+def apply_moby_omeka_profile_to_metadata(
+    metadata: dict,
+    omeka_profile: str,
+    moby_cfg: dict | None = None,
+) -> dict:
+    """Drop Omeka-suppressed catalog fields before persisting attribution lists."""
+    if normalize_moby_omeka_profile(omeka_profile) != "press_material":
+        return metadata
+    fields = list(metadata.get("moby_catalog_fields") or moby_catalog_fields(metadata))
+    metadata["moby_catalog_fields"] = [f for f in fields if f != "first_release_date"]
+    metadata["attribution"] = moby_attribution_text(metadata, moby_cfg)
+    return metadata
+
+
 class _HTMLPlainText(HTMLParser):
     _BLOCK_END = frozenset({"p", "div", "li", "h1", "h2", "h3", "h4", "tr", "blockquote"})
 
@@ -119,6 +140,24 @@ def moby_attribution_suffix(moby_cfg: dict | None = None) -> str:
         if suffix:
             return str(suffix).strip()
     return MOBY_ATTRIBUTION_SUFFIX
+
+
+def moby_attribution_for_omeka_rights(
+    metadata_json: dict | None,
+    moby_cfg: dict | None = None,
+    *,
+    omeka_profile: str = "press_material",
+) -> str:
+    """Moby credit for dcterms:rights — excludes game synopsis fields (not copied to description)."""
+    if not metadata_json:
+        return moby_attribution_suffix(moby_cfg)
+    meta = dict(metadata_json)
+    fields = list(meta.get("moby_catalog_fields") or moby_catalog_fields(meta))
+    omit = frozenset({"description", "official_description"})
+    if normalize_moby_omeka_profile(omeka_profile) == "press_material":
+        omit = omit | frozenset({"first_release_date"})
+    meta["moby_catalog_fields"] = [f for f in fields if f not in omit]
+    return moby_attribution_text(meta, moby_cfg)
 
 
 def moby_attribution_text(metadata_json: dict | None, moby_cfg: dict | None = None) -> str:
@@ -519,7 +558,15 @@ class MobyClient:
         finalize_moby_metadata(metadata)
 
         has_body = bool((metadata.get("description_plain") or metadata.get("official_ad_blurb_plain") or "").strip())
+        has_catalog = bool(
+            metadata.get("publishers")
+            or metadata.get("developers")
+            or metadata.get("first_release_date")
+        )
         if not has_body:
+            # Press Omeka uses inventory-based descriptions, not Moby synopsis — id + catalog is enough.
+            if has_catalog:
+                return MobyResult("ok", None, game_id, title, metadata, "first_release")
             return MobyResult(
                 "incomplete",
                 "moby_metadata_incomplete",

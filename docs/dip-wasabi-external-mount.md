@@ -1,6 +1,6 @@
 # Pilot: DIP on Wasabi + external tar mount (Omeka)
 
-OmekaDipViewer can read a DIP `.tar` from **`o:data.external_tar_path`** when that path is readable inside the Omeka container (read-only rclone mount of `dip-access/` on Wasabi).
+OmekaDipViewer can read a package `.tar` from **`o:data.external_tar_path`** when that path is readable inside the Omeka container (read-only rclone mount of the **`hitsave-incoming`** bucket). Archive types use S3 prefixes as folders (`press-material/`, `dip-access/`, `redump/`, …).
 
 ## Config
 
@@ -34,10 +34,10 @@ mkdir -p "$DIP_WASABI_MOUNT"
 docker compose -f docker-compose.yml -f docker-compose.dip-wasabi-rclone.yml up -d
 ```
 
-Verify inside Omeka: `test -r /dip-wasabi/repcopies-a-full-abzu/repcopies-a-full-abzu.tar`
+Verify inside Omeka: `test -r /hitsave-incoming/press-material/repcopies-b-full-tekken-7/repcopies-b-full-tekken-7.tar` (BagIt) or `test -r /hitsave-incoming/dip-access/repcopies-a-full-abzu/repcopies-a-full-abzu.tar` (legacy E-ARK dip-access).
 
 Set `OMEKA_MARIADB_CONTAINER=hitsave-omeka-test-mariadb-1` when running `apply-external-dip-omeka.py` so custom `media.data` fields persist (REST PATCH alone drops them).
 
-Local Omeka copy under `volume/files/original/` may remain; the viewer prefers `external_tar_path` when set.
+BagIt press ingest registers Omeka media via **`external_tar_path` only** (no tar bytes in Omeka). Legacy items may still have a local `files/original/` copy until re-registered.
 
 Branch: `feat/dip-wasabi-external-mount` (archiver, omeka-dip-viewer, hitsave-omeka-test).

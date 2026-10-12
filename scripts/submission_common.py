@@ -30,6 +30,7 @@ class SubmissionError(Exception):
 class SubmissionManifest:
     game_key: str | None
     omeka_item_title: str | None
+    ingest_kind: str | None
     material_type: str | None
     submitter: str | None
     notes: str | None
@@ -246,7 +247,7 @@ def load_manifest(
     *,
     max_manifest_bytes: int,
 ) -> SubmissionManifest:
-    empty = SubmissionManifest(None, None, None, None, None)
+    empty = SubmissionManifest(None, None, None, None, None, None)
     if yaml is None:
         return empty
     for name in filenames:
@@ -269,6 +270,7 @@ def load_manifest(
             omeka_item_title=str(data["omeka_item_title"]).strip()
             if data.get("omeka_item_title")
             else None,
+            ingest_kind=str(data["ingest_kind"]).strip() if data.get("ingest_kind") else None,
             material_type=str(data.get("material_type") or "").strip() or None,
             submitter=str(data.get("submitter") or "").strip() or None,
             notes=str(data.get("notes") or "").strip() or None,
@@ -281,6 +283,7 @@ def build_game_config(
     source_game_folder: Path,
     game_key: str,
     omeka_item_title: str,
+    ingest_kind: str,
     paths: dict,
     batch_key: str,
     video_access: dict | None = None,
@@ -294,8 +297,9 @@ def build_game_config(
     staging_root = output_root / ".staging" / "submissions" / batch_key
     cfg: dict = {
         "source_game_folder": str(source_game_folder),
-        "output_tar": str(dip_dir / f"{game_key}.tar"),
+        "ingest_kind": ingest_kind,
         "staging_dir": str(staging_root / game_key),
+        "bagit_bag_dir": str(aip_dir / game_key),
         "aip_bag_dir": str(aip_dir / game_key),
         "game_key": game_key,
         "omeka_item_title": omeka_item_title,

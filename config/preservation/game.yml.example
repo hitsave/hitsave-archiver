@@ -3,6 +3,7 @@
 #
 # Run: docker compose run --rm ingest-worker /config/preservation/game.yml
 
+ingest_kind: press_material
 source_subpath: Example/Publisher/GameFolder
 game_key: example-game
 omeka_item_title: "Example Game — press material"

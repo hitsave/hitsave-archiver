@@ -7,7 +7,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from omeka_staff_metadata import aip_s3_uri, merge_uri_property, uri_value_row  # noqa: E402
+from omeka_staff_metadata import (  # noqa: E402
+    aip_s3_uri,
+    filter_bibo_uri_public,
+    merge_staff_preservation_uri,
+    merge_uri_property,
+    uri_value_row,
+)
 
 
 def test_aip_s3_uri() -> None:
@@ -24,6 +30,35 @@ def test_merge_uri_property_appends() -> None:
     out = merge_uri_property(item, term, row)
     assert out is not None
     assert len(out[term]) == 2
+    assert out[term][-1]["is_public"] is False
+
+
+def test_filter_bibo_uri_public_removes_s3() -> None:
+    item = {
+        "bibo:uri": [
+            {"@id": "https://www.mobygames.com/game/1"},
+            {"@id": "s3://hitsave-incoming/press-material/x/x.tar"},
+        ]
+    }
+    out = filter_bibo_uri_public(item)
+    assert out is not None
+    assert len(out["bibo:uri"]) == 1
+    assert out["bibo:uri"][0]["@id"].startswith("https://")
+
+
+def test_merge_staff_preservation_uri_replaces_s3() -> None:
+    term = "dcterms:relation"
+    item = {
+        term: [
+            {"@id": "https://example.org/link"},
+            {"@id": "s3://hitsave-incoming/press-material/a/a.tar"},
+            {"@id": "s3://hitsave-incoming/press-material/b/b.tar"},
+        ]
+    }
+    row = uri_value_row(1, "s3://hitsave-incoming/press-material/c/c.tar", is_public=False)
+    out = merge_staff_preservation_uri(item, term, row)
+    ids = [r["@id"] for r in out[term]]
+    assert ids == ["https://example.org/link", "s3://hitsave-incoming/press-material/c/c.tar"]
     assert out[term][-1]["is_public"] is False
 
 

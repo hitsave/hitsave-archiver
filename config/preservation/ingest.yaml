@@ -46,8 +46,10 @@ wasabi:
   bucket: hitsave-incoming
   prefix: press-material/
   verify_upload: true
+  # Omeka path for rclone mount of the whole bucket (archive folders = S3 prefixes).
+  omeka_mount_root: /hitsave-incoming
 
-# DIP .tar objects: dip-access/{game_key}/{game_key}.tar (see dip-wasabi.yml.example).
+# Legacy E-ARK: separate dip-access/ tar (ignored when packaging_mode is bagit).
 dip_wasabi:
   enabled: true
   config_file: preservation/dip-wasabi.yml.example

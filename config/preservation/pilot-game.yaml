@@ -1,4 +1,5 @@
 # WoG1 pilot — paths are inside the preservation ingest container.
+ingest_kind: press_material
 source_game_folder: /data/press-material/Varna/Softmax/WoG1
 output_tar: /output/dip/pilot-wog1.tar
 staging_dir: /output/.staging/pilot-wog1

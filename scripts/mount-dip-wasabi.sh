@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Read-only rclone mount of dip-access/ prefix for Omeka external DIP paths.
+# Read-only rclone mount of hitsave-incoming (whole bucket) for Omeka external tar paths.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -26,7 +26,8 @@ fi
 exec rclone mount "$REMOTE" "$MOUNT" \
   --config "$ROOT/.generated/rclone-dip-wasabi.conf" \
   --read-only \
-  --dir-cache-time 72h \
-  --vfs-cache-mode full \
+  --dir-cache-time 30s \
+  --attr-timeout 30s \
+  --vfs-cache-mode minimal \
   "${EXTRA[@]}" \
   --daemon

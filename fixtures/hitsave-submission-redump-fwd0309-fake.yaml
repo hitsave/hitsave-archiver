@@ -1,7 +1,7 @@
 # Stub handoff for catalog-only test (no Wasabi upload). SSOT: redump.info disc 81693.
 game_key: redump-fwd0309
-material_type: disc_dump
-source_profile: redump
+ingest_kind: dump
+material_type: dump
 moby_enrich: false
 wasabi:
   bucket: hitsave-incoming

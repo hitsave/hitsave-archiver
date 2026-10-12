@@ -60,6 +60,34 @@ def item_has_uri(item_body: dict, term: str, uri: str) -> bool:
     return False
 
 
+def is_wasabi_s3_uri(uri: str) -> bool:
+    return str(uri or "").strip().lower().startswith("s3://")
+
+
+def filter_bibo_uri_public(item_body: dict) -> dict[str, list] | None:
+    """Drop Wasabi s3:// values from bibo:uri (Moby game pages use this property)."""
+    term = "bibo:uri"
+    rows = item_body.get(term) or []
+    kept = [dict(row) for row in rows if not is_wasabi_s3_uri(str(row.get("@id") or ""))]
+    if len(kept) == len(rows):
+        return None
+    return {term: kept}
+
+
+def merge_staff_preservation_uri(
+    item_body: dict,
+    term: str,
+    new_row: dict[str, Any],
+) -> dict[str, list]:
+    """Keep non-s3 relation/URI values; store exactly one staff s3:// row (private)."""
+    uri = str(new_row.get("@id") or "")
+    rows = [dict(row) for row in (item_body.get(term) or [])]
+    rows = [row for row in rows if not is_wasabi_s3_uri(str(row.get("@id") or ""))]
+    if uri:
+        rows.append(new_row)
+    return {term: rows}
+
+
 def merge_uri_property(
     item_body: dict,
     term: str,
@@ -93,9 +121,22 @@ def _patch_item_aip_uri(
     item_body = resp.json()
     pid = api.resolve_property_id(session, base, creds, uri_property)
     row = uri_value_row(pid, aip_uri, is_public=uri_is_public)
-    updates = merge_uri_property(item_body, uri_property, row)
-    if not updates:
+    bibo_fix = filter_bibo_uri_public(item_body)
+    s3_rows = [
+        row
+        for row in (item_body.get(uri_property) or [])
+        if is_wasabi_s3_uri(str(row.get("@id") or ""))
+    ]
+    relation_ok = (
+        len(s3_rows) == 1
+        and str(s3_rows[0].get("@id") or "") == aip_uri
+        and bool(s3_rows[0].get("is_public")) == uri_is_public
+    )
+    if relation_ok and not bibo_fix:
         return False
+    updates: dict[str, list] = merge_staff_preservation_uri(item_body, uri_property, row)
+    if bibo_fix:
+        updates = {**updates, **bibo_fix}
     api.patch_item_rdf_values(session, base, creds, item_id, updates, item_body=item_body)
     return True
 
@@ -130,6 +171,97 @@ def ledger_aip_wasabi_prefix(db_cfg: dict, game_key: str) -> str | None:
     return str(row[0]).strip()
 
 
+def ledger_preservation_package_s3_uri(db_cfg: dict, game_key: str, bucket: str) -> str | None:
+    """BagIt s3:// URI from ledger (package_storage_prefix or legacy keys)."""
+    if psycopg is None:
+        raise RuntimeError("psycopg required")
+    conn = psycopg.connect(
+        host=db_cfg["host"],
+        port=int(db_cfg.get("port", 5432)),
+        dbname=db_cfg["database"],
+        user=db_cfg["user"],
+        password=db_cfg["password"],
+    )
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT package_storage_prefix, aip_wasabi_prefix, package_tar_key
+                FROM game_ingest WHERE game_key = %s
+                """,
+                (game_key,),
+            )
+            row = cur.fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return None
+    storage_prefix, aip_prefix, tar_key = row[0], row[1], row[2]
+    if storage_prefix:
+        raw = str(storage_prefix).strip()
+        if raw.startswith("s3://"):
+            return raw.rstrip("/") + "/"
+        return aip_s3_uri(bucket=bucket, storage_prefix=raw)
+    if tar_key:
+        legacy = str(tar_key).lstrip("/")
+        if legacy.lower().endswith(".tar"):
+            legacy = legacy[:-4]
+        return aip_s3_uri(bucket=bucket, storage_prefix=legacy)
+    if aip_prefix:
+        prefix = aip_prefix
+        raw = str(prefix).strip()
+        if raw.startswith("s3://"):
+            return raw.rstrip("/")
+        return aip_s3_uri(bucket=bucket, storage_prefix=raw)
+    return None
+
+
+def strip_wasabi_s3_from_relation(
+    session: requests.Session,
+    base: str,
+    creds: dict,
+    item_id: int,
+    *,
+    relation_term: str = "dcterms:relation",
+    api: type[OmekaItemApi],
+) -> bool:
+    """Remove all s3:// values from relation (e.g. duplicate staff URIs shown when logged in)."""
+    get_url = api.api_url(base, f"items/{item_id}", creds)
+    resp = session.get(get_url, headers={"Accept": "application/ld+json"}, timeout=120)
+    if not resp.ok:
+        raise RuntimeError(f"GET item {item_id} failed ({resp.status_code}): {resp.text[:800]}")
+    item_body = resp.json()
+    rows = item_body.get(relation_term) or []
+    kept = [dict(row) for row in rows if not is_wasabi_s3_uri(str(row.get("@id") or ""))]
+    if len(kept) == len(rows):
+        return False
+    api.patch_item_rdf_values(
+        session, base, creds, item_id, {relation_term: kept}, item_body=item_body
+    )
+    return True
+
+
+def strip_public_wasabi_bibo_uri(
+    session: requests.Session,
+    base: str,
+    creds: dict,
+    item_id: int,
+    *,
+    api: type[OmekaItemApi],
+) -> bool:
+    """Remove s3:// from bibo:uri so anonymous users never see storage locations."""
+    get_url = api.api_url(base, f"items/{item_id}", creds)
+    resp = session.get(get_url, headers={"Accept": "application/ld+json"}, timeout=120)
+    if not resp.ok:
+        raise RuntimeError(f"GET item {item_id} failed ({resp.status_code}): {resp.text[:800]}")
+    item_body = resp.json()
+    bibo_fix = filter_bibo_uri_public(item_body)
+    if not bibo_fix:
+        return False
+    api.patch_item_rdf_values(session, base, creds, item_id, bibo_fix, item_body=item_body)
+    return True
+
+
 def apply_item_aip_uri(
     session: requests.Session,
     base: str,
@@ -151,10 +283,9 @@ def apply_item_aip_uri(
     if not bucket:
         return None
     db_cfg = _load_yaml(Path(ingest_cfg["database"]["config_file"]))["postgres"]
-    prefix = ledger_aip_wasabi_prefix(db_cfg, game_key)
-    if not prefix:
+    uri = ledger_preservation_package_s3_uri(db_cfg, game_key, bucket)
+    if not uri:
         return None
-    uri = aip_s3_uri(bucket=bucket, storage_prefix=prefix)
     term = str(aip_cfg.get("uri_property") or "dcterms:relation").strip()
     is_public = bool(aip_cfg.get("uri_is_public", False))
     _patch_item_aip_uri(

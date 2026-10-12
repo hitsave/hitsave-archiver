@@ -84,131 +84,7 @@ def ensure_item_set(
     return item_set_id
 
 
-def _append_literal(
-    out: dict[str, list],
-    session: requests.Session,
-    base: str,
-    creds: dict,
-    term: str,
-    value: str | None,
-    *,
-    api,
-) -> None:
-    if not value or not str(value).strip():
-        return
-    pid = api.resolve_property_id(session, base, creds, term)
-    out.setdefault(term, []).append(api.literal_value(pid, str(value).strip()))
-
-
-def _redump_field(fields: dict[str, str], key: str) -> str | None:
-    raw = (fields.get(key) or "").strip()
-    if not raw or raw.startswith("(OPTIONAL)") or raw.startswith("(REQUIRED"):
-        return None
-    return raw
-
-
-def _catalog_alternates(title: str, foreign: str | None, alternates: list[str]) -> list[str]:
-    """Foreign title plus any [T:ALT] titles, each distinct from the main title and each other."""
-    main = (title or "").strip()
-    seen = {main.casefold()} if main else set()
-    out: list[str] = []
-    for raw in [foreign, *alternates]:
-        val = (raw or "").strip()
-        if not val:
-            continue
-        key = val.casefold()
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(val)
-    return out
-
-
-def build_redump_values(
-    session: requests.Session,
-    base: str,
-    creds: dict,
-    manifest: dict[str, Any],
-    *,
-    storage_uri_base: str,
-    api,
-    redump_cfg: dict[str, Any] | None = None,
-    existing_item: dict | None = None,
-) -> tuple[dict[str, list], str]:
-    """
-    Catalog fields for Omeka RDF terms.
-
-    Title and alternative titles come from redump.info when SHA-1 resolves a disc;
-    other fields still use submissionInfo / manifest. Full sidecar stays in Wasabi.
-    """
-    fields = (manifest.get("redump") or {}).get("parsed", {}).get("fields") or {}
-    alternates = (manifest.get("redump") or {}).get("parsed", {}).get("alternate_titles") or []
-    wasabi = manifest.get("wasabi") or {}
-    fallback_title = str(manifest.get("omeka_item_title") or fields.get("Title") or "")
-
-    from redump_info_lookup import redump_disc_page_url, resolve_redump_disc_by_sha1
-
-    cfg = redump_cfg or {}
-    checksums = (manifest.get("redump") or {}).get("parsed", {}).get("checksums") or {}
-    sha1 = checksums.get("sha1") or fields.get("SHA1")
-    resolved = resolve_redump_disc_by_sha1(session, sha1=str(sha1) if sha1 else None, redump_cfg=cfg)
-
-    description: str | None = None
-    if resolved is not None:
-        disc_id, redump_titles = resolved
-        title = redump_titles.title
-        foreign = redump_titles.foreign_title
-        extra_alts = list(redump_titles.alternative_titles)
-        description = redump_titles.contents
-    else:
-        disc_id = None
-        title = fallback_title
-        foreign = fields.get("Foreign Title (Non-latin)")
-        extra_alts = alternates
-
-    values: dict[str, list] = {}
-    _append_literal(values, session, base, creds, "dcterms:title", title, api=api)
-    for alt in _catalog_alternates(title, foreign, extra_alts):
-        _append_literal(values, session, base, creds, "dcterms:alternative", alt, api=api)
-
-    serial = _redump_field(fields, "Disc Serial") or _redump_field(fields, "Barcode")
-    if serial:
-        id_rows: list[dict] = []
-        if existing_item is not None:
-            for row in existing_item.get("dcterms:identifier") or []:
-                val = str(row.get("@value") or "")
-                if val.startswith("ark:"):
-                    id_rows.append(row)
-        pid = api.resolve_property_id(session, base, creds, "dcterms:identifier")
-        id_rows.append(api.literal_value(pid, serial))
-        values["dcterms:identifier"] = id_rows
-
-    # Redump → DC (one value per property unless noted).
-    for fmt in (_redump_field(fields, "System"), _redump_field(fields, "Media Type")):
-        _append_literal(values, session, base, creds, "dcterms:format", fmt, api=api)
-    _append_literal(values, session, base, creds, "dcterms:type", _redump_field(fields, "Category"), api=api)
-    _append_literal(values, session, base, creds, "dcterms:coverage", _redump_field(fields, "Region"), api=api)
-    _append_literal(values, session, base, creds, "dcterms:language", _redump_field(fields, "Languages"), api=api)
-
-    if wasabi.get("bucket") and wasabi.get("prefix"):
-        staff_uri = f"s3://{wasabi['bucket']}/{wasabi['prefix']}"
-    else:
-        game_key = str(manifest.get("game_key") or "")
-        staff_uri = f"{storage_uri_base.rstrip('/')}/{game_key}/"
-    bibo_pid = api.resolve_property_id(session, base, creds, "bibo:uri")
-    values["bibo:uri"] = [api.uri_value(bibo_pid, staff_uri)]
-
-    if disc_id is not None:
-        redump_url = redump_disc_page_url(disc_id, cfg)
-        relation_pid = api.resolve_property_id(session, base, creds, "dcterms:relation")
-        values["dcterms:relation"] = [api.uri_value(relation_pid, redump_url)]
-
-    if description:
-        _append_literal(values, session, base, creds, "dcterms:description", description, api=api)
-    else:
-        values["dcterms:description"] = []
-    values["dcterms:source"] = []
-    return values, title
+from dump_catalog_omeka import build_redump_values, dump_catalog_config  # noqa: E402
 
 
 def patch_catalog_item(
@@ -281,13 +157,13 @@ def main() -> None:
 
     uploader_cfg = load_yaml(CONFIG_ROOT / "omeka-uploader.yaml")
     api_cfg = uploader_cfg.get("api") or {}
-    redump_cfg = uploader_cfg.get("redump_catalog") or {}
+    redump_cfg = dump_catalog_config(uploader_cfg)
     cred_path = CONFIG_ROOT / str(api_cfg.get("credentials_file", "secrets/omeka-api-credentials-local.yaml"))
     creds = load_yaml(cred_path)
 
     base = str(api_cfg["base_url"]).rstrip("/")
     site_slug = str(api_cfg.get("site_slug", "hitsave-test"))
-    item_set_title = str(redump_cfg.get("item_set_title", "Redump disc dumps"))
+    item_set_title = str(redump_cfg.get("item_set_title", "Dumps"))
     is_public = bool(redump_cfg.get("is_public", True))
     storage_uri_base = str(
         redump_cfg.get("storage_uri_base", "http://10.1.1.60:8088/staff/redump")

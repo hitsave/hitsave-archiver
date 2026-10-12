@@ -8,5 +8,5 @@ dip_wasabi:
   # Object keys: {prefix}{game_key}/{game_key}.tar
   prefix: dip-access/
   verify_upload: true
-  # Path inside the Omeka container (bind-mount from host rclone mount).
-  omeka_mount_root: /dip-wasabi
+  # Omeka path for rclone mount of hitsave-incoming (prefix is a folder under this root).
+  omeka_mount_root: /hitsave-incoming

@@ -1,5 +1,7 @@
 # MobyGames API (optional). Copy mobygames-credentials.yaml from example.
 mobygames:
+  # Omeka field mapping (release date, description source) follows ingest_kind in
+  # config/preservation/ingest-kinds.yaml — not this file.
   # Appended only when the attribution sentence does not already mention MobyGames.
   attribution_suffix: "Data by MobyGames.com"
   enabled: true

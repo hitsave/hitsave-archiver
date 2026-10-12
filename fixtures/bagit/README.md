@@ -5,6 +5,7 @@ Real press-material bags built with `scripts/build-bagit-package.py` (not synthe
 | File | Source SIP | Notes |
 |------|------------|--------|
 | `repcopies-s-25-scrubs.tar` | `/tank2/press-material/Representation_Copies/S/Scrubs` | 2 image files; use with OmekaDipViewer `test/parse_fixture.php` |
+| `repcopies-b-full-tekken-7.tar` | `/tank2/press-material/Representation_Copies/T/Tekken_7` | ~136 files (jpg/png/pdf); built via `bagit-demo-tekken-7.yaml` — **too large for git**; lives under `/tank/.../output/dip/batch/repcopies-b-full/` |
 
 Rebuild (requires `HOST_PRESS_MATERIAL=/tank2/press-material`):
 

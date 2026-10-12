@@ -3,6 +3,7 @@
 # Run:    bash scripts/run-batch-preservation-omeka.sh config/preservation/batch.yml
 
 batch_key: my-batch-key
+ingest_kind: press_material
 source_subpath: Representation_Copies/T
 
 select:

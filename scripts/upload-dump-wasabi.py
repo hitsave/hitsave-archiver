@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Upload a BagIt .tar (single AIP/DIP object) to Wasabi; update ledger package fields."""
+"""Upload an unpacked BagIt bag to Wasabi under dumps/{system}/{category}/{package_id}/."""
 from __future__ import annotations
 
 import hashlib
@@ -20,7 +20,8 @@ except ImportError as e:
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INGEST_CONFIG = Path("/config/preservation/ingest.yaml")
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
-from preservation_common import wasabi_bagit_tar_key  # noqa: E402
+from dump_classify import package_storage_s3_uri  # noqa: E402
+from preservation_common import wasabi_unpacked_prefix  # noqa: E402
 
 
 def load_yaml(path: Path) -> dict:
@@ -40,6 +41,22 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def iter_package_files(package_root: Path) -> list[Path]:
+    files = [p for p in sorted(package_root.rglob("*")) if p.is_file()]
+    if not files:
+        raise RuntimeError(f"No files in bag directory: {package_root}")
+    return files
+
+
+def object_key(storage_root: str, bag_dir: Path, file_path: Path) -> str:
+    rel = file_path.relative_to(bag_dir).as_posix()
+    return f"{storage_root}{rel}"
 
 
 def make_s3_client(wasabi: dict, creds: dict):
@@ -69,53 +86,51 @@ def load_wasabi_settings(ingest_config_path: Path) -> tuple[dict, Path]:
     return wasabi, cred_path
 
 
-def upload_package_tar(
-    tar_path: Path,
-    game_key: str,
+def upload_bag_to_prefix(
+    bag_dir: Path,
+    package_storage_prefix: str,
     *,
     ingest_config_path: Path = DEFAULT_INGEST_CONFIG,
-) -> dict[str, str | int]:
-    tar_path = tar_path.resolve()
-    if not tar_path.is_file():
-        raise RuntimeError(f"Package tar not found: {tar_path}")
+) -> dict[str, str]:
+    bag_dir = bag_dir.resolve()
+    if not bag_dir.is_dir():
+        raise RuntimeError(f"Bag directory not found: {bag_dir}")
 
     wasabi, _ = load_wasabi_settings(ingest_config_path)
     if not wasabi.get("enabled", True):
         raise RuntimeError("Wasabi upload is disabled (wasabi.enabled: false)")
 
     bucket = str(wasabi["bucket"])
-    prefix = str(wasabi.get("prefix", ""))
-    key = wasabi_bagit_tar_key(game_key, prefix)
+    root = wasabi_unpacked_prefix(package_storage_prefix)
     verify = bool(wasabi.get("verify_upload", True))
     creds = load_yaml(resolve_config_path(str(wasabi["credentials_file"]), ingest_config_path.parent.parent))
     client = make_s3_client(wasabi, creds)
 
-    size = tar_path.stat().st_size
-    local_digest = sha256_file(tar_path) if verify else None
-
-    with tar_path.open("rb") as body:
-        client.put_object(Bucket=bucket, Key=key, Body=body, ContentLength=size)
-
-    if verify:
-        head = client.head_object(Bucket=bucket, Key=key)
-        remote_size = int(head.get("ContentLength") or 0)
-        if remote_size != size:
-            raise RuntimeError(f"Size mismatch after upload: s3://{bucket}/{key}")
-        max_full_verify = int(wasabi.get("max_full_verify_bytes", 524288000))
-        if local_digest and size <= max_full_verify:
+    files = iter_package_files(bag_dir)
+    uploaded = 0
+    for path in files:
+        key = object_key(root, bag_dir, path)
+        local_digest = sha256_file(path) if verify else None
+        size = path.stat().st_size
+        with path.open("rb") as body:
+            client.put_object(Bucket=bucket, Key=key, Body=body, ContentLength=size)
+        if verify:
             resp = client.get_object(Bucket=bucket, Key=key)
             remote = resp["Body"].read()
-            if hashlib.sha256(remote).hexdigest() != local_digest:
+            if len(remote) != size:
+                raise RuntimeError(f"Size mismatch after upload: s3://{bucket}/{key}")
+            if sha256_bytes(remote) != local_digest:
                 raise RuntimeError(f"SHA-256 mismatch after upload: s3://{bucket}/{key}")
+        uploaded += 1
+        print(f"  uploaded s3://{bucket}/{key} ({size} bytes)")
 
-    s3_uri = f"s3://{bucket}/{key}"
-    print(f"Uploaded {s3_uri} ({size} bytes)")
+    s3_uri = package_storage_s3_uri(bucket, package_storage_prefix)
+    print(f"Wasabi dump upload complete: {uploaded} objects under {s3_uri}")
     return {
         "bucket": bucket,
-        "key": key,
+        "package_storage_prefix": package_storage_prefix.strip("/"),
         "s3_uri": s3_uri,
-        "tar_bytes": size,
-        "sha256": local_digest or sha256_file(tar_path),
+        "object_prefix": root,
     }
 
 
@@ -129,9 +144,9 @@ def pg_connect(db_cfg: dict):
     )
 
 
-def update_ledger_package(
+def update_ledger_dump_storage(
     game_key: str,
-    upload: dict[str, str | int],
+    upload: dict[str, str],
     *,
     ingest_config_path: Path = DEFAULT_INGEST_CONFIG,
 ) -> None:
@@ -146,12 +161,20 @@ def update_ledger_package(
                 UPDATE game_ingest
                 SET aip_wasabi_prefix = %s,
                     aip_uploaded_at = %s,
-                    package_tar_key = %s,
-                    package_tar_sha256 = %s,
+                    package_storage_prefix = %s,
+                    storage_layout = %s,
+                    package_tar_key = NULL,
+                    package_tar_sha256 = NULL,
                     updated_at = NOW()
                 WHERE game_key = %s
                 """,
-                (str(upload["s3_uri"]), now, str(upload["key"]), str(upload["sha256"]), game_key),
+                (
+                    str(upload["s3_uri"]),
+                    now,
+                    str(upload["package_storage_prefix"]),
+                    "bagit_unpacked",
+                    game_key,
+                ),
             )
             if cur.rowcount == 0:
                 raise RuntimeError(f"No game_ingest row for game_key={game_key!r}")
@@ -159,16 +182,18 @@ def update_ledger_package(
 
 
 def main() -> None:
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 4:
         raise SystemExit(
-            "Usage: upload-package-wasabi.py <package.tar> <game_key> [ingest.yaml]"
+            "Usage: upload-dump-wasabi.py <bag_dir> <game_key> <package_storage_prefix> [ingest.yaml]"
         )
-    tar_path = Path(sys.argv[1])
+    bag_dir = Path(sys.argv[1])
     game_key = sys.argv[2]
-    ingest_path = Path(sys.argv[3]) if len(sys.argv) > 3 else DEFAULT_INGEST_CONFIG
+    storage_prefix = sys.argv[3].strip("/")
+    ingest_path = Path(sys.argv[4]) if len(sys.argv) > 4 else DEFAULT_INGEST_CONFIG
+
     try:
-        upload = upload_package_tar(tar_path, game_key, ingest_config_path=ingest_path)
-        update_ledger_package(game_key, upload, ingest_config_path=ingest_path)
+        upload = upload_bag_to_prefix(bag_dir, storage_prefix, ingest_config_path=ingest_path)
+        update_ledger_dump_storage(game_key, upload, ingest_config_path=ingest_path)
     except ClientError as e:
         raise SystemExit(f"Wasabi S3 error: {e}") from e
 
