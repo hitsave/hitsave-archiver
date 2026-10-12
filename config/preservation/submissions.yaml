@@ -1,4 +1,4 @@
-# Portable submission intake (zip → unpack → same E-ARK AIP/DIP pipeline as press-material ingest).
+# Portable submission intake (zip → unpack → same BagIt ingest pipeline as press-material ingest).
 # Planned zip layout rules (folder vs filename vs quarantine): docs/submission-zip-layout-standard.md
 # Paths are inside the ingest-worker / ClamAV containers unless noted.
 paths:
