@@ -1,0 +1,85 @@
+Common Disc Info:
+	Title: Famitsu Wave DVD 2003 7gatsu-gou Tokubetsu Furoku
+	Foreign Title (Non-latin): ファミ通Ｗａｖｅ　ＤＶＤ　２００３　７月号　特別付録
+	Disc Number / Letter: (OPTIONAL)
+	Disc Title: (OPTIONAL)
+	System: DVD-Video
+	Media Type: DVD-ROM-5
+	Category: Coverdiscs
+	Region: Japan
+	Languages: Japanese
+	Disc Serial: FWD0307
+
+	Ringcode Information:
+		Data Side Mastering Code (laser branded/etched): FWD0307 Made in Taiwan	92051314N
+		Data Side Mastering SID Code: IFPI LB76
+		Data Side Toolstamp or Mastering Code (engraved/stamped): (REQUIRED, IF EXISTS)
+		Data Side Mould SID Code: IFPI 2N93
+		Data Side Additional Mould: (REQUIRED, IF EXISTS)
+		Label Side Mould SID Code: IFPI 2N83
+	Barcode: (OPTIONAL)
+	Comments: [T:VOL] FWD0307
+	[T:ALT] Famitsu Wave DVD July 2003
+	Contents: (OPTIONAL)
+
+Version and Editions:
+	Version: (REQUIRED, IF EXISTS)
+	Edition/Release: Magazine Bundle
+
+Extras:
+	Primary Volume Descriptor (PVD):
+
+0320 : 20 20 20 20 20 20 20 20  20 20 20 20 20 32 30 30                200
+0330 : 33 30 35 31 32 31 30 34  33 30 39 30 30 24 30 30   3051210430900$00
+0340 : 30 30 30 30 30 30 30 30  30 30 30 30 30 30 00 30   00000000000000.0
+0350 : 30 30 30 30 30 30 30 30  30 30 30 30 30 30 30 00   000000000000000.
+0360 : 30 30 30 30 30 30 30 30  30 30 30 30 30 30 30 30   0000000000000000
+0370 : 00 01 00 00 00 00 00 00  00 00 00 00 00 00 00 00   ................
+
+Copy Protection:
+	Copy Protection:
+
+Region: 2
+Copyright Protection System Type: CSS/CPPM
+VIDEO_TS.VOB Title Key: C0 01 7A 71 A5
+VTS_01_0.VOB Title Key: C0 01 7A 71 A5
+VTS_01_1.VOB Title Key: C0 01 7A 71 A5
+VTS_02_0.VOB Title Key: C0 01 7A 71 A6
+VTS_02_1.VOB Title Key: C0 01 7A 71 A6
+VTS_03_0.VOB Title Key: C0 01 7A 71 A7
+VTS_03_1.VOB Title Key: C0 01 7A 71 A7
+VTS_04_0.VOB Title Key: C0 01 7A 71 A8
+VTS_04_1.VOB Title Key: C0 01 7A 71 A8
+VTS_05_0.VOB Title Key: C0 01 7A 71 A9
+VTS_05_1.VOB Title Key: C0 01 7A 71 A9
+VTS_06_0.VOB Title Key: C0 01 7A 71 AA
+VTS_06_1.VOB Title Key: C0 01 7A 71 AA
+VTS_07_0.VOB Title Key: C0 01 7A 71 AB
+VTS_07_1.VOB Title Key: C0 01 7A 71 AB
+VTS_08_0.VOB Title Key: C0 01 7A 71 AC
+VTS_08_1.VOB Title Key: C0 01 7A 71 AC
+VTS_09_0.VOB Title Key: C0 01 7A 71 AD
+VTS_09_1.VOB Title Key: C0 01 7A 71 AD
+VTS_10_0.VOB Title Key: C0 01 7A 71 AE
+VTS_10_1.VOB Title Key: C0 01 7A 71 AE
+VTS_11_0.VOB Title Key: C0 01 7A 71 AF
+VTS_11_1.VOB Title Key: C0 01 7A 71 AF
+VTS_12_0.VOB Title Key: C0 01 7A 71 B0
+VTS_12_1.VOB Title Key: C0 01 7A 71 B0
+VTS_13_0.VOB Title Key: C0 01 7A 71 B1
+VTS_13_1.VOB Title Key: C0 01 7A 71 B1
+VTS_14_0.VOB Title Key: C0 01 7A 71 B2
+VTS_14_1.VOB Title Key: C0 01 7A 71 B2
+VTS_15_0.VOB Title Key: C0 01 7A 71 B3
+VTS_15_1.VOB Title Key: C0 01 7A 71 B3
+VTS_16_0.VOB Title Key: C0 01 7A 71 B4
+VTS_16_1.VOB Title Key: C0 01 7A 71 B4
+VTS_17_0.VOB Title Key: C0 01 7A 71 B5
+VTS_17_1.VOB Title Key: C0 01 7A 71 B5
+Decrypted Disc Key: 00 00 03 C8 D1
+
+Size & Checksum:
+	Size: 4136693760
+	CRC32: df22af4d
+	MD5: 2a2aeb879a038fdda369a2d9067c2be6
+	SHA1: 411a429df6765bfa43b0471181b3ae0365831c97

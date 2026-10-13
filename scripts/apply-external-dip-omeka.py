@@ -25,6 +25,9 @@ from moby_resolve import uses_moby_catalog_data  # noqa: E402
 from omeka_staff_metadata import (  # noqa: E402
     apply_item_aip_uri,
     load_omeka_catalog_config,
+    require_external_dip_config,
+    require_omeka_api_config,
+    require_omeka_mariadb_config,
     strip_public_wasabi_bibo_uri,
     strip_wasabi_s3_from_relation,
 )
@@ -59,6 +62,7 @@ def patch_media_external_dip(
     package_bytes: int,
     sha256: str,
     package_storage_prefix: str,
+    dip_storage: str,
     api,
 ) -> None:
     get_url = api.api_url(base, f"media/{media_id}", creds)
@@ -69,7 +73,7 @@ def patch_media_external_dip(
     existing_data = body.get("data") if isinstance(body.get("data"), dict) else {}
     merged = {
         **existing_data,
-        "dip_storage": "wasabi-s3",
+        "dip_storage": dip_storage,
         "dip_wasabi_uri": s3_uri,
         "package_wasabi_uri": s3_uri,
         "dip_size_bytes": package_bytes,
@@ -97,26 +101,18 @@ def patch_media_external_dip(
 
 
 def resolve_omeka_mariadb_container() -> str:
-    env = os.environ.get("OMEKA_MARIADB_CONTAINER", "").strip()
-    if env:
-        return env
     catalog_cfg = load_omeka_catalog_config(CONFIG_ROOT)
-    db = catalog_cfg.get("omeka_mariadb") or {}
-    return str(db.get("container") or "").strip()
+    return require_omeka_mariadb_config(catalog_cfg)["container"]
 
 
 def merge_media_data_json(media_id: int, merged: dict[str, Any]) -> None:
     container = resolve_omeka_mariadb_container()
     catalog_cfg = load_omeka_catalog_config(CONFIG_ROOT)
-    database = str(
-        os.environ.get("OMEKA_MARIADB_DATABASE")
-        or (catalog_cfg.get("omeka_mariadb") or {}).get("database")
-        or "omeka_s"
-    ).strip()
+    database = require_omeka_mariadb_config(catalog_cfg)["database"]
     if not container:
         raise RuntimeError(
             "Omeka API did not persist media.data.package_storage_prefix; "
-            "set OMEKA_MARIADB_CONTAINER (e.g. hitsave-omeka-test-mariadb-1) and re-run."
+            "configure omeka-catalog.yaml omeka_mariadb.container and re-run."
         )
     patch_json = json.dumps(merged, separators=(",", ":"))
     sql = (
@@ -206,10 +202,11 @@ def main() -> None:
         )
 
     catalog_cfg = load_omeka_catalog_config(CONFIG_ROOT)
-    api_cfg = catalog_cfg.get("api") or {}
-    cred_path = CONFIG_ROOT / str(api_cfg.get("credentials_file", "secrets/omeka-api-credentials-local.yaml"))
+    api_cfg = require_omeka_api_config(catalog_cfg)
+    dip_cfg = require_external_dip_config(catalog_cfg)
+    cred_path = CONFIG_ROOT / api_cfg["credentials_file"]
     creds = load_yaml(cred_path)
-    base = str(api_cfg["base_url"]).rstrip("/")
+    base = api_cfg["base_url"].rstrip("/")
 
     api = _register_dip_api_module()
     session = requests.Session()
@@ -224,7 +221,7 @@ def main() -> None:
             args.game_key, ingest_cfg
         )
 
-    dip_ingester = str(api_cfg.get("dip_ingester", "omeka_dip_package"))
+    dip_ingester = dip_cfg["dip_ingester"]
     dip_media_id = find_dip_media_id_on_item(
         session,
         base,
@@ -253,6 +250,7 @@ def main() -> None:
         package_bytes=package_bytes,
         sha256="",
         package_storage_prefix=package_storage_prefix,
+        dip_storage=dip_cfg["dip_storage"],
         api=api,
     )
     staff_aip_uri = apply_item_aip_uri(
@@ -272,7 +270,9 @@ def main() -> None:
     moby_fields: list[str] = []
     moby_url: str | None = None
     if metadata_json and uses_moby_catalog_data(metadata_json):
-        moby_cfg = load_yaml(CONFIG_ROOT / "mobygames.yaml").get("mobygames") or {}
+        from moby_resolve import load_mobygames_config, moby_public_game_url
+
+        moby_cfg = load_mobygames_config(CONFIG_ROOT)
         omeka_profile = resolve_omeka_moby_profile(
             ingest_kind=ingest_kind,
             game_key=args.game_key,
@@ -290,7 +290,7 @@ def main() -> None:
             omeka_profile=omeka_profile,
         )
         moby_url = metadata_json.get("moby_url") or (
-            f"https://www.mobygames.com/game/{metadata_json['moby_game_id']}"
+            moby_public_game_url(moby_cfg, metadata_json["moby_game_id"])
             if metadata_json.get("moby_game_id")
             else None
         )

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create or update an Omeka catalog item for ingest kind dump (Redump + Moby, no DIP tar)."""
+"""Create or update an Omeka catalog item for ingest kind dump (Redump + Moby metadata)."""
 from __future__ import annotations
 
 import importlib.util
@@ -148,16 +148,18 @@ def apply_dump_catalog(
             ledger_aip = row[3]
             ledger_prefix = row[4]
 
-    uploader_cfg = load_yaml(CONFIG_ROOT / "omeka-catalog.yaml")
-    api_cfg = uploader_cfg.get("api") or {}
+    from omeka_staff_metadata import load_omeka_catalog_config, require_omeka_api_config
+
+    uploader_cfg = load_omeka_catalog_config(CONFIG_ROOT)
+    api_cfg = require_omeka_api_config(uploader_cfg)
     dump_cfg = dump_catalog_config(uploader_cfg)
-    cred_path = CONFIG_ROOT / str(api_cfg.get("credentials_file", "secrets/omeka-api-credentials-local.yaml"))
+    cred_path = CONFIG_ROOT / api_cfg["credentials_file"]
     creds = load_yaml(cred_path)
-    base = str(api_cfg["base_url"]).rstrip("/")
-    site_slug = str(api_cfg.get("site_slug", "hitsave-test"))
-    item_set_title = str(dump_cfg.get("item_set_title", "Dumps"))
-    is_public = bool(dump_cfg.get("is_public", True))
-    storage_uri_base = str(dump_cfg.get("storage_uri_base", ""))
+    base = api_cfg["base_url"].rstrip("/")
+    site_slug = api_cfg["site_slug"]
+    item_set_title = dump_cfg["item_set_title"]
+    is_public = dump_cfg["is_public"]
+    storage_uri_base = dump_cfg["storage_uri_base"]
 
     session = requests.Session()
     site_id = api.resolve_site_id(session, base, creds, site_slug)

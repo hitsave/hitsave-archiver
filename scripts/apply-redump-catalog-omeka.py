@@ -158,19 +158,19 @@ def main() -> None:
     patch_item_id = int(sys.argv[3]) if len(sys.argv) == 4 else None
     manifest = load_yaml(manifest_path)
 
-    uploader_cfg = load_yaml(CONFIG_ROOT / "omeka-catalog.yaml")
-    api_cfg = uploader_cfg.get("api") or {}
+    from omeka_staff_metadata import load_omeka_catalog_config, require_omeka_api_config
+
+    uploader_cfg = load_omeka_catalog_config(CONFIG_ROOT)
+    api_cfg = require_omeka_api_config(uploader_cfg)
     redump_cfg = dump_catalog_config(uploader_cfg)
-    cred_path = CONFIG_ROOT / str(api_cfg.get("credentials_file", "secrets/omeka-api-credentials-local.yaml"))
+    cred_path = CONFIG_ROOT / api_cfg["credentials_file"]
     creds = load_yaml(cred_path)
 
-    base = str(api_cfg["base_url"]).rstrip("/")
-    site_slug = str(api_cfg.get("site_slug", "hitsave-test"))
-    item_set_title = str(redump_cfg.get("item_set_title", "Dumps"))
-    is_public = bool(redump_cfg.get("is_public", True))
-    storage_uri_base = str(
-        redump_cfg.get("storage_uri_base", "http://10.1.1.60:8088/staff/redump")
-    )
+    base = api_cfg["base_url"].rstrip("/")
+    site_slug = api_cfg["site_slug"]
+    item_set_title = redump_cfg["item_set_title"]
+    is_public = redump_cfg["is_public"]
+    storage_uri_base = redump_cfg["storage_uri_base"]
     wasabi_ingest_cfg = load_ingest_config().get("wasabi")
 
     api = _register_dip_api_module()

@@ -4,6 +4,7 @@ mobygames:
   # config/preservation/ingest-kinds.yaml — not this file.
   # Appended only when the attribution sentence does not already mention MobyGames.
   attribution_suffix: "Data by MobyGames.com"
+  public_game_url_template: "https://www.mobygames.com/game/{game_id}"
   enabled: true
   api_base: https://api.mobygames.com/v1
   credentials_file: secrets/mobygames-credentials.yaml

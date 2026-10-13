@@ -88,7 +88,7 @@ Migration **`schema/009_backfill_ingest_kind_dump.sql`**: `game_dump` / `disc_du
 
 ## Omeka (catalog-only)
 
-- **`apply_dump_catalog_omeka.py`** — Redump RDF from SIP sidecar + SHA-1 lookup, Moby from ledger, staff **`bibo:uri`** = ledger `aip_wasabi_prefix` (`s3://…/dumps/…/`). No DIP tar media.
+- **`apply_dump_catalog_omeka.py`** — Redump RDF from SIP sidecar + SHA-1 lookup, Moby from ledger, staff **`bibo:uri`** = ledger `aip_wasabi_prefix` (`s3://…/dumps/…/`). Unpacked BagIt on Wasabi only (no Omeka file storage).
 - **`register-dip-omeka-api.py`** delegates to the same path when **`ingest_kind: dump`**.
 - GDrive intake handoff YAML can still use **`apply-redump-catalog-omeka.py`**; it shares **`dump_catalog_omeka.build_redump_values`**.
 
@@ -98,5 +98,5 @@ Drive poller uploads raw dump folders to the **same Wasabi prefix** (`intake/dum
 
 ## Related docs
 
-- Press BagIt tar plan: [`oais-bagit-preservation-plan.md`](./oais-bagit-preservation-plan.md)
+- Press BagIt plan: [`oais-bagit-preservation-plan.md`](./oais-bagit-preservation-plan.md)
 - Config contract: [`config-contract.md`](./config-contract.md)

@@ -286,7 +286,7 @@ def main() -> None:
         )
     raw["game_key"] = identity.package_id
     cfg = resolve_game_config(raw, agent_version="build-bagit-package.py")
-    ingest_kind = str(cfg.get("ingest_kind") or "press_material")
+    ingest_kind = str(cfg["ingest_kind"])
     dump_clf = None
     if ingest_kind == "dump":
         dump_clf = classify_dump_sip(source, package_id=identity.package_id)
@@ -299,8 +299,8 @@ def main() -> None:
         source,
         bag_dir,
         identity=identity,
-        agent_version=str(pres.get("agent_version", "build-bagit-package.py")),
-        repository_code=str(pres.get("repository_code", "hitsave")),
+        agent_version=str(pres["agent_version"]),
+        repository_code=str(pres["repository_code"]),
         max_files=max_files,
         max_bytes=max_bytes,
         ingest_kind=ingest_kind,

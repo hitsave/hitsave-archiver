@@ -50,8 +50,10 @@ def folder_bytes(path: Path) -> int:
 
 def resolve_source_parent(batch: dict, cfg_root: Path) -> Path:
     """Folder to scan: press_material_root + source_subpath (see ingest.yaml)."""
-    paths = load_ingest_config()["paths"]
-    press_root = Path(paths.get("press_material_root", "/data/press-material"))
+    from config_require import require_dict, require_str
+
+    paths = require_dict(load_ingest_config(), "paths", where="ingest.yaml")
+    press_root = Path(require_str(paths, "press_material_root", where="ingest.yaml paths"))
     if batch.get("source_subpath") is not None:
         sub = str(batch["source_subpath"]).strip().strip("/")
         if not sub:

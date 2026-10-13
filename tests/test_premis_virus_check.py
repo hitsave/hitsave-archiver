@@ -35,8 +35,8 @@ def test_build_virus_check_premis_xml_contains_event_type_and_outcome() -> None:
 
 def test_attach_virus_check_premis_updates_bag_manifests(tmp_path: Path) -> None:
     bag = tmp_path / "bag"
-    (bag / "data").mkdir(parents=True)
-    (bag / "data" / "a.txt").write_text("x", encoding="utf-8")
+    bag.mkdir(parents=True)
+    (bag / "a.txt").write_text("x", encoding="utf-8")
     import bagit
 
     bagit.make_bag(str(bag), checksums=["sha256"])
@@ -61,5 +61,5 @@ def test_attach_virus_check_premis_updates_bag_manifests(tmp_path: Path) -> None
     )
     out = attach_virus_check_premis(bag, report, linking_agent="test")
     assert out.is_file()
-    manifest = (bag / "manifest-sha256.txt").read_text(encoding="utf-8")
-    assert "metadata/premis/virus-check-event.xml" in manifest
+    tag_manifest = (bag / "tagmanifest-sha256.txt").read_text(encoding="utf-8")
+    assert "metadata/premis/virus-check-event.xml" in tag_manifest

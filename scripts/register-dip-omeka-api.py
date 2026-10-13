@@ -26,7 +26,12 @@ from moby_resolve import moby_description_for_omeka, uses_moby_catalog_data  # n
 from press_material_description import press_material_description  # noqa: E402
 from normalize_display_title import catalog_item_title  # noqa: E402
 from omeka_dip_media import find_dip_media_id_on_item  # noqa: E402
-from omeka_staff_metadata import apply_item_aip_uri, load_omeka_catalog_config  # noqa: E402
+from omeka_staff_metadata import (  # noqa: E402
+    apply_item_aip_uri,
+    load_omeka_catalog_config,
+    require_external_dip_config,
+    require_omeka_api_config,
+)
 from omeka_external_dip import (  # noqa: E402
     attach_external_dip_media,
     create_item_without_media,
@@ -349,7 +354,8 @@ def main() -> None:
         return
 
     catalog_cfg = load_omeka_catalog_config(CONFIG_ROOT)
-    api_cfg = catalog_cfg["api"]
+    api_cfg = require_omeka_api_config(catalog_cfg)
+    dip_cfg = require_external_dip_config(catalog_cfg)
     cred_rel = Path(api_cfg["credentials_file"])
     if cred_rel.parts and cred_rel.parts[0] == "config":
         cred_rel = Path(*cred_rel.parts[1:])
@@ -376,12 +382,15 @@ def main() -> None:
     site_id = resolve_site_id(session, base, creds, api_cfg["site_slug"])
     title_pid = resolve_property_id(session, base, creds, "dcterms:title")
     item_set_id = resolve_item_set_id(session, base, creds, api_cfg["item_set_title"])
-    is_public = bool(api_cfg.get("default_is_public", False))
+    is_public = api_cfg["default_is_public"]
 
     package_storage_prefix = ""
     ledger_ingest_kind = ""
     total_bytes = 0
-    external_dip = resolve_bagit_external_dip(game_key, ingest_cfg)
+    external_dip = resolve_bagit_external_dip(
+        game_key, ingest_cfg, dip_storage=dip_cfg["dip_storage"]
+    )
+    dip_ingester = dip_cfg["dip_ingester"]
 
     conn = pg_connect(db_cfg)
     metadata_json = None
@@ -392,7 +401,7 @@ def main() -> None:
             cur.execute(
                 """
                 SELECT omeka_item_id, omeka_media_id, metadata_json, moby_status, block_reason, status,
-                       inventory_json, ingest_kind, package_tar_key, package_tar_sha256, total_bytes,
+                       inventory_json, ingest_kind, total_bytes,
                        package_storage_prefix
                 FROM game_ingest WHERE game_key = %s
                 """,
@@ -425,8 +434,8 @@ def main() -> None:
             elif game_cfg.get("ingest_kind"):
                 omeka_profile = resolve_omeka_moby_profile(game_cfg=game_cfg)
         if row:
-            total_bytes = int(row[10]) if row[10] is not None else 0
-            package_storage_prefix = str(row[11]).strip() if row[11] else ""
+            total_bytes = int(row[8]) if row[8] is not None else 0
+            package_storage_prefix = str(row[9]).strip() if row[9] else ""
         if not package_storage_prefix:
             package_storage_prefix = str(external_dip.get("package_storage_prefix") or "")
         if not package_storage_prefix:
@@ -435,7 +444,6 @@ def main() -> None:
                 "(package_storage_prefix empty); run ingest first"
             )
 
-        dip_ingester = str(api_cfg.get("dip_ingester", "omeka_dip_package"))
         moby_cfg = load_yaml(CONFIG_ROOT / "mobygames.yaml").get("mobygames") or {}
         existing_item_id = int(row[0]) if row and row[0] else None
         dip_media_id = None
@@ -474,6 +482,7 @@ def main() -> None:
                 package_bytes=total_bytes,
                 sha256="",
                 package_storage_prefix=str(external_dip["package_storage_prefix"]),
+                dip_storage=str(external_dip["dip_storage"]),
                 api=OmekaItemApi,
             )
             staff_aip = apply_item_aip_uri(
@@ -532,7 +541,6 @@ def main() -> None:
             omeka_profile=omeka_profile,
         )
 
-    dip_ingester = str(api_cfg.get("dip_ingester", "omeka_dip_package"))
     ext_dip = _external_dip_helpers()
     merge_media_data_json = ext_dip.merge_media_data_json
 
@@ -558,7 +566,7 @@ def main() -> None:
             item_id=item_id,
             s3_uri=str(external_dip["s3_uri"]),
             package_storage_prefix=str(external_dip["package_storage_prefix"]),
-            dip_storage=str(external_dip.get("dip_storage") or "wasabi-s3"),
+            dip_storage=str(external_dip["dip_storage"]),
             ingester=dip_ingester,
             is_public=is_public,
             package_bytes=total_bytes,
@@ -589,7 +597,7 @@ def main() -> None:
                 item_id=item_id,
                 s3_uri=str(external_dip["s3_uri"]),
                 package_storage_prefix=str(external_dip["package_storage_prefix"]),
-                dip_storage=str(external_dip.get("dip_storage") or "wasabi-s3"),
+                dip_storage=str(external_dip["dip_storage"]),
                 ingester=dip_ingester,
                 is_public=is_public,
                 package_bytes=total_bytes,

@@ -21,7 +21,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INGEST_CONFIG = Path("/config/preservation/ingest.yaml")
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from dump_classify import package_storage_s3_uri  # noqa: E402
-from preservation_common import resolve_wasabi_bucket, wasabi_unpacked_prefix  # noqa: E402
+from preservation_common import (  # noqa: E402
+    resolve_wasabi_bucket,
+    wasabi_s3_region,
+    wasabi_unpacked_prefix,
+)
 
 
 def load_yaml(path: Path) -> dict:
@@ -63,7 +67,7 @@ def make_s3_client(wasabi: dict, creds: dict):
     return boto3.client(
         "s3",
         endpoint_url=str(wasabi["endpoint"]).rstrip("/"),
-        region_name=str(wasabi.get("region", "us-east-1")),
+        region_name=wasabi_s3_region(wasabi),
         aws_access_key_id=str(creds["access_key_id"]),
         aws_secret_access_key=str(creds["secret_access_key"]),
         config=Config(signature_version="s3v4", retries={"max_attempts": 5, "mode": "standard"}),
@@ -164,8 +168,6 @@ def update_ledger_dump_storage(
                     aip_uploaded_at = %s,
                     package_storage_prefix = %s,
                     storage_layout = %s,
-                    package_tar_key = NULL,
-                    package_tar_sha256 = NULL,
                     updated_at = NOW()
                 WHERE game_key = %s
                 """,

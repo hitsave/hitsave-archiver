@@ -21,7 +21,12 @@ CONFIG_ROOT = Path(os.environ.get("HITSAVE_CONFIG_ROOT", str(_default_config)))
 
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from moby_page_scrape import fetch_ad_blurb_from_web  # noqa: E402
-from moby_resolve import finalize_moby_metadata, uses_moby_catalog_data  # noqa: E402
+from moby_resolve import (  # noqa: E402
+    finalize_moby_metadata,
+    load_mobygames_config,
+    moby_public_game_url,
+    uses_moby_catalog_data,
+)
 
 
 def load_yaml(path: Path) -> dict:
@@ -52,7 +57,7 @@ def cookie_jar(moby_cfg: dict) -> Path | None:
 
 def main() -> None:
     dry_run = "--dry-run" in sys.argv
-    moby_cfg = load_yaml(CONFIG_ROOT / "mobygames.yaml").get("mobygames") or {}
+    moby_cfg = load_mobygames_config(CONFIG_ROOT)
     min_chars = int(moby_cfg.get("ad_blurb_min_chars", 80))
     jar = cookie_jar(moby_cfg)
 
@@ -85,7 +90,7 @@ def main() -> None:
         has_ad = bool((meta.get("official_ad_blurb_plain") or "").strip())
         if has_desc or has_ad:
             continue
-        moby_url = meta.get("moby_url") or f"https://www.mobygames.com/game/{moby_game_id}/"
+        moby_url = meta.get("moby_url") or f"{moby_public_game_url(moby_cfg, moby_game_id)}/"
         text, source = fetch_ad_blurb_from_web(moby_url, cookie_jar=jar, min_chars=min_chars)
         if len(text) < min_chars:
             updated.append(

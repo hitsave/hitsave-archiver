@@ -1,0 +1,5 @@
+# Dev defaults — operators override via gitignored copy or private config tree.
+host_paths:
+  press_material_host: ./data/press-material
+  submissions_incoming_host: ./data/submissions/incoming
+  output_root_host: ./data/output
