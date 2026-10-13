@@ -32,6 +32,7 @@ COPY scripts/batch-expand-preservation.py \
     scripts/dump_redump.py \
     scripts/dump_classify.py \
     scripts/dump_catalog_omeka.py \
+    scripts/handoff_dump_catalog_omeka.py \
     scripts/upload-dump-wasabi.py \
     scripts/apply_dump_catalog_omeka.py \
     scripts/batch_ledger.py \

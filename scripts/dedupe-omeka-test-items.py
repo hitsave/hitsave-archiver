@@ -19,6 +19,8 @@ CONFIG_ROOT = Path(__import__("os").environ.get("HITSAVE_CONFIG_ROOT", str(REPO_
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import importlib.util  # noqa: E402
 
+from yaml_config import load_yaml  # noqa: E402
+
 
 def _backfill_module():
     path = REPO_ROOT / "scripts" / "backfill-ledger-omeka-ids.py"
@@ -34,7 +36,6 @@ _backfill = _backfill_module()
 api_url = _backfill.api_url
 fetch_omeka_items = _backfill.fetch_omeka_items
 item_title = _backfill.item_title
-load_yaml = _backfill.load_yaml
 title_match_key = _backfill.title_match_key
 
 

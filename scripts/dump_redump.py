@@ -33,6 +33,10 @@ class RedumpSubmission:
         return self.fields.get("Title") or None
 
     @property
+    def foreign_title(self) -> str | None:
+        return self.fields.get("Foreign Title (Non-latin)") or None
+
+    @property
     def system(self) -> str | None:
         return (self.fields.get("System") or "").strip() or None
 
@@ -146,3 +150,7 @@ def parse_submission_info(text: str) -> RedumpSubmission:
         if alt and alt not in sub.foreign_alternate_titles:
             sub.foreign_alternate_titles.append(alt)
     return sub
+
+
+# Used by hitsave-gdrive-intake verify (keep in sync via scripts/sync-redump-parser-to-gdrive.sh).
+DISC_IMAGE_SUFFIXES = (".iso", ".bin", ".img", ".chd", ".gdi")
