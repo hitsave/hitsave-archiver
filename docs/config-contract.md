@@ -29,7 +29,7 @@ Preservation behavior reads committed YAML under `config/`. Operator copies (`ga
 
 Examples: [`game.yml.example`](../config/preservation/game.yml.example), [`batch.yml.example`](../config/preservation/batch.yml.example).
 
-Batch expand writes **minimal** per-game YAML under `config/preservation/generated/{batch_key}/` (`source_subpath`, `game_key`, `omeka_item_title`, `batch_key` only). Ingest resolves paths at runtime via **`resolve_game_config()`**. Batch output dirs come from **`batch_output_dirs()`** unless `batch.yml` `output:` overrides.
+Batch expand writes **minimal** per-game YAML under `config/preservation/generated/{batch_key}/` (`source_subpath`, `game_key`, `omeka_item_title`, `batch_key` only). Ingest resolves paths at runtime via **`resolve_game_config()`**. Batch output dirs come from **`batch_output_dirs()`** unless `batch.yml` `output:` overrides (`bag_dir`, `aip_dir`, `staging_dir`) — that override is intentional for one-off runs, not a script fallback.
 
 ## Intentional duplication (documented)
 
