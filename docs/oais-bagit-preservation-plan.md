@@ -42,7 +42,7 @@ Provenance is copied into each bag (`bag-info.txt`, `metadata/submission.json`) 
    build-bagit-package.py        →  local bag under /output/bag/…
         │
         ▼
-   upload-press-bag-wasabi.py    →  Wasabi prefix press-material/{letter}/{package_id}/
+   upload-bag-wasabi.py          →  Wasabi prefix (kind-specific layout)
         │
         ▼
    register-dip-omeka-api.py       →  Omeka item + S3-backed DIP media
@@ -52,7 +52,7 @@ Provenance is copied into each bag (`bag-info.txt`, `metadata/submission.json`) 
 |------|---------------------|
 | Ingest | `ingest-folder.py` (ingest-worker) |
 | Bag build | `build-bagit-package.py` |
-| Wasabi | `upload-press-bag-wasabi.py` (press), `upload-dump-wasabi.py` (dumps) |
+| Wasabi | `upload-bag-wasabi.py` |
 | Omeka | `register-dip-omeka-api.py` |
 | Fixity | `fixity-check.py` |
 | Catalog export | `export-preservation-catalog.py` |

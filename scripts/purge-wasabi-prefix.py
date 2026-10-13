@@ -17,17 +17,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INGEST = Path("/config/preservation/ingest.yaml")
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-import importlib.util
-
-_spec = importlib.util.spec_from_file_location("upload_dump_wasabi", REPO_ROOT / "scripts" / "upload-dump-wasabi.py")
-assert _spec and _spec.loader
-_mod = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_mod)
-load_wasabi_settings = _mod.load_wasabi_settings
-
 from preservation_common import wasabi_bucket_for_storage_prefix, wasabi_s3_region  # noqa: E402
-
-
+from upload_bag_wasabi import load_wasabi_settings  # noqa: E402
 from yaml_config import load_yaml  # noqa: E402
 
 

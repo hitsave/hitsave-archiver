@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""Upload an unpacked BagIt bag to Wasabi under dumps/{system}/{category}/{package_id}/."""
+"""Upload unpacked BagIt trees to Wasabi (all ingest kinds; bucket/prefix from ledger + ingest-kinds)."""
 from __future__ import annotations
 
 import hashlib
@@ -10,7 +9,6 @@ from pathlib import Path
 try:
     import boto3
     import psycopg
-    import yaml
     from botocore.config import Config
     from botocore.exceptions import ClientError
 except ImportError as e:
@@ -20,11 +18,15 @@ except ImportError as e:
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INGEST_CONFIG = Path("/config/preservation/ingest.yaml")
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
-from dump_classify import package_storage_s3_uri  # noqa: E402
+
 from config_require import require_bool  # noqa: E402
+from dump_classify import classify_dump_sip, package_storage_s3_uri  # noqa: E402
+from package_identity import relative_sip_path  # noqa: E402
 from preservation_common import (  # noqa: E402
+    material_root_for_kind,
     resolve_wasabi_bucket,
     sha256_file,
+    wasabi_package_storage_prefix,
     wasabi_s3_region,
     wasabi_unpacked_prefix,
 )
@@ -81,12 +83,72 @@ def load_wasabi_settings(ingest_config_path: Path) -> tuple[dict, Path]:
     return wasabi, cred_path
 
 
+def pg_connect(db_cfg: dict):
+    return psycopg.connect(
+        host=db_cfg["host"],
+        port=int(db_cfg.get("port", 5432)),
+        dbname=db_cfg["database"],
+        user=db_cfg["user"],
+        password=db_cfg["password"],
+    )
+
+
+def resolve_storage_prefix(game_key: str, ingest_config_path: Path) -> tuple[str, str, str]:
+    """Return (package_id, ingest_kind, package_storage_prefix) from ledger."""
+    ingest = load_yaml(ingest_config_path)
+    db_path = Path(ingest["database"]["config_file"])
+    db_cfg = load_yaml(db_path)["postgres"]
+    with pg_connect(db_cfg) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT package_id, sort_letter, ingest_kind, source_path, package_storage_prefix
+                FROM game_ingest WHERE game_key = %s
+                """,
+                (game_key,),
+            )
+            row = cur.fetchone()
+    if not row:
+        raise RuntimeError(f"No game_ingest row for game_key={game_key!r}")
+    package_id = str(row[0] or game_key)
+    sort_letter = str(row[1] or "X")
+    ingest_kind = str(row[2] or "").strip()
+    source_path = str(row[3] or "").strip()
+    existing_prefix = str(row[4] or "").strip()
+    if not ingest_kind:
+        raise RuntimeError(f"game_ingest.ingest_kind is required for Wasabi upload: {game_key!r}")
+
+    if existing_prefix:
+        return package_id, ingest_kind, existing_prefix.strip("/")
+
+    if ingest_kind == "dump":
+        if not source_path:
+            raise RuntimeError(f"game_ingest.source_path required for dump prefix: {game_key!r}")
+        clf = classify_dump_sip(Path(source_path), package_id=package_id)
+        return package_id, ingest_kind, clf.package_storage_prefix.strip("/")
+
+    if not source_path:
+        raise RuntimeError(f"game_ingest.source_path required to build Wasabi prefix: {game_key!r}")
+    rel = relative_sip_path(
+        Path(source_path),
+        material_root_for_kind(ingest_kind, ingest.get("paths") or {}),
+    )
+    prefix = wasabi_package_storage_prefix(
+        ingest_kind,
+        package_id=package_id,
+        sort_letter=sort_letter,
+        relative_sip_path=rel,
+    )
+    return package_id, ingest_kind, prefix.strip("/")
+
+
 def upload_bag_to_prefix(
     bag_dir: Path,
     package_storage_prefix: str,
     *,
     ingest_config_path: Path = DEFAULT_INGEST_CONFIG,
     bucket: str | None = None,
+    ingest_kind: str | None = None,
 ) -> dict[str, str]:
     bag_dir = bag_dir.resolve()
     if not bag_dir.is_dir():
@@ -96,7 +158,8 @@ def upload_bag_to_prefix(
     if not require_bool(wasabi, "enabled", where="ingest.yaml wasabi"):
         raise RuntimeError("Wasabi upload is disabled (wasabi.enabled: false)")
 
-    bucket = str(bucket or resolve_wasabi_bucket(wasabi, "dump"))
+    kind = ingest_kind or "dump"
+    bucket = str(bucket or resolve_wasabi_bucket(wasabi, kind))
     root = wasabi_unpacked_prefix(package_storage_prefix)
     verify = require_bool(wasabi, "verify_upload", where="ingest.yaml wasabi")
     creds = load_yaml(resolve_config_path(str(wasabi["credentials_file"]), ingest_config_path.parent.parent))
@@ -121,7 +184,7 @@ def upload_bag_to_prefix(
         print(f"  uploaded s3://{bucket}/{key} ({size} bytes)")
 
     s3_uri = package_storage_s3_uri(bucket, package_storage_prefix)
-    print(f"Wasabi dump upload complete: {uploaded} objects under {s3_uri}")
+    print(f"Wasabi bag upload complete: {uploaded} objects under {s3_uri}")
     return {
         "bucket": bucket,
         "package_storage_prefix": package_storage_prefix.strip("/"),
@@ -130,17 +193,7 @@ def upload_bag_to_prefix(
     }
 
 
-def pg_connect(db_cfg: dict):
-    return psycopg.connect(
-        host=db_cfg["host"],
-        port=int(db_cfg.get("port", 5432)),
-        dbname=db_cfg["database"],
-        user=db_cfg["user"],
-        password=db_cfg["password"],
-    )
-
-
-def update_ledger_dump_storage(
+def update_ledger_wasabi_upload(
     game_key: str,
     upload: dict[str, str],
     *,
@@ -175,25 +228,34 @@ def update_ledger_dump_storage(
         conn.commit()
 
 
+def upload_bag_for_game_key(
+    bag_dir: Path,
+    game_key: str,
+    *,
+    ingest_config_path: Path = DEFAULT_INGEST_CONFIG,
+) -> dict[str, str]:
+    ingest = load_yaml(ingest_config_path)
+    wasabi = ingest.get("wasabi") or {}
+    _package_id, ingest_kind, storage_prefix = resolve_storage_prefix(game_key, ingest_config_path)
+    upload = upload_bag_to_prefix(
+        bag_dir,
+        storage_prefix,
+        ingest_config_path=ingest_config_path,
+        bucket=resolve_wasabi_bucket(wasabi, ingest_kind),
+        ingest_kind=ingest_kind,
+    )
+    update_ledger_wasabi_upload(game_key, upload, ingest_config_path=ingest_config_path)
+    return upload
+
+
 def main() -> None:
-    if len(sys.argv) < 4:
-        raise SystemExit(
-            "Usage: upload-dump-wasabi.py <bag_dir> <game_key> <package_storage_prefix> [ingest.yaml]"
-        )
+    if len(sys.argv) < 3:
+        raise SystemExit("Usage: upload-bag-wasabi.py <bag_dir> <game_key> [ingest.yaml]")
     bag_dir = Path(sys.argv[1])
     game_key = sys.argv[2]
-    storage_prefix = sys.argv[3].strip("/")
-    ingest_path = Path(sys.argv[4]) if len(sys.argv) > 4 else DEFAULT_INGEST_CONFIG
-    wasabi = load_yaml(ingest_path).get("wasabi") or {}
-
+    ingest_path = Path(sys.argv[3]) if len(sys.argv) > 3 else DEFAULT_INGEST_CONFIG
     try:
-        upload = upload_bag_to_prefix(
-            bag_dir,
-            storage_prefix,
-            ingest_config_path=ingest_path,
-            bucket=resolve_wasabi_bucket(wasabi, "dump"),
-        )
-        update_ledger_dump_storage(game_key, upload, ingest_config_path=ingest_path)
+        upload_bag_for_game_key(bag_dir, game_key, ingest_config_path=ingest_path)
     except ClientError as e:
         raise SystemExit(f"Wasabi S3 error: {e}") from e
 

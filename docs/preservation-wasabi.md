@@ -4,10 +4,10 @@ Press and dump ingest upload **unpacked RFC 8493 BagIt** trees to Wasabi. Keys a
 
 | Ingest kind | Script | Bucket (config) | S3 key layout |
 |-------------|--------|-----------------|---------------|
-| `press_material` | `upload-press-bag-wasabi.py` | `wasabi.buckets.press_material` | `press-material/{sort_letter}/{package_id}/` |
-| `dump` | `upload-dump-wasabi.py` | `wasabi.buckets.dumps` | prefix from `ingest-kinds.yaml` dump layout |
-| `other` | `upload-press-bag-wasabi.py` | `wasabi.buckets.other` | `other/{sort_letter}/{package_id}/` |
-| `analog` | `upload-press-bag-wasabi.py` | `wasabi.buckets.analog` | `analog/{relative_sip_path}/` (folder tree under `paths.analog_material_root`, e.g. `VHS/USA/promotional/Nintendo/The Invasion of Nintendo`) |
+| `press_material` | `upload-bag-wasabi.py` | `wasabi.buckets.press_material` | `press-material/{sort_letter}/{package_id}/` |
+| `dump` | `upload-bag-wasabi.py` | `wasabi.buckets.dumps` | prefix from `ingest-kinds.yaml` dump layout |
+| `other` | `upload-bag-wasabi.py` | `wasabi.buckets.other` | `other/{sort_letter}/{package_id}/` |
+| `analog` | `upload-bag-wasabi.py` | `wasabi.buckets.analog` | `analog/{relative_sip_path}/` (folder tree under `paths.analog_material_root`, e.g. `VHS/USA/promotional/Nintendo/The Invasion of Nintendo`) |
 
 Omeka reads **press** packages via S3 API — see [dip-wasabi-s3.md](./dip-wasabi-s3.md). Point Omeka `dip-s3.config.php` at the **press_material** bucket.
 

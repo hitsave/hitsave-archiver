@@ -4,7 +4,7 @@ Press and dump ingest upload **unpacked BagIt** trees to the `hitsave-incoming` 
 
 ## Flow
 
-1. **Ingest** — `build-bagit-package.py` → `upload-press-bag-wasabi.py` or `upload-dump-wasabi.py`
+1. **Ingest** — `build-bagit-package.py` → `upload-bag-wasabi.py`
 2. **Ledger** — `package_storage_prefix`, `inventory_json`, local bag under `$HOST_OUTPUT/bag/…`
 3. **Omeka** — `register-dip-omeka-api.py` creates `omeka_dip_package` media with `package_storage_prefix` and `dip_wasabi_uri`
 4. **Browse** — OmekaDipViewer reads objects via S3 (`dip-s3.config.php`)
