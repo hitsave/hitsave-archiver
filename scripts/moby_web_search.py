@@ -21,9 +21,11 @@ def _ddg_text_results(query: str, *, max_results: int) -> list[dict[str, Any]]:
 
 def duckduckgo_moby_game_id(
     search_title: str,
+    moby_cfg: dict,
     *,
     max_results: int = 10,
 ) -> tuple[int | None, str | None]:
+    from moby_resolve import moby_public_game_url
     """
     Search DuckDuckGo for ``{title} mobygames`` and return the first Moby game id.
 
@@ -43,5 +45,5 @@ def duckduckgo_moby_game_id(
         if game_id is None or game_id in seen:
             continue
         seen.add(game_id)
-        return game_id, f"https://www.mobygames.com/game/{game_id}/"
+        return game_id, f"{moby_public_game_url(moby_cfg, game_id)}/"
     return None, None

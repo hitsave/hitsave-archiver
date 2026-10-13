@@ -1,4 +1,4 @@
-# Packaged DIP browse/grid previews (metadata/hitsave/ in BagIt tar).
+# Packaged DIP browse/grid previews (metadata/hitsave/ in unpacked BagIt on Wasabi).
 # Keep in sync with OmekaDipViewer DipConfig defaults.
 
 dip_previews:

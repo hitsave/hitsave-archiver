@@ -1,0 +1,6 @@
+# Host paths for shell scripts and operator notes (bind mounts use HOST_* in host.env).
+# Copy to host-paths.yaml (gitignored) or merge into private config checkout.
+host_paths:
+  press_material_host: ./data/press-material
+  submissions_incoming_host: ./data/submissions/incoming
+  output_root_host: ./data/output

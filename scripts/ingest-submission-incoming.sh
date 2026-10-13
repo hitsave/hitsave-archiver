@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-INCOMING="${SUBMISSIONS_INCOMING:-/tank/hitsave-archiver/submissions/incoming}"
+INCOMING="$(python3 "$ROOT/scripts/read-host-path-config.py" submissions_incoming_host)"
 shopt -s nullglob
 
 if [[ $# -ge 1 ]]; then

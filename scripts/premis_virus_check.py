@@ -171,7 +171,9 @@ def attach_virus_check_premis(
     submission = json.loads(submission_path.read_text(encoding="utf-8"))
     package_id = str(submission.get("package_id") or submission.get("game_key") or "")
     package_uuid = str(submission.get("package_uuid") or "")
-    repository_code = str(submission.get("repository_code") or "hitsave")
+    repository_code = str(submission.get("repository_code") or "").strip()
+    if not repository_code:
+        raise ValueError("submission.json missing repository_code for PREMIS")
     if not package_id:
         raise ValueError("submission.json missing package_id for PREMIS linking object")
 

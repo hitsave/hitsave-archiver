@@ -62,12 +62,6 @@ def staff_storage_uri(
     )
     if bkt and pfx:
         return f"s3://{bkt}/{str(pfx).strip('/')}/"
-    legacy = wasabi.get("prefix")
-    if bkt and legacy:
-        leg = str(legacy).strip("/")
-        if not leg.startswith("dumps/"):
-            leg = f"dumps/{leg}" if leg else f"dumps/Others/{game_key}"
-        return f"s3://{bkt}/{leg}/"
     if game_key and storage_uri_base:
         return f"{storage_uri_base.rstrip('/')}/{game_key}/"
     return ""
@@ -216,4 +210,18 @@ def build_redump_values(
 
 
 def dump_catalog_config(uploader_cfg: dict[str, Any]) -> dict[str, Any]:
-    return dict(uploader_cfg.get("dump_catalog") or uploader_cfg.get("redump_catalog") or {})
+    from config_require import require_bool, require_key, require_str
+
+    dump = uploader_cfg.get("dump_catalog")
+    if not isinstance(dump, dict):
+        raise ValueError("omeka-catalog.yaml must define dump_catalog")
+    where = "omeka-catalog.yaml dump_catalog"
+    return {
+        "item_set_title": require_str(dump, "item_set_title", where=where),
+        "is_public": require_bool(dump, "is_public", where=where),
+        "storage_uri_base": require_str(dump, "storage_uri_base", where=where),
+        "site_url": require_str(dump, "site_url", where=where),
+        "disc_url": require_str(dump, "disc_url", where=where),
+        "lookup_timeout_seconds": int(require_key(dump, "lookup_timeout_seconds", where=where)),
+        "user_agent": require_str(dump, "user_agent", where=where),
+    }

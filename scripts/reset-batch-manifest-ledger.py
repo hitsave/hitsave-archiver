@@ -62,8 +62,6 @@ def main() -> None:
                     metadata_source = NULL,
                     moby_status = NULL,
                     block_reason = NULL,
-                    package_tar_key = NULL,
-                    package_tar_sha256 = NULL,
                     package_storage_prefix = NULL,
                     aip_wasabi_prefix = NULL,
                     storage_layout = NULL,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import json
+import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -18,14 +19,17 @@ PORT = int(CONFIG["server"]["port"])
 
 
 def _omeka_link_bases(cfg: dict) -> tuple[str, str]:
-    omeka = cfg.get("omeka") or {}
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from config_require import require_dict, require_str
+
+    omeka = require_dict(cfg, "omeka", where="status-web.yaml")
     if omeka.get("public_admin_base") and omeka.get("public_site_base"):
         return (
-            str(omeka["public_admin_base"]).rstrip("/"),
-            str(omeka["public_site_base"]).rstrip("/"),
+            require_str(omeka, "public_admin_base", where="status-web.yaml omeka").rstrip("/"),
+            require_str(omeka, "public_site_base", where="status-web.yaml omeka").rstrip("/"),
         )
-    base = str(omeka.get("public_url") or "http://10.1.1.60:8088").rstrip("/")
-    slug = str(omeka.get("site_slug") or "hitsave-test").strip("/")
+    base = require_str(omeka, "public_url", where="status-web.yaml omeka").rstrip("/")
+    slug = require_str(omeka, "site_slug", where="status-web.yaml omeka").strip("/")
     return f"{base}/admin", f"{base}/s/{slug}"
 
 

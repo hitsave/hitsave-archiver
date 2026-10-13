@@ -148,12 +148,44 @@ def _load_yaml(path: Path) -> dict:
 
 
 def load_omeka_catalog_config(config_root: Path) -> dict:
-    """Omeka REST registration settings (omeka-catalog.yaml; omeka-uploader.yaml is deprecated)."""
-    for name in ("omeka-catalog.yaml", "omeka-uploader.yaml"):
-        path = config_root / name
-        if path.is_file():
-            return _load_yaml(path)
+    """Omeka REST registration settings from omeka-catalog.yaml."""
+    path = config_root / "omeka-catalog.yaml"
+    if path.is_file():
+        return _load_yaml(path)
     raise FileNotFoundError(f"Missing omeka-catalog.yaml under {config_root}")
+
+
+def require_omeka_api_config(catalog_cfg: dict) -> dict:
+    from config_require import require_bool, require_dict, require_str
+
+    api = require_dict(catalog_cfg, "api", where="omeka-catalog.yaml")
+    return {
+        "base_url": require_str(api, "base_url", where="omeka-catalog.yaml api"),
+        "credentials_file": require_str(api, "credentials_file", where="omeka-catalog.yaml api"),
+        "site_slug": require_str(api, "site_slug", where="omeka-catalog.yaml api"),
+        "default_is_public": require_bool(api, "default_is_public", where="omeka-catalog.yaml api"),
+        "item_set_title": require_str(api, "item_set_title", where="omeka-catalog.yaml api"),
+    }
+
+
+def require_external_dip_config(catalog_cfg: dict) -> dict:
+    from config_require import require_dict, require_str
+
+    dip = require_dict(catalog_cfg, "external_dip", where="omeka-catalog.yaml")
+    return {
+        "dip_storage": require_str(dip, "dip_storage", where="omeka-catalog.yaml external_dip"),
+        "dip_ingester": require_str(dip, "dip_ingester", where="omeka-catalog.yaml external_dip"),
+    }
+
+
+def require_omeka_mariadb_config(catalog_cfg: dict) -> dict:
+    from config_require import require_dict, require_str
+
+    db = require_dict(catalog_cfg, "omeka_mariadb", where="omeka-catalog.yaml")
+    return {
+        "container": require_str(db, "container", where="omeka-catalog.yaml omeka_mariadb"),
+        "database": require_str(db, "database", where="omeka-catalog.yaml omeka_mariadb"),
+    }
 
 
 def apply_staff_aip_uri_after_register(aip_cfg: dict) -> bool:
@@ -301,8 +333,10 @@ def apply_item_aip_uri(
     uri = ledger_preservation_package_s3_uri(db_cfg, game_key, wasabi)
     if not uri:
         return None
-    term = str(aip_cfg.get("uri_property") or "dcterms:relation").strip()
-    is_public = bool(aip_cfg.get("uri_is_public", False))
+    from config_require import require_bool, require_str
+
+    term = require_str(aip_cfg, "uri_property", where="omeka-catalog.yaml aip_wasabi")
+    is_public = require_bool(aip_cfg, "uri_is_public", where="omeka-catalog.yaml aip_wasabi")
     _patch_item_aip_uri(
         session,
         base,

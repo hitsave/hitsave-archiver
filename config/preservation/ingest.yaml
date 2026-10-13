@@ -51,6 +51,4 @@ wasabi:
     dumps: hitsave-dumps
     other: hitsave-other
     analog: hitsave-analog
-  # Legacy note: press letter batches use wasabi_root press-material from ingest-kinds.yaml.
-  prefix: press-material/
   verify_upload: true

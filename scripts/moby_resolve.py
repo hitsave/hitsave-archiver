@@ -20,8 +20,6 @@ except ImportError:
 
 from normalize_display_title import normalize_name_fragment
 
-# MobyGames API terms: required suffix wherever API-sourced catalog data is shown.
-MOBY_ATTRIBUTION_SUFFIX = "Data by MobyGames.com"
 OFFICIAL_DESCRIPTION_LABEL = "Official description (ad blurb)"
 # Release notes from Moby platform API — not marketing ad blurbs.
 _RELEASE_DESCRIPTION_SKIP = frozenset(
@@ -134,17 +132,32 @@ def build_moby_attribution_sentence(metadata_json: dict) -> str:
     return f"{body} information from MobyGames."
 
 
-def moby_attribution_suffix(moby_cfg: dict | None = None) -> str:
-    if moby_cfg:
-        suffix = moby_cfg.get("attribution_suffix") or moby_cfg.get("attribution")
-        if suffix:
-            return str(suffix).strip()
-    return MOBY_ATTRIBUTION_SUFFIX
+def load_mobygames_config(config_root: Path) -> dict:
+    from config_require import require_dict
+
+    path = config_root / "mobygames.yaml"
+    if not path.is_file():
+        raise FileNotFoundError(f"Missing {path}")
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return require_dict(raw, "mobygames", where="mobygames.yaml")
+
+
+def moby_public_game_url(moby_cfg: dict, game_id: int | str) -> str:
+    from config_require import require_str
+
+    tpl = require_str(moby_cfg, "public_game_url_template", where="mobygames.yaml")
+    return tpl.format(game_id=int(game_id))
+
+
+def moby_attribution_suffix(moby_cfg: dict) -> str:
+    from config_require import require_str
+
+    return require_str(moby_cfg, "attribution_suffix", where="mobygames.yaml")
 
 
 def moby_attribution_for_omeka_rights(
     metadata_json: dict | None,
-    moby_cfg: dict | None = None,
+    moby_cfg: dict,
     *,
     omeka_profile: str = "press_material",
 ) -> str:
@@ -160,7 +173,7 @@ def moby_attribution_for_omeka_rights(
     return moby_attribution_text(meta, moby_cfg)
 
 
-def moby_attribution_text(metadata_json: dict | None, moby_cfg: dict | None = None) -> str:
+def moby_attribution_text(metadata_json: dict | None, moby_cfg: dict) -> str:
     if not metadata_json:
         return moby_attribution_suffix(moby_cfg)
     sentence = build_moby_attribution_sentence(metadata_json)
@@ -378,13 +391,6 @@ class MobyResult:
     metadata_source: str | None
 
 
-def load_moby_config(config_root: Path) -> dict:
-    path = config_root / "mobygames.yaml"
-    if not path.is_file():
-        return {"mobygames": {"enabled": False}}
-    return yaml.safe_load(path.read_text())
-
-
 def search_title_from_folder(folder_name: str, display_title: str | None) -> str:
     if display_title and " — " in display_title:
         main = display_title.split(" — ", 1)[0]
@@ -442,9 +448,11 @@ def pick_moby_search_game(search_title: str, games: list[dict]) -> dict | None:
 
 class MobyClient:
     def __init__(self, cfg: dict, credentials_path: Path):
+        from config_require import require_key, require_str
+
         self.cfg = cfg
-        self.base = cfg.get("api_base", "https://api.mobygames.com/v1").rstrip("/")
-        self.interval = float(cfg.get("min_request_interval_seconds", 1.1))
+        self.base = require_str(cfg, "api_base", where="mobygames.yaml").rstrip("/")
+        self.interval = float(require_key(cfg, "min_request_interval_seconds", where="mobygames.yaml"))
         self._last_request = 0.0
         self.api_key = ""
         if credentials_path.is_file():
@@ -510,7 +518,7 @@ class MobyClient:
         game = detail if isinstance(detail, dict) and detail.get("title") else detail.get("game") or detail
         title = game.get("title") or fallback_title
         description = (game.get("description") or "").strip()
-        moby_url = f"https://www.mobygames.com/game/{game_id}"
+        moby_url = moby_public_game_url(self.cfg, game_id)
         metadata = {
             "moby_game_id": game_id,
             "moby_title": title,
@@ -587,8 +595,7 @@ def resolve_for_game(
     moby_game_id: int | None = None,
     moby_search_title: str | None = None,
 ) -> MobyResult:
-    root_cfg = load_moby_config(config_root)
-    moby_cfg = root_cfg.get("mobygames") or {}
+    moby_cfg = load_mobygames_config(config_root)
     if not moby_cfg.get("enabled", True):
         return MobyResult("skipped", None, None, None, None, None)
 
@@ -625,7 +632,7 @@ def resolve_for_game(
         ):
             from moby_web_search import duckduckgo_moby_game_id
 
-            game_id, moby_url = duckduckgo_moby_game_id(search)
+            game_id, moby_url = duckduckgo_moby_game_id(search, moby_cfg)
             if game_id:
                 ddg_result = client.resolve_by_id(int(game_id), search)
                 if ddg_result.metadata_json is not None:

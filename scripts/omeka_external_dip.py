@@ -12,6 +12,8 @@ from package_ledger import ledger_bagit_wasabi_paths
 def resolve_bagit_external_dip(
     game_key: str,
     ingest_cfg: dict,
+    *,
+    dip_storage: str,
 ) -> dict[str, str | int]:
     db_path = Path(ingest_cfg["database"]["config_file"])
     import yaml
@@ -19,10 +21,13 @@ def resolve_bagit_external_dip(
     db_cfg = yaml.safe_load(db_path.read_text())["postgres"]
     wasabi = ingest_cfg.get("wasabi") or {}
     s3_uri, prefix = ledger_bagit_wasabi_paths(db_cfg, game_key, wasabi)
+    storage = str(dip_storage).strip()
+    if not storage:
+        raise ValueError("dip_storage is required")
     return {
         "s3_uri": s3_uri,
         "package_storage_prefix": prefix,
-        "dip_storage": "wasabi-s3",
+        "dip_storage": storage,
     }
 
 
@@ -38,7 +43,7 @@ def attach_external_dip_media(
     package_bytes: int = 0,
     sha256: str = "",
     package_storage_prefix: str = "",
-    dip_storage: str = "wasabi-s3",
+    dip_storage: str,
     api_url: Callable[[str, str, dict], str],
     merge_media_data_json: Callable[[int, dict[str, Any]], None] | None = None,
 ) -> int:

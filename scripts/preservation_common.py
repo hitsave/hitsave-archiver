@@ -8,6 +8,8 @@ from pathlib import Path
 
 import yaml
 
+from config_require import require_dict, require_key, require_str
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -25,10 +27,10 @@ def load_ingest_config() -> dict:
 def batch_output_dirs(batch_key: str, ingest: dict, out_cfg: dict | None = None) -> tuple[Path, Path, Path]:
     """Default batch bag/staging dirs under paths.output_root (container paths)."""
     out_cfg = out_cfg or {}
-    paths = ingest["paths"]
-    root = Path(paths["output_root"])
-    bag_sub = paths.get("bag_subdir", "bag")
-    aip_sub = paths.get("aip_subdir", "aip")
+    paths = require_dict(ingest, "paths", where="ingest.yaml")
+    root = Path(require_str(paths, "output_root", where="ingest.yaml paths"))
+    bag_sub = require_str(paths, "bag_subdir", where="ingest.yaml paths")
+    aip_sub = require_str(paths, "aip_subdir", where="ingest.yaml paths")
     rel = Path("batch") / batch_key
     bag_dir = Path(out_cfg.get("bag_dir", root / bag_sub / rel))
     aip_dir = Path(out_cfg.get("aip_dir", root / aip_sub / rel))
@@ -39,12 +41,12 @@ def batch_output_dirs(batch_key: str, ingest: dict, out_cfg: dict | None = None)
 def resolve_game_config(cfg: dict, *, agent_version: str | None = None) -> dict:
     """Apply ingest.yaml paths, defaults, and preservation metadata to a game config."""
     ingest = load_ingest_config()
-    paths = ingest["paths"]
+    paths = require_dict(ingest, "paths", where="ingest.yaml")
     out = dict(cfg)
-    press_root = Path(paths["press_material_root"])
-    output_root = Path(paths["output_root"])
-    bag_sub = paths.get("bag_subdir", "bag")
-    aip_sub = paths.get("aip_subdir", "aip")
+    press_root = Path(require_str(paths, "press_material_root", where="ingest.yaml paths"))
+    output_root = Path(require_str(paths, "output_root", where="ingest.yaml paths"))
+    bag_sub = require_str(paths, "bag_subdir", where="ingest.yaml paths")
+    aip_sub = require_str(paths, "aip_subdir", where="ingest.yaml paths")
 
     if out.get("source_subpath") and not out.get("source_game_folder"):
         sub = str(out["source_subpath"]).strip().strip("/")
@@ -78,11 +80,15 @@ def resolve_game_config(cfg: dict, *, agent_version: str | None = None) -> dict:
             aip_base = aip_base / batch_segment
         out["aip_bag_dir"] = str(aip_base / game_key)
 
-    defaults = ingest.get("defaults") or {}
-    out.setdefault("max_files", defaults.get("max_files", 5000))
-    out.setdefault("max_total_bytes", defaults.get("max_total_bytes", 5368709120))
+    defaults = require_dict(ingest, "defaults", where="ingest.yaml")
+    if "max_files" not in out:
+        out["max_files"] = int(require_key(defaults, "max_files", where="ingest.yaml defaults"))
+    if "max_total_bytes" not in out:
+        out["max_total_bytes"] = int(
+            require_key(defaults, "max_total_bytes", where="ingest.yaml defaults")
+        )
 
-    pres = dict(ingest.get("preservation") or {})
+    pres = dict(require_dict(ingest, "preservation", where="ingest.yaml"))
     pres.update(out.get("preservation") or {})
     if agent_version:
         pres["agent_version"] = agent_version
@@ -122,6 +128,10 @@ def wasabi_bucket_config_key(ingest_kind: str) -> str:
     return kind
 
 
+def wasabi_s3_region(wasabi: dict) -> str:
+    return require_str(wasabi, "region", where="ingest.yaml wasabi")
+
+
 def resolve_wasabi_bucket(wasabi: dict, ingest_kind: str) -> str:
     """Bucket for an ingest kind from wasabi.buckets only (no fallback)."""
     buckets = wasabi.get("buckets")
@@ -150,19 +160,20 @@ def wasabi_bucket_for_storage_prefix(
     if ingest_kind:
         return resolve_wasabi_bucket(wasabi, ingest_kind)
     root = str(package_storage_prefix or "").strip("/").split("/")[0].casefold()
-    if root == "dumps":
-        return resolve_wasabi_bucket(wasabi, "dump")
-    if root == "press-material":
-        return resolve_wasabi_bucket(wasabi, "press_material")
-    if root == "other":
-        return resolve_wasabi_bucket(wasabi, "other")
-    if root == "analog":
-        return resolve_wasabi_bucket(wasabi, "analog")
-    raise RuntimeError(
-        f"Cannot infer Wasabi bucket from storage prefix {package_storage_prefix!r}; "
-        "set ingest_kind on the ledger row or use a known wasabi_root prefix "
-        "(press-material/, dumps/, other/, analog/)"
-    )
+    if not root:
+        raise RuntimeError(
+            f"Cannot infer Wasabi bucket from empty storage prefix; set ingest_kind on the ledger row"
+        )
+    from ingest_kind import wasabi_root_to_ingest_kind_map
+
+    kind = wasabi_root_to_ingest_kind_map().get(root)
+    if not kind:
+        known = ", ".join(sorted(wasabi_root_to_ingest_kind_map()))
+        raise RuntimeError(
+            f"Cannot infer Wasabi bucket from storage prefix {package_storage_prefix!r} "
+            f"(unknown root {root!r}; known wasabi_root values: {known})"
+        )
+    return resolve_wasabi_bucket(wasabi, kind)
 
 
 def wasabi_unpacked_prefix(storage_prefix: str) -> str:
@@ -178,10 +189,9 @@ def material_root_for_kind(ingest_kind: str, paths: dict) -> Path:
     """Host/container root used to compute relative_sip_path for Wasabi keys."""
     kind = str(ingest_kind or "").strip().casefold().replace("-", "_")
     if kind == "analog":
-        analog = paths.get("analog_material_root")
-        if analog and str(analog).strip():
-            return Path(str(analog))
-    return Path(paths["press_material_root"])
+        analog = require_str(paths, "analog_material_root", where="ingest.yaml paths")
+        return Path(analog)
+    return Path(require_str(paths, "press_material_root", where="ingest.yaml paths"))
 
 
 def _validate_relative_sip_path(rel: str) -> str:
@@ -200,11 +210,9 @@ def wasabi_key_pattern_for_kind(ingest_kind: str) -> str:
     custom = ingest_kind_spec(ingest_kind).get("wasabi_key_pattern")
     if custom and str(custom).strip():
         return str(custom).strip()
-    storage = load_packaging_yaml_root().get("storage") or {}
-    wasabi = storage.get("wasabi") or {}
-    return str(
-        wasabi.get("unpacked_key_pattern") or "{prefix}/{sort_letter}/{package_id}"
-    )
+    storage = require_dict(load_packaging_yaml_root(), "storage", where="packaging.yaml")
+    wasabi = require_dict(storage, "wasabi", where="packaging.yaml storage")
+    return require_str(wasabi, "unpacked_key_pattern", where="packaging.yaml storage.wasabi")
 
 
 def wasabi_package_storage_prefix(
@@ -234,26 +242,6 @@ def wasabi_package_storage_prefix(
         package_id=pid,
         game_key=pid,
         relative_sip_path=rel,
-    ).strip("/")
-
-
-def wasabi_bagit_unpacked_prefix(
-    wasabi_prefix: str,
-    *,
-    package_id: str,
-    sort_letter: str,
-) -> str:
-    """Legacy helper: format default press layout with an explicit prefix segment."""
-    pattern = wasabi_key_pattern_for_kind("press_material")
-    prefix = wasabi_prefix.strip("/")
-    pid = package_id.strip("/")
-    letter = sort_letter.strip("/") or "X"
-    return pattern.format(
-        prefix=prefix,
-        sort_letter=letter,
-        package_id=pid,
-        game_key=pid,
-        relative_sip_path="",
     ).strip("/")
 
 

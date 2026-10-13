@@ -11,7 +11,7 @@ from omeka_dip_media import media_is_dip_package  # noqa: E402
 
 
 def test_dip_package_renderer() -> None:
-    body = {"o:renderer": "omeka_dip_package", "o:media_type": "application/x-tar"}
+    body = {"o:renderer": "omeka_dip_package", "o:media_type": "application/vnd.omeka.dip-package"}
     assert media_is_dip_package(body, dip_ingester="omeka_dip_package")
 
 
@@ -35,10 +35,10 @@ def test_png_is_not_dip() -> None:
     assert not media_is_dip_package(body, dip_ingester="omeka_dip_package")
 
 
-def test_stray_tar_without_dip_ingester_not_dip() -> None:
+def test_non_dip_file_media_not_dip() -> None:
     body = {
         "o:renderer": "file",
-        "o:media_type": "application/x-tar",
-        "data": {"original_filename": "notes.tar"},
+        "o:media_type": "application/octet-stream",
+        "data": {"original_filename": "notes.bin"},
     }
     assert not media_is_dip_package(body, dip_ingester="omeka_dip_package")

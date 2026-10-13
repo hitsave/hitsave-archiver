@@ -16,6 +16,7 @@ except ImportError as e:
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
+from config_require import require_dict, require_str  # noqa: E402
 from preservation_common import iso_now, load_ingest_config  # noqa: E402
 from submission_sources import load_submission_sources_config  # noqa: E402
 
@@ -62,8 +63,6 @@ def fetch_complete_games(conn) -> list[dict]:
                 source_path,
                 submission_source_id,
                 package_format,
-                package_tar_sha256,
-                package_tar_key,
                 inventory_json,
                 omeka_item_id,
                 omeka_media_id,
@@ -115,7 +114,6 @@ def build_catalog(rows: list[dict], *, repository_code: str) -> dict:
         bucket, key = wasabi_from_row(row)
         package = {
             "format": fmt,
-            "payload_sha256": row.get("package_tar_sha256"),
             "wasabi_bucket": bucket,
             "wasabi_key": key,
         }
@@ -151,7 +149,8 @@ def main() -> None:
     ingest = load_ingest_config()
     db_path = Path(ingest["database"]["config_file"])
     db_cfg = load_yaml(db_path)["postgres"]
-    repository_code = str((ingest.get("preservation") or {}).get("repository_code") or "hitsave")
+    pres = require_dict(ingest, "preservation", where="ingest.yaml")
+    repository_code = require_str(pres, "repository_code", where="ingest.yaml preservation")
 
     with pg_connect(db_cfg) as conn:
         rows = fetch_complete_games(conn)

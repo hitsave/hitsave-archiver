@@ -17,7 +17,7 @@ def _uri_row(pid: int, url: str) -> dict:
 def test_moby_bibo_uri_rows_drops_s3_and_adds_moby() -> None:
     item = {
         "bibo:uri": [
-            {"@id": "s3://hitsave-incoming/press-material/x/x.tar"},
+            {"@id": "s3://hitsave-incoming/press-material/x/x/"},
             {"@id": "https://www.mobygames.com/game/99/"},
         ]
     }

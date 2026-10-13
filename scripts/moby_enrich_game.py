@@ -19,7 +19,7 @@ from ingest_kind import moby_enrich_enabled, moby_omeka_profile_for_game_cfg  # 
 from moby_resolve import (  # noqa: E402
     apply_moby_omeka_profile_to_metadata,
     finalize_moby_metadata,
-    load_moby_config,
+    load_mobygames_config,
     resolve_for_game,
     uses_moby_catalog_data,
 )
@@ -75,7 +75,7 @@ def main() -> None:
     display_title = game_cfg.get("omeka_item_title")
 
     config_root = Path("/config") if Path("/config/mobygames.yaml").is_file() else REPO_ROOT / "config"
-    moby_cfg = load_moby_config(config_root).get("mobygames") or {}
+    moby_cfg = load_mobygames_config(config_root)
     omeka_profile = moby_omeka_profile_for_game_cfg(game_cfg)
     if not moby_enrich_enabled(game_cfg):
         print(

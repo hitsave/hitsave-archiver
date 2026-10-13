@@ -5,10 +5,10 @@ cd "$ROOT"
 
 python3 scripts/sync-preservation-config.py
 
-if [[ ! -d /tank/hitsave-archiver/output ]]; then
-  echo "Create output root first (needs write access to /tank):" >&2
-  echo "  sudo mkdir -p /tank/hitsave-archiver/output/{dip,aip,processed,quarantine}" >&2
-  echo "  sudo chown -R \"$(whoami):$(whoami)\" /tank/hitsave-archiver" >&2
+OUTPUT_HOST="$(python3 "$ROOT/scripts/read-host-path-config.py" output_root_host)"
+if [[ ! -d "$OUTPUT_HOST" ]]; then
+  echo "Create output root first (configure host_paths.output_root_host in config/preservation/host-paths.yaml):" >&2
+  echo "  mkdir -p \"$OUTPUT_HOST\"/{dip,aip,processed,quarantine}" >&2
   exit 1
 fi
 

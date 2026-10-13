@@ -73,19 +73,38 @@ def moby_enrich_enabled(game_cfg: dict | None) -> bool:
 
 
 def storage_profile_for_kind(kind_id: str) -> str:
-    profile = str(ingest_kind_spec(kind_id).get("storage_profile") or "bagit_unpacked").strip().casefold()
-    if profile in ("bagit_tar", "bagit_unpacked"):
-        return profile
-    return "bagit_unpacked"
+    from config_require import require_str
+
+    spec = ingest_kind_spec(kind_id)
+    profile = require_str(spec, "storage_profile", where=f"ingest_kinds.{kind_id}").casefold()
+    if profile != "bagit_unpacked":
+        raise ValueError(
+            f"ingest_kinds.{kind_id}.storage_profile must be bagit_unpacked (got {profile!r})"
+        )
+    return profile
 
 
 def wasabi_root_for_kind(kind_id: str) -> str:
-    root = str(ingest_kind_spec(kind_id).get("wasabi_root") or "").strip().strip("/")
-    if root:
-        return root
-    if kind_id == "dump":
-        return "dumps"
-    return "press-material"
+    from config_require import require_str
+
+    spec = ingest_kind_spec(kind_id)
+    return require_str(spec, "wasabi_root", where=f"ingest_kinds.{kind_id}").strip().strip("/")
+
+
+def wasabi_root_to_ingest_kind_map() -> dict[str, str]:
+    """Map Wasabi key first segment (wasabi_root) → ingest kind id."""
+    kinds = load_ingest_kinds_config().get("ingest_kinds") or {}
+    out: dict[str, str] = {}
+    for kind_id, spec in kinds.items():
+        if not isinstance(spec, dict):
+            continue
+        root = wasabi_root_for_kind(str(kind_id)).casefold()
+        if root in out and out[root] != kind_id:
+            raise ValueError(f"Duplicate wasabi_root {root!r} on ingest kinds")
+        out[root] = str(kind_id)
+    if not out:
+        raise ValueError("ingest-kinds.yaml defines no ingest_kinds with wasabi_root")
+    return out
 
 
 def moby_omeka_profile_for_kind(kind_id: str) -> str:

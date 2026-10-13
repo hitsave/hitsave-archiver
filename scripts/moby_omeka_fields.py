@@ -77,7 +77,9 @@ def append_moby_fields_to_payload(
     ]
     moby_url = metadata_json.get("moby_url")
     if not moby_url and metadata_json.get("moby_game_id"):
-        moby_url = f"https://www.mobygames.com/game/{metadata_json['moby_game_id']}"
+        from moby_resolve import moby_public_game_url
+
+        moby_url = moby_public_game_url(moby_cfg, metadata_json["moby_game_id"])
     if moby_url:
         bibo_pid = resolve_property_id(session, base, creds, "bibo:uri")
         rows = moby_bibo_uri_rows(item_body, str(moby_url), bibo_pid, uri_value)

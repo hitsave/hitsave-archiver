@@ -25,7 +25,7 @@ _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
 load_wasabi_settings = _mod.load_wasabi_settings
 
-from preservation_common import wasabi_bucket_for_storage_prefix  # noqa: E402
+from preservation_common import wasabi_bucket_for_storage_prefix, wasabi_s3_region  # noqa: E402
 
 
 def load_yaml(path: Path) -> dict:
@@ -77,7 +77,7 @@ def main() -> None:
     client = boto3.client(
         "s3",
         endpoint_url=str(wasabi["endpoint"]).rstrip("/"),
-        region_name=str(wasabi.get("region", "us-east-1")),
+        region_name=wasabi_s3_region(wasabi),
         aws_access_key_id=str(creds["access_key_id"]),
         aws_secret_access_key=str(creds["secret_access_key"]),
         config=Config(signature_version="s3v4"),

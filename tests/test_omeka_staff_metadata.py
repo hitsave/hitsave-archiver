@@ -37,7 +37,7 @@ def test_filter_bibo_uri_public_removes_s3() -> None:
     item = {
         "bibo:uri": [
             {"@id": "https://www.mobygames.com/game/1"},
-            {"@id": "s3://hitsave-incoming/press-material/x/x.tar"},
+            {"@id": "s3://hitsave-incoming/press-material/x/x/"},
         ]
     }
     out = filter_bibo_uri_public(item)
@@ -51,14 +51,14 @@ def test_merge_staff_preservation_uri_replaces_s3() -> None:
     item = {
         term: [
             {"@id": "https://example.org/link"},
-            {"@id": "s3://hitsave-incoming/press-material/a/a.tar"},
-            {"@id": "s3://hitsave-incoming/press-material/b/b.tar"},
+            {"@id": "s3://hitsave-incoming/press-material/a/a/"},
+            {"@id": "s3://hitsave-incoming/press-material/b/b/"},
         ]
     }
-    row = uri_value_row(1, "s3://hitsave-incoming/press-material/c/c.tar", is_public=False)
+    row = uri_value_row(1, "s3://hitsave-incoming/press-material/c/c/", is_public=False)
     out = merge_staff_preservation_uri(item, term, row)
     ids = [r["@id"] for r in out[term]]
-    assert ids == ["https://example.org/link", "s3://hitsave-incoming/press-material/c/c.tar"]
+    assert ids == ["https://example.org/link", "s3://hitsave-incoming/press-material/c/c/"]
     assert out[term][-1]["is_public"] is False
 
 

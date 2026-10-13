@@ -20,8 +20,10 @@ COPY scripts/batch-expand-preservation.py \
     scripts/reset-batch-manifest-ledger.py \
     scripts/upload-press-bag-wasabi.py \
     scripts/purge-wasabi-prefix.py \
-    scripts/delete-wasabi-letter-tar-keys.py \
     scripts/export-preservation-catalog.py \
+    scripts/config_require.py \
+    scripts/host_paths.py \
+    scripts/read-host-path-config.py \
     scripts/submission_sources.py \
     scripts/preservation_common.py \
     scripts/ingest_kind.py \
@@ -39,7 +41,6 @@ COPY scripts/batch-expand-preservation.py \
     scripts/ingest-folder.py \
     scripts/premis_virus_check.py \
     scripts/fixity-check.py \
-    scripts/read-config-yaml.py \
     scripts/omeka_dip_media.py \
     scripts/omeka_external_dip.py \
     scripts/dip_mount_preflight.py \

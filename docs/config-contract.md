@@ -11,7 +11,9 @@ Preservation behavior reads committed YAML under `config/`. Operator copies (`ga
 | MobyGames API | [`config/mobygames.yaml`](../config/mobygames.yaml) | API credentials path, ad blurb fetch; optional `block_on_failure` (default false) |
 | BagIt packaging | [`config/preservation/packaging.yaml`](../config/preservation/packaging.yaml) | BagIt dirs, Wasabi unpacked key pattern, validation |
 | Portable zip limits, allowlists | [`config/preservation/submissions.yaml`](../config/preservation/submissions.yaml) | `limits.*`, `security.*`, submission-only `preservation.video_access` |
-| Omeka catalog registration target | [`config/omeka-catalog.yaml`](../config/omeka-catalog.yaml) | API base URL, site slug, `aip_wasabi` staff URI (`is_public: false`) |
+| Omeka catalog registration target | [`config/omeka-catalog.yaml`](../config/omeka-catalog.yaml) | API base URL, site slug, `external_dip`, `aip_wasabi` staff URI (`is_public: false`) |
+| Operator host bind paths (shell scripts) | [`config/preservation/host-paths.yaml`](../config/preservation/host-paths.yaml) | `host_paths.*_host` — see `.example`; Docker mounts still use `host.env` `HOST_*` |
+| MobyGames API + public URLs | [`config/mobygames.yaml`](../config/mobygames.yaml) | `api_base`, `public_game_url_template`, `attribution_suffix` |
 | ClamAV scan caps (aligned with submissions) | [`config/clamav/clamd.conf`](../config/clamav/clamd.conf) | Must stay in sync with `submissions.yaml` `limits.max_member_bytes` / `max_archive_members` — see [`config/clamav/README.md`](../config/clamav/README.md) |
 | Private credentials | **hitsave-archiver-config** (from `config/secrets/*.example`) | Wasabi, Omeka API, Moby, ledger DB |
 | Test Omeka admin URL / site slug | **hitsave-omeka-test** `config/omeka-test/settings.yaml` | Must match `omeka-catalog.yaml` `site_slug` and API base when uploading to test |
@@ -40,6 +42,7 @@ Batch expand writes **minimal** per-game YAML under `config/preservation/generat
 
 ## Anti-patterns
 
+- Python or shell **fallback defaults** for URLs, buckets, or paths — scripts must read YAML and fail if a required key is missing.
 - Full paths like `/data/press-material/...` in new operator YAML — use **`source_subpath`**.
 - Repeating `max_files` / `repository_code` in every `game.yml` — omit; defaults come from `ingest.yaml`.
 - Committing `config/preservation/generated/` — gitignored; batch expand output only.

@@ -8,6 +8,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
+MOBY_CFG = {
+    "attribution_suffix": "Data by MobyGames.com",
+    "public_game_url_template": "https://www.mobygames.com/game/{game_id}",
+}
+
 from moby_resolve import (  # noqa: E402
     apply_moby_omeka_profile_to_metadata,
     build_moby_attribution_sentence,
@@ -58,7 +63,7 @@ def test_description_for_omeka_labels_ad_blurb() -> None:
         "official_ad_blurb_source": "PlayStation Store Description",
         "moby_catalog_fields": ["official_description", "publisher"],
     }
-    text = moby_description_for_omeka(meta, {})
+    text = moby_description_for_omeka(meta, MOBY_CFG)
     assert text.startswith("Official description (ad blurb) (PlayStation Store Description)")
     assert "Step into the shoes" in text
 
@@ -67,7 +72,7 @@ def test_attribution_for_omeka_rights_press_omits_release_date() -> None:
     meta = {
         "moby_catalog_fields": ["publisher", "developer", "first_release_date"],
     }
-    text = moby_attribution_for_omeka_rights(meta, {}, omeka_profile="press_material")
+    text = moby_attribution_for_omeka_rights(meta, MOBY_CFG, omeka_profile="press_material")
     assert "Release date" not in text
     assert "Publisher" in text
 
@@ -78,7 +83,7 @@ def test_apply_omeka_profile_press_strips_release_from_catalog_fields() -> None:
         "publishers": ["Bandai Namco"],
         "moby_catalog_fields": ["publisher", "first_release_date"],
     }
-    apply_moby_omeka_profile_to_metadata(meta, "press_material", {})
+    apply_moby_omeka_profile_to_metadata(meta, "press_material", MOBY_CFG)
     assert "first_release_date" not in meta["moby_catalog_fields"]
     assert "Release date" not in meta["attribution"]
 
@@ -88,7 +93,7 @@ def test_attribution_for_omeka_rights_omits_description_fields() -> None:
         "description_plain": "A game about heroes.",
         "moby_catalog_fields": ["description", "publisher"],
     }
-    text = moby_attribution_for_omeka_rights(meta, {})
+    text = moby_attribution_for_omeka_rights(meta, MOBY_CFG)
     assert "Description" not in text
     assert "Publisher" in text
 
