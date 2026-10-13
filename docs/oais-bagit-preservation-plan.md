@@ -50,7 +50,7 @@ Provenance is copied into each bag (`bag-info.txt`, `metadata/submission.json`) 
 
 | Step | Script / component |
 |------|---------------------|
-| Ingest | `ingest-game-folder.py` (ingest-worker) |
+| Ingest | `ingest-folder.py` (ingest-worker) |
 | Bag build | `build-bagit-package.py` |
 | Wasabi | `upload-press-bag-wasabi.py` (press), `upload-dump-wasabi.py` (dumps) |
 | Omeka | `register-dip-omeka-api.py` |

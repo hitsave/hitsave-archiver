@@ -379,6 +379,7 @@ def main() -> None:
     is_public = bool(api_cfg.get("default_is_public", False))
 
     package_storage_prefix = ""
+    ledger_ingest_kind = ""
     total_bytes = 0
     external_dip = resolve_bagit_external_dip(game_key, ingest_cfg)
 
@@ -418,6 +419,7 @@ def main() -> None:
             if isinstance(inventory_json, str):
                 inventory_json = json.loads(inventory_json)
             kind = (str(row[7]).strip() if row[7] else "") or str(game_cfg.get("ingest_kind") or "")
+            ledger_ingest_kind = kind
             if kind:
                 omeka_profile = resolve_omeka_moby_profile(ingest_kind=kind)
             elif game_cfg.get("ingest_kind"):
@@ -540,6 +542,7 @@ def main() -> None:
             catalog_cfg=catalog_cfg,
             config_root=CONFIG_ROOT,
             package_storage_prefix=package_storage_prefix,
+            ingest_kind=ledger_ingest_kind or None,
         )
     except DipNotAvailableError as e:
         raise SystemExit(f"BagIt DIP not available for Omeka catalog registration: {e}") from e

@@ -85,6 +85,7 @@ def ensure_item_set(
 
 
 from dump_catalog_omeka import build_redump_values, dump_catalog_config  # noqa: E402
+from preservation_common import load_ingest_config  # noqa: E402
 
 
 def patch_catalog_item(
@@ -97,6 +98,7 @@ def patch_catalog_item(
     storage_uri_base: str,
     api,
     redump_cfg: dict[str, Any] | None = None,
+    wasabi_ingest_cfg: dict | None = None,
     is_public: bool = True,
 ) -> str:
     get_url = api.api_url(base, f"items/{item_id}", creds)
@@ -113,6 +115,7 @@ def patch_catalog_item(
         api=api,
         redump_cfg=redump_cfg,
         existing_item=item_body,
+        wasabi_ingest_cfg=wasabi_ingest_cfg,
     )
     api.patch_item_rdf_values(session, base, creds, item_id, updates, item_body=item_body)
     _set_resource_public(session, base, creds, "items", item_id, is_public=is_public, api=api)
@@ -168,6 +171,7 @@ def main() -> None:
     storage_uri_base = str(
         redump_cfg.get("storage_uri_base", "http://10.1.1.60:8088/staff/redump")
     )
+    wasabi_ingest_cfg = load_ingest_config().get("wasabi")
 
     api = _register_dip_api_module()
     session = requests.Session()
@@ -182,6 +186,7 @@ def main() -> None:
             storage_uri_base=storage_uri_base,
             api=api,
             redump_cfg=redump_cfg,
+            wasabi_ingest_cfg=wasabi_ingest_cfg,
             is_public=is_public,
         )
         item_id = patch_item_id
@@ -197,6 +202,7 @@ def main() -> None:
             storage_uri_base=storage_uri_base,
             api=api,
             redump_cfg=redump_cfg,
+            wasabi_ingest_cfg=wasabi_ingest_cfg,
         )
         item_id = create_catalog_item(
             session,

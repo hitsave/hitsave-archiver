@@ -186,8 +186,11 @@ def ledger_aip_wasabi_prefix(db_cfg: dict, game_key: str) -> str | None:
     return str(row[0]).strip()
 
 
-def ledger_preservation_package_s3_uri(db_cfg: dict, game_key: str, bucket: str) -> str | None:
+def ledger_preservation_package_s3_uri(
+    db_cfg: dict, game_key: str, wasabi: dict
+) -> str | None:
     """BagIt s3:// URI from ledger (package_storage_prefix or legacy keys)."""
+    from preservation_common import wasabi_bucket_for_storage_prefix
     if psycopg is None:
         raise RuntimeError("psycopg required")
     conn = psycopg.connect(
@@ -201,7 +204,7 @@ def ledger_preservation_package_s3_uri(db_cfg: dict, game_key: str, bucket: str)
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT package_storage_prefix, aip_wasabi_prefix
+                SELECT package_storage_prefix, aip_wasabi_prefix, ingest_kind
                 FROM game_ingest WHERE game_key = %s
                 """,
                 (game_key,),
@@ -211,17 +214,20 @@ def ledger_preservation_package_s3_uri(db_cfg: dict, game_key: str, bucket: str)
         conn.close()
     if not row:
         return None
-    storage_prefix, aip_prefix = row[0], row[1]
+    storage_prefix, aip_prefix, ingest_kind = row[0], row[1], row[2]
+    kind = str(ingest_kind or "").strip() or None
     if storage_prefix:
         raw = str(storage_prefix).strip()
         if raw.startswith("s3://"):
             return raw.rstrip("/") + "/"
+        bucket = wasabi_bucket_for_storage_prefix(wasabi, raw, ingest_kind=kind)
         return aip_s3_uri(bucket=bucket, storage_prefix=raw)
     if aip_prefix:
         prefix = aip_prefix
         raw = str(prefix).strip()
         if raw.startswith("s3://"):
             return raw.rstrip("/")
+        bucket = wasabi_bucket_for_storage_prefix(wasabi, raw, ingest_kind=kind)
         return aip_s3_uri(bucket=bucket, storage_prefix=raw)
     return None
 
@@ -289,11 +295,10 @@ def apply_item_aip_uri(
     if not apply_staff_aip_uri_after_register(aip_cfg):
         return None
     wasabi = ingest_cfg.get("wasabi") or {}
-    bucket = str(wasabi.get("bucket") or "").strip()
-    if not bucket:
+    if not isinstance(wasabi.get("buckets"), dict) or not wasabi.get("buckets"):
         return None
     db_cfg = _load_yaml(Path(ingest_cfg["database"]["config_file"]))["postgres"]
-    uri = ledger_preservation_package_s3_uri(db_cfg, game_key, bucket)
+    uri = ledger_preservation_package_s3_uri(db_cfg, game_key, wasabi)
     if not uri:
         return None
     term = str(aip_cfg.get("uri_property") or "dcterms:relation").strip()

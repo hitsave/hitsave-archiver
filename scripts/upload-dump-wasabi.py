@@ -21,7 +21,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INGEST_CONFIG = Path("/config/preservation/ingest.yaml")
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from dump_classify import package_storage_s3_uri  # noqa: E402
-from preservation_common import wasabi_unpacked_prefix  # noqa: E402
+from preservation_common import resolve_wasabi_bucket, wasabi_unpacked_prefix  # noqa: E402
 
 
 def load_yaml(path: Path) -> dict:
@@ -91,6 +91,7 @@ def upload_bag_to_prefix(
     package_storage_prefix: str,
     *,
     ingest_config_path: Path = DEFAULT_INGEST_CONFIG,
+    bucket: str | None = None,
 ) -> dict[str, str]:
     bag_dir = bag_dir.resolve()
     if not bag_dir.is_dir():
@@ -100,7 +101,7 @@ def upload_bag_to_prefix(
     if not wasabi.get("enabled", True):
         raise RuntimeError("Wasabi upload is disabled (wasabi.enabled: false)")
 
-    bucket = str(wasabi["bucket"])
+    bucket = str(bucket or resolve_wasabi_bucket(wasabi, "dump"))
     root = wasabi_unpacked_prefix(package_storage_prefix)
     verify = bool(wasabi.get("verify_upload", True))
     creds = load_yaml(resolve_config_path(str(wasabi["credentials_file"]), ingest_config_path.parent.parent))
@@ -190,9 +191,15 @@ def main() -> None:
     game_key = sys.argv[2]
     storage_prefix = sys.argv[3].strip("/")
     ingest_path = Path(sys.argv[4]) if len(sys.argv) > 4 else DEFAULT_INGEST_CONFIG
+    wasabi = load_yaml(ingest_path).get("wasabi") or {}
 
     try:
-        upload = upload_bag_to_prefix(bag_dir, storage_prefix, ingest_config_path=ingest_path)
+        upload = upload_bag_to_prefix(
+            bag_dir,
+            storage_prefix,
+            ingest_config_path=ingest_path,
+            bucket=resolve_wasabi_bucket(wasabi, "dump"),
+        )
         update_ledger_dump_storage(game_key, upload, ingest_config_path=ingest_path)
     except ClientError as e:
         raise SystemExit(f"Wasabi S3 error: {e}") from e

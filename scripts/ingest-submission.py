@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ingest a portable submission zip: safe unpack → ClamAV → BagIt ingest (via ingest-game-folder)."""
+"""Ingest a portable submission zip: safe unpack → ClamAV → BagIt ingest (via ingest-folder)."""
 from __future__ import annotations
 
 import argparse
@@ -98,7 +98,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--skip-ingest",
         action="store_true",
-        help="Unpack and write game config only (no ingest-game-folder)",
+        help="Unpack and write game config only (no ingest-folder)",
     )
     return parser.parse_args()
 
@@ -213,7 +213,7 @@ def main() -> None:
             return
 
         subprocess.run(
-            [sys.executable, str(SCRIPTS / "ingest-game-folder.py"), str(game_cfg_path)],
+            [sys.executable, str(SCRIPTS / "ingest-folder.py"), str(game_cfg_path)],
             check=True,
         )
         dest = paths["processed"] / zip_path.name

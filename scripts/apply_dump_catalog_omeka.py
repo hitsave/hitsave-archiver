@@ -184,6 +184,7 @@ def apply_dump_catalog(
         existing_item=existing_body,
         ledger_aip_wasabi_prefix=ledger_aip,
         ledger_package_storage_prefix=ledger_prefix,
+        wasabi_ingest_cfg=ingest_cfg.get("wasabi"),
     )
 
     if metadata_json and uses_moby_catalog_data(metadata_json):

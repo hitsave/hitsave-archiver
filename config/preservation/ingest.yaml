@@ -3,6 +3,8 @@
 # Portable zip intake: config/preservation/submissions.yaml and docs/portable-submissions.md
 paths:
   press_material_root: /data/press-material
+  # SIP folders for ingest_kind analog (VHS/USA/…); defaults to press_material_root if unset.
+  analog_material_root: /data/analog
   output_root: /output
   dip_subdir: dip
   bag_subdir: bag
@@ -19,7 +21,7 @@ defaults:
   max_files: 5000
   max_total_bytes: 5368709120
 
-# Source content policy (press folders and portable submissions via ingest-game-folder).
+# Source content policy (press folders and portable submissions via ingest-folder).
 # enforce: false = log matches only (permissive test ingest); true = quarantine + abort.
 content_policy:
   enforce: true
@@ -32,7 +34,7 @@ content_policy:
 preservation:
   repository_code: hitsave
   agent_name: HitSave archive ingest
-  agent_version: ingest-game-folder.py
+  agent_version: ingest-folder.py
 
 database:
   config_file: /config/preservation/database.yaml
@@ -43,6 +45,12 @@ wasabi:
   credentials_file: secrets/wasabi-credentials.yaml
   endpoint: https://s3.us-east-2.wasabisys.com
   region: us-east-2
-  bucket: hitsave-incoming
+  # Required: one bucket per layout (ingest kind dump → key dumps). No fallback bucket.
+  buckets:
+    press_material: hitsave-press-material
+    dumps: hitsave-dumps
+    other: hitsave-other
+    analog: hitsave-analog
+  # Legacy note: press letter batches use wasabi_root press-material from ingest-kinds.yaml.
   prefix: press-material/
   verify_upload: true

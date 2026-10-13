@@ -30,12 +30,19 @@ def head_wasabi_bagit_txt(
     package_storage_prefix: str,
     *,
     config_root: Path,
+    bucket: str | None = None,
+    ingest_kind: str | None = None,
 ) -> int:
     """Return bagit.txt size; raise DipNotAvailableError if prefix is missing."""
     if boto3 is None:
         raise RuntimeError("boto3 required for Wasabi preflight")
+    from preservation_common import wasabi_bucket_for_storage_prefix
+
     key = f"{package_storage_prefix.strip('/')}/bagit.txt"
     wasabi = ingest_cfg["wasabi"]
+    target_bucket = bucket or wasabi_bucket_for_storage_prefix(
+        wasabi, package_storage_prefix, ingest_kind=ingest_kind
+    )
     creds = _load_wasabi_creds(config_root, ingest_cfg)
     client = boto3.client(
         "s3",
@@ -46,7 +53,7 @@ def head_wasabi_bagit_txt(
         config=Config(signature_version="s3v4"),
     )
     try:
-        head = client.head_object(Bucket=wasabi["bucket"], Key=key)
+        head = client.head_object(Bucket=target_bucket, Key=key)
     except Exception as e:
         from botocore.exceptions import ClientError
 
@@ -66,13 +73,19 @@ def assert_bagit_external_dip_available(
     config_root: Path,
     package_storage_prefix: str = "",
     expected_bytes: int = 0,
+    ingest_kind: str | None = None,
 ) -> int:
     """Verify unpacked BagIt prefix exists on Wasabi."""
     _ = catalog_cfg
     prefix = str(package_storage_prefix).strip("/")
     if not prefix:
         raise DipNotAvailableError("package_storage_prefix is required for BagIt Omeka attach")
-    size = head_wasabi_bagit_txt(ingest_cfg, prefix, config_root=config_root)
+    size = head_wasabi_bagit_txt(
+        ingest_cfg,
+        prefix,
+        config_root=config_root,
+        ingest_kind=ingest_kind,
+    )
     if expected_bytes > 0 and size <= 0:
         raise DipNotAvailableError(f"Wasabi bagit.txt unreadable for prefix {prefix!r}")
     return size

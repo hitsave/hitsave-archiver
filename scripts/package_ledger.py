@@ -5,7 +5,11 @@ from pathlib import Path
 from typing import Any
 
 from package_identity import PackageIdentity, build_package_identity
-from preservation_common import bagit_package_s3_uri_for_prefix
+from preservation_common import (
+    bagit_package_s3_uri_for_prefix,
+    resolve_wasabi_bucket,
+    wasabi_bucket_for_storage_prefix,
+)
 from submission_sources import resolve_submission_source
 
 
@@ -35,9 +39,11 @@ def resolve_package_identity(
     conn,
     *,
     source: Path,
-    press_material_root: Path,
+    material_root: Path,
     omeka_item_title: str,
+    press_material_root: Path | None = None,
 ) -> PackageIdentity:
+    _ = press_material_root  # legacy callers; use material_root
     submission = resolve_submission_source(source)
     if not submission or not submission.get("id"):
         raise RuntimeError(
@@ -46,7 +52,7 @@ def resolve_package_identity(
     submission_id = str(submission["id"])
     draft = build_package_identity(
         source=source,
-        press_material_root=press_material_root,
+        press_material_root=material_root,
         submission_source_id=submission_id,
         omeka_item_title=omeka_item_title,
     )
@@ -54,7 +60,7 @@ def resolve_package_identity(
     if existing and existing.get("package_id"):
         return build_package_identity(
             source=source,
-            press_material_root=press_material_root,
+            press_material_root=material_root,
             submission_source_id=submission_id,
             omeka_item_title=omeka_item_title,
             existing_package_id=str(existing["package_id"]),
@@ -82,7 +88,8 @@ def ledger_bagit_wasabi_paths(
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT package_storage_prefix, package_id, sort_letter, game_key
+                SELECT package_storage_prefix, package_id, sort_letter, game_key, ingest_kind,
+                       source_path
                 FROM game_ingest WHERE game_key = %s
                 """,
                 (game_key,),
@@ -92,20 +99,50 @@ def ledger_bagit_wasabi_paths(
         conn.close()
     if not row:
         raise RuntimeError(f"No ledger row for game_key={game_key!r}")
-    storage_prefix, package_id, sort_letter, ledger_game_key = row
-    bucket = str(wasabi_ingest_cfg["bucket"]).strip()
+    storage_prefix, package_id, sort_letter, ledger_game_key, ingest_kind, source_path = row
+    kind = str(ingest_kind or "").strip() or None
+    if storage_prefix:
+        prefix = str(storage_prefix).strip("/")
+        bucket = wasabi_bucket_for_storage_prefix(
+            wasabi_ingest_cfg, prefix, ingest_kind=kind
+        )
+    else:
+        if not kind:
+            raise RuntimeError(
+                f"Cannot resolve Wasabi bucket for {ledger_game_key!r}: "
+                "missing package_storage_prefix and ingest_kind"
+            )
+        bucket = resolve_wasabi_bucket(wasabi_ingest_cfg, kind)
     if storage_prefix:
         prefix = str(storage_prefix).strip("/")
         return bagit_package_s3_uri_for_prefix(bucket, prefix), prefix
 
-    from preservation_common import wasabi_bagit_unpacked_prefix
+    from package_identity import relative_sip_path
+    from preservation_common import (
+        load_ingest_config,
+        material_root_for_kind,
+        wasabi_package_storage_prefix,
+    )
 
-    prefix_root = str(wasabi_ingest_cfg.get("prefix") or "press-material")
+    if not kind:
+        raise RuntimeError(
+            f"Cannot build Wasabi prefix for {ledger_game_key!r}: ingest_kind is required"
+        )
+    if not source_path:
+        raise RuntimeError(
+            f"Cannot build Wasabi prefix for {ledger_game_key!r}: source_path is required"
+        )
+    paths = load_ingest_config().get("paths") or {}
+    rel = relative_sip_path(
+        Path(str(source_path)),
+        material_root_for_kind(kind, paths),
+    )
     pid = package_id or ledger_game_key
     letter = sort_letter or "X"
-    prefix = wasabi_bagit_unpacked_prefix(
-        prefix_root,
+    prefix = wasabi_package_storage_prefix(
+        kind,
         package_id=str(pid),
         sort_letter=str(letter),
+        relative_sip_path=rel,
     )
     return bagit_package_s3_uri_for_prefix(bucket, prefix), prefix

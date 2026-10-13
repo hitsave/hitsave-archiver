@@ -72,7 +72,8 @@ def fetch_complete_games(conn) -> list[dict]:
                 updated_at,
                 aip_uploaded_at,
                 aip_wasabi_prefix,
-                package_storage_prefix
+                package_storage_prefix,
+                ingest_kind
             FROM game_ingest
             WHERE status = 'complete'
             ORDER BY game_key
@@ -82,8 +83,11 @@ def fetch_complete_games(conn) -> list[dict]:
 
 
 def wasabi_from_row(row: dict) -> tuple[str | None, str | None]:
+    from preservation_common import wasabi_bucket_for_storage_prefix
+
     ingest = load_ingest_config()
-    bucket = str((ingest.get("wasabi") or {}).get("bucket") or "") or None
+    wasabi = ingest.get("wasabi") or {}
+    kind = str(row.get("ingest_kind") or "").strip() or None
     for field in ("package_storage_prefix", "aip_wasabi_prefix"):
         raw = row.get(field)
         if not raw:
@@ -95,9 +99,10 @@ def wasabi_from_row(row: dict) -> tuple[str | None, str | None]:
                 b, key = rest.split("/", 1)
                 return b, key.strip("/")
             continue
-        if bucket and text:
+        if text:
+            bucket = wasabi_bucket_for_storage_prefix(wasabi, text, ingest_kind=kind)
             return bucket, text
-    return bucket, None
+    return None, None
 
 
 def build_catalog(rows: list[dict], *, repository_code: str) -> dict:

@@ -67,7 +67,7 @@ Ledger: `dump_class = other`, `dump_system` / `dump_category` null.
 
 ## Classification and upload (implementation)
 
-1. **`ingest-game-folder.py`** — after ClamAV, **`dump_classify.classify_dump_sip()`** on the SIP folder; ledger columns `dump_class`, `dump_system`, `dump_category`, `package_storage_prefix`, `storage_layout = bagit_unpacked`.
+1. **`ingest-folder.py`** — after ClamAV, **`dump_classify.classify_dump_sip()`** on the SIP folder; ledger columns `dump_class`, `dump_system`, `dump_category`, `package_storage_prefix`, `storage_layout = bagit_unpacked`.
 2. **`build-bagit-package.py`** — writes `wasabi_key` / staff URI into `metadata/submission.json` from the same classification.
 3. **`upload-dump-wasabi.py`** — syncs the unpacked bag tree to the computed prefix.
 
