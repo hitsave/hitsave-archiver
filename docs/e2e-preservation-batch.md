@@ -1,4 +1,4 @@
-# E2E preservation batch (multi-game + test Omeka)
+# E2E preservation batch (multi-folder + test Omeka)
 
 Use when **`hitsave-archiver`**, **`hitsave-archiver-config`**, and **`hitsave-omeka-test`** run on one machine (see [hitsave-omeka-test `docs/build-real-dip.md`](https://github.com/hitsave/hitsave-omeka-test/blob/main/docs/build-real-dip.md)).
 

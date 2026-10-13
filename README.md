@@ -18,11 +18,11 @@ Related public repos:
 ~/hitsave-omeka-test/            # local Omeka on :8088 (optional, for QA / catalog register target)
 ```
 
-Docker Compose mounts the private tree at `/config/secrets` and overlays `/config/preservation/database.yaml`. Override the host path with `HITSAVE_PRIVATE_CONFIG` if your private clone is not a sibling directory.
+When you run Docker Compose, it bind-mounts your **private config checkout** into the containers: Wasabi/Omeka/Moby credentials under `/config/secrets`, and Postgres ledger settings at `/config/preservation/database.yaml`. Compose expects that checkout next to this repo as `../hitsave-archiver-config`. If it lives somewhere else on your machine, set `HITSAVE_PRIVATE_CONFIG` to its full host path before `docker compose up`.
 
 Omeka catalog registration settings: `config/omeka-catalog.yaml` (points at test or prod API via private credentials).
 
-**Multi-game E2E (batch ingest + Omeka):** [docs/e2e-preservation-batch.md](docs/e2e-preservation-batch.md).
+**Multi-folder E2E (batch ingest + Omeka):** [docs/e2e-preservation-batch.md](docs/e2e-preservation-batch.md).
 
 ## Quick start (dev / CI)
 
@@ -73,3 +73,7 @@ Set `HITSAVE_PRIVATE_CONFIG` and the `HOST_*` variables in a host env file (not 
 ```bash
 git grep -iE 'secret_access|AKIA[0-9A-Z]{16}|BEGIN (RSA|OPENSSH)' -- ':!*.example' ':!docs/' ':!.ci/private-config/'
 ```
+
+## License
+
+Copyright 2026 Hit Save! Licensed under the [Apache License, Version 2.0](LICENSE). You may fork and modify this project without an obligation to contribute changes back.
