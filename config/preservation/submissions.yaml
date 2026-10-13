@@ -1,4 +1,4 @@
-# Portable submission intake (zip → unpack → same E-ARK AIP/DIP pipeline as press-material ingest).
+# Portable submission intake (zip → unpack → same BagIt ingest pipeline as press-material ingest).
 # Planned zip layout rules (folder vs filename vs quarantine): docs/submission-zip-layout-standard.md
 # Paths are inside the ingest-worker / ClamAV containers unless noted.
 paths:
@@ -79,6 +79,7 @@ security:
 
 preservation:
   batch_key: portable-submissions
+  ingest_kind: press_material
   # max_files / max_total_bytes: defaults from config/preservation/ingest.yaml
   # Skip ffmpeg access copies for portable intake until operator review (see docs/portable-submissions.md).
   video_access:

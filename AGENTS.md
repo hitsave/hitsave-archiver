@@ -9,9 +9,11 @@
 
 Compose expects `HITSAVE_PRIVATE_CONFIG` (default sibling `../hitsave-archiver-config`). Run `./scripts/ensure-local-config.sh` after clone.
 
+**Preservation direction:** OAIS + BagIt (unpacked on Wasabi, payload under `data/`). See **`docs/oais-bagit-preservation-plan.md`** and **`config/preservation/submission-sources.yaml`**.
+
 ## Docker
 
-Use `docker compose` (ingest worker, uploader, CI fixtures). Do not run preservation scripts with bare host Python when the stack defines the runtime.
+Use `docker compose` (ingest worker, omeka-catalog, CI fixtures). Do not run preservation scripts with bare host Python when the stack defines the runtime.
 
 After changing `ingest-worker/` or submission security code, run:
 

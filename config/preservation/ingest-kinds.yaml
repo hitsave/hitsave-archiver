@@ -1,0 +1,42 @@
+# Ingest kind → catalog enrichment (SSOT). Set on each game/submission YAML as ingest_kind.
+# Moby API settings stay in mobygames.yaml; Omeka field mapping follows moby_omeka_profile here.
+ingest_kinds:
+  press_material:
+    description: Community press kits under paths.press_material_root
+    moby_enrich: true
+    moby_omeka_profile: press_material
+    storage_profile: bagit_tar
+    wasabi_root: press-material
+
+  dump:
+    description: >-
+      Preserved dumps (Redump disc images, ROM sets, install trees, coverdiscs, etc.).
+      Unpacked BagIt prefix on Wasabi; Moby + Redump catalog when evidence exists.
+    moby_enrich: true
+    moby_omeka_profile: game_catalog
+    storage_profile: bagit_unpacked
+    wasabi_root: dumps
+    dump_layout:
+      redump:
+        submission_info_names:
+          - "!submissionInfo.txt"
+          - "!submissioninfo.txt"
+          - submissionInfo.txt
+          - submissioninfo.txt
+        require_sections:
+          - Common Disc Info
+          - Size & Checksum
+        require_fields:
+          - System
+          - Category
+        require_checksums:
+          - sha1
+        path_pattern: "{system}/{category}/{package_id}"
+      other:
+        path_pattern: "Others/{package_id}"
+
+  other:
+    description: Generic SIP with no automatic Moby or Redump catalog step
+    moby_enrich: false
+    storage_profile: bagit_tar
+    wasabi_root: press-material

@@ -71,11 +71,12 @@ def resolve_source_parent(batch: dict, cfg_root: Path) -> Path:
     )
 
 
-def slug_key(batch_key: str, folder_name: str) -> str:
+def slug_key(_batch_key: str, folder_name: str) -> str:
+    """Title-style slug from folder name (package_id assigned at ingest with UUID v7)."""
     base = re.sub(r"[^a-zA-Z0-9]+", "-", folder_name.strip()).strip("-").lower()
     if not base:
         base = "game"
-    return f"{batch_key}-{base}"[:120]
+    return base[:120]
 
 
 def main() -> None:
@@ -118,6 +119,11 @@ def main() -> None:
         )
 
     ingest = load_ingest_config()
+    batch_ingest_kind = batch.get("ingest_kind")
+    if not batch_ingest_kind or not str(batch_ingest_kind).strip():
+        raise SystemExit(
+            "batch.yml must set ingest_kind (e.g. press_material); see config/preservation/ingest-kinds.yaml"
+        )
     press_root = Path(ingest["paths"]["press_material_root"])
     batch_output_dirs(batch_key, ingest, batch.get("output") or {})  # validate / override dirs exist in batch.yml
 
@@ -136,6 +142,7 @@ def main() -> None:
         title = normalize_display_title(raw_title)
         game_cfg = {
             "source_subpath": subpath,
+            "ingest_kind": str(batch_ingest_kind).strip(),
             "game_key": game_key,
             "omeka_item_title": title,
             "batch_key": batch_key,

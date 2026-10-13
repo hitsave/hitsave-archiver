@@ -9,8 +9,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from moby_resolve import (  # noqa: E402
+    apply_moby_omeka_profile_to_metadata,
     build_moby_attribution_sentence,
     moby_attribution_text,
+    moby_attribution_for_omeka_rights,
     moby_description_for_omeka,
     moby_search_title_candidates,
 )
@@ -59,6 +61,36 @@ def test_description_for_omeka_labels_ad_blurb() -> None:
     text = moby_description_for_omeka(meta, {})
     assert text.startswith("Official description (ad blurb) (PlayStation Store Description)")
     assert "Step into the shoes" in text
+
+
+def test_attribution_for_omeka_rights_press_omits_release_date() -> None:
+    meta = {
+        "moby_catalog_fields": ["publisher", "developer", "first_release_date"],
+    }
+    text = moby_attribution_for_omeka_rights(meta, {}, omeka_profile="press_material")
+    assert "Release date" not in text
+    assert "Publisher" in text
+
+
+def test_apply_omeka_profile_press_strips_release_from_catalog_fields() -> None:
+    meta = {
+        "first_release_date": "2017-06-02",
+        "publishers": ["Bandai Namco"],
+        "moby_catalog_fields": ["publisher", "first_release_date"],
+    }
+    apply_moby_omeka_profile_to_metadata(meta, "press_material", {})
+    assert "first_release_date" not in meta["moby_catalog_fields"]
+    assert "Release date" not in meta["attribution"]
+
+
+def test_attribution_for_omeka_rights_omits_description_fields() -> None:
+    meta = {
+        "description_plain": "A game about heroes.",
+        "moby_catalog_fields": ["description", "publisher"],
+    }
+    text = moby_attribution_for_omeka_rights(meta, {})
+    assert "Description" not in text
+    assert "Publisher" in text
 
 
 def test_attribution_appends_suffix_when_sentence_does_not_name_mobygames() -> None:

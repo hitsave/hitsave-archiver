@@ -20,12 +20,16 @@ CONFIG_ROOT = Path(__import__("os").environ.get("HITSAVE_CONFIG_ROOT", str(REPO_
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import importlib.util  # noqa: E402
 
+from ingest_kind import resolve_omeka_moby_profile  # noqa: E402
+
+# Ledger rows ingested before ingest_kind column was populated (Omeka routing only).
+_LEGACY_OMEKA_INGEST_KIND = "press_material"
 from moby_resolve import uses_moby_catalog_data  # noqa: E402
 
 
-def _upload_api_module():
-    path = REPO_ROOT / "scripts" / "upload-dip-omeka-api.py"
-    spec = importlib.util.spec_from_file_location("upload_dip_omeka_api", path)
+def _register_dip_api_module():
+    path = REPO_ROOT / "scripts" / "register-dip-omeka-api.py"
+    spec = importlib.util.spec_from_file_location("register_dip_omeka_api", path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"Cannot load {path}")
     mod = importlib.util.module_from_spec(spec)
@@ -39,12 +43,12 @@ def main() -> None:
     if not apply_all and not keys:
         raise SystemExit("Usage: apply-moby-metadata-omeka.py [--all] [game_key ...]")
 
-    upload = _upload_api_module()
-    load_yaml = upload.load_yaml
-    pg_connect = upload.pg_connect
-    apply_moby_metadata_to_item = upload.apply_moby_metadata_to_item
+    register_api = _register_dip_api_module()
+    load_yaml = register_api.load_yaml
+    pg_connect = register_api.pg_connect
+    apply_moby_metadata_to_item = register_api.apply_moby_metadata_to_item
 
-    api_cfg = load_yaml(CONFIG_ROOT / "omeka-uploader.yaml")["api"]
+    api_cfg = load_yaml(CONFIG_ROOT / "omeka-catalog.yaml")["api"]
     cred_rel = Path(api_cfg["credentials_file"])
     if cred_rel.parts and cred_rel.parts[0] == "config":
         cred_rel = Path(*cred_rel.parts[1:])
@@ -64,7 +68,7 @@ def main() -> None:
             if apply_all:
                 cur.execute(
                     """
-                    SELECT game_key, omeka_item_id, metadata_json
+                    SELECT game_key, omeka_item_id, metadata_json, inventory_json, ingest_kind
                     FROM game_ingest
                     WHERE omeka_item_id IS NOT NULL AND metadata_json IS NOT NULL
                     ORDER BY game_key
@@ -73,7 +77,7 @@ def main() -> None:
             else:
                 cur.execute(
                     """
-                    SELECT game_key, omeka_item_id, metadata_json
+                    SELECT game_key, omeka_item_id, metadata_json, inventory_json, ingest_kind
                     FROM game_ingest
                     WHERE game_key = ANY(%s) AND omeka_item_id IS NOT NULL
                     ORDER BY game_key
@@ -85,14 +89,18 @@ def main() -> None:
         conn.close()
 
     results = []
-    for game_key, item_id, metadata_json in rows:
+    for game_key, item_id, metadata_json, inventory_json, ingest_kind in rows:
         if isinstance(metadata_json, str):
             metadata_json = json.loads(metadata_json)
+        if isinstance(inventory_json, str):
+            inventory_json = json.loads(inventory_json)
         if not metadata_json or not uses_moby_catalog_data(metadata_json):
             results.append(
                 {"game_key": game_key, "omeka_item_id": item_id, "skipped": True, "reason": "no_moby"}
             )
             continue
+        kind = (str(ingest_kind).strip() if ingest_kind else "") or _LEGACY_OMEKA_INGEST_KIND
+        omeka_profile = resolve_omeka_moby_profile(ingest_kind=kind)
         fields = apply_moby_metadata_to_item(
             session,
             base,
@@ -101,6 +109,8 @@ def main() -> None:
             metadata_json,
             moby_cfg,
             game_key=game_key,
+            inventory_json=inventory_json,
+            omeka_profile=omeka_profile,
         )
         results.append(
             {

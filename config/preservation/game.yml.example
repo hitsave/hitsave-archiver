@@ -3,13 +3,14 @@
 #
 # Run: docker compose run --rm ingest-worker /config/preservation/game.yml
 
+ingest_kind: press_material
 source_subpath: Example/Publisher/GameFolder
 game_key: example-game
 omeka_item_title: "Example Game — press material"
 
-# Optional overrides (container paths):
-# output_tar: /output/dip/example-game.tar
+# Optional overrides (container paths; defaults from resolve_game_config):
+# bagit_bag_dir: /output/bag/example-game
 # staging_dir: /output/.staging/example-game
-# aip_bag_dir: /output/aip/example-game
+# aip_bag_dir: /output/bag/example-game
 # max_files: 5000
 # max_total_bytes: 5368709120

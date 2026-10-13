@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Resume batch ingest + Omeka upload (uploader skips rows that verify in Omeka).
-#   --ingest-only   Run ingest-worker only (no Omeka upload).
+# Resume batch ingest + Omeka catalog register (omeka-catalog skips rows already in Omeka).
+#   --ingest-only   Run ingest-worker only (no Omeka catalog register).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -22,19 +22,46 @@ for g in m['games']:
     print(g['config'])
 ")
 
-docker compose build ingest-worker omeka-uploader >/dev/null
+docker compose build ingest-worker omeka-catalog >/dev/null
+
+ledger_status() {
+  local cfg="$1"
+  local rel="${cfg#config/preservation/}"
+  docker compose run --rm --entrypoint python ingest-worker \
+    /app/scripts/batch_ledger.py status "/config/preservation/$rel" 2>/dev/null | tr -d '[:space:]' || true
+}
 
 for cfg in "${CONFIGS[@]}"; do
   key="$(python3 -c "import yaml; print(yaml.safe_load(open('$cfg'))['game_key'])")"
-  status="$(docker compose exec -T postgres psql -U hitsave -d hitsave_ledger -tAc \
-    "SELECT status FROM game_ingest WHERE game_key='${key}' LIMIT 1" 2>/dev/null | tr -d ' ' || true)"
-  if [[ "$status" != "complete" ]]; then
+  status="$(ledger_status "$cfg")"
+  if [[ "$status" != "complete" && "$status" != "quarantine" ]]; then
     echo "=== ingest: $key ==="
-    docker compose run --rm -T ingest-worker "/config/preservation/${cfg#config/preservation/}" </dev/null
+    if ! docker compose run --rm -T ingest-worker "/config/preservation/${cfg#config/preservation/}" </dev/null; then
+      echo "=== ingest failed (continuing batch): $key ===" >&2
+    fi
+    status="$(ledger_status "$cfg")"
+  elif [[ "$status" == "quarantine" ]]; then
+    echo "=== ingest skipped (quarantine): $key ==="
   fi
   if [[ "$INGEST_ONLY" -eq 0 ]]; then
-    echo "=== omeka upload: $key ==="
-    docker compose run --rm -T omeka-uploader "$key" "/config/preservation/${cfg#config/preservation/}" </dev/null
+    if [[ "$status" == "complete" ]]; then
+      rel="${cfg#config/preservation/}"
+      needs_moby="$(docker compose run --rm --entrypoint python ingest-worker \
+        /app/scripts/batch_ledger.py needs_moby "/config/preservation/$rel" 2>/dev/null | tr -d '[:space:]' || echo 0)"
+      if [[ "$needs_moby" == "1" ]]; then
+        echo "=== moby enrich (ledger backfill): $key ==="
+        docker compose run --rm -T --entrypoint python ingest-worker \
+          /app/scripts/moby_enrich_game.py "/config/preservation/$rel" </dev/null || true
+      fi
+      pkg_key="$(docker compose run --rm --entrypoint python ingest-worker \
+        /app/scripts/batch_ledger.py game_key "/config/preservation/$rel" 2>/dev/null | tr -d '[:space:]' || true)"
+      echo "=== omeka catalog register: ${pkg_key:-$key} ==="
+      if ! docker compose run --rm -T omeka-catalog "/config/preservation/${cfg#config/preservation/}" </dev/null; then
+        echo "=== omeka catalog register failed (continuing batch): $key ===" >&2
+      fi
+    else
+      echo "=== omeka catalog register skipped: $key (ledger status=${status:-none}) ==="
+    fi
   fi
 done
 

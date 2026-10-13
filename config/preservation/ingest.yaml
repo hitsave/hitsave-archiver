@@ -5,6 +5,7 @@ paths:
   press_material_root: /data/press-material
   output_root: /output
   dip_subdir: dip
+  bag_subdir: bag
   aip_subdir: aip
   processed_subdir: processed
   quarantine_subdir: quarantine
@@ -18,6 +19,16 @@ defaults:
   max_files: 5000
   max_total_bytes: 5368709120
 
+# Source content policy (press folders and portable submissions via ingest-game-folder).
+# enforce: false = log matches only (permissive test ingest); true = quarantine + abort.
+content_policy:
+  enforce: true
+  blockers:
+    booru_tagged_filenames:
+      enabled: true
+      # Match when filename starts with a post id and has at least this many "__" separators.
+      min_double_underscore_segments: 3
+
 preservation:
   repository_code: hitsave
   agent_name: HitSave archive ingest
@@ -26,13 +37,12 @@ preservation:
 database:
   config_file: /config/preservation/database.yaml
 
-# E-ARK AIPs: one S3 prefix per game (unpacked package root). Enable wasabi in private ops config if needed.
+# Unpacked BagIt prefixes under press-material/ (and dump layouts via ingest-kinds.yaml).
 wasabi:
-  enabled: false
-  # Live credentials: private repo → mounted at /config/secrets/ (see README).
+  enabled: true
   credentials_file: secrets/wasabi-credentials.yaml
-  endpoint: https://s3.us-east-1.wasabisys.com
-  region: us-east-1
-  bucket: your-aip-bucket-name
+  endpoint: https://s3.us-east-2.wasabisys.com
+  region: us-east-2
+  bucket: hitsave-incoming
   prefix: press-material/
   verify_upload: true

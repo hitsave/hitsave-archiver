@@ -1,6 +1,6 @@
 # hitsave-archiver
 
-Public preservation machinery for [HitSave](https://hitsave.org): press-material and portable zip ingest, E-ARK AIP/DIP packaging, ClamAV scanning, optional Wasabi AIP upload, and Omeka S DIP upload via REST.
+Public preservation machinery for [HitSave](https://hitsave.org): press-material and portable zip ingest, RFC 8493 BagIt packaging, ClamAV scanning, Wasabi upload (unpacked bags), and Omeka S catalog registration via REST (S3-backed DIP media, no Omeka file storage).
 
 **Credentials never belong in this repo.** Operator secrets use a separate checkout mounted at runtime; build it from `config/**/*.example` — see **[docs/operator-config.md](docs/operator-config.md)**, **[docs/config-contract.md](docs/config-contract.md)**, and [docs/public-repos.md](docs/public-repos.md).
 
@@ -15,12 +15,12 @@ Related public repos:
 ```text
 ~/hitsave-archiver/              # this repo (public)
 ~/hitsave-archiver-config/       # secrets + operator database.yaml (private)
-~/hitsave-omeka-test/            # local Omeka on :8088 (optional, for QA / uploader target)
+~/hitsave-omeka-test/            # local Omeka on :8088 (optional, for QA / catalog register target)
 ```
 
 Docker Compose mounts the private tree at `/config/secrets` and overlays `/config/preservation/database.yaml`. Override the host path with `HITSAVE_PRIVATE_CONFIG` if your private clone is not a sibling directory.
 
-Omeka REST upload settings: `config/omeka-uploader.yaml` (points at test or prod API via private credentials).
+Omeka catalog registration settings: `config/omeka-catalog.yaml` (points at test or prod API via private credentials).
 
 **Multi-game E2E (batch ingest + Omeka):** [docs/e2e-preservation-batch.md](docs/e2e-preservation-batch.md).
 
@@ -67,7 +67,7 @@ Set `HITSAVE_PRIVATE_CONFIG` and the `HOST_*` variables in a host env file (not 
 
 ## Config hygiene
 
-- Committed templates: `config/secrets/*.example`, `config/preservation/database.yaml.example`, `config/omeka-uploader.yaml`
+- Committed templates: `config/secrets/*.example`, `config/preservation/database.yaml.example`, `config/omeka-catalog.yaml`
 - Before pushing changes, scan for accidental secrets:
 
 ```bash

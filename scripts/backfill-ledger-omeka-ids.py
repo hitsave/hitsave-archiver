@@ -91,7 +91,7 @@ def pg_connect(db_cfg: dict):
 
 def main() -> None:
     dry_run = "--dry-run" in sys.argv
-    api_cfg = load_yaml(CONFIG_ROOT / "omeka-uploader.yaml")["api"]
+    api_cfg = load_yaml(CONFIG_ROOT / "omeka-catalog.yaml")["api"]
     cred_rel = Path(api_cfg["credentials_file"])
     if cred_rel.parts and cred_rel.parts[0] == "config":
         cred_rel = Path(*cred_rel.parts[1:])

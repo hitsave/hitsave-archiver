@@ -49,7 +49,7 @@ hitsave-archiver-config/
 | `preservation/database.yaml` | [`config/preservation/database.yaml.example`](../config/preservation/database.yaml.example) |
 | `host.env` (shell exports for `HOST_*`) | [`config/host.env.example`](../config/host.env.example) |
 
-Use **local** credentials for test Omeka (`config/omeka-uploader.yaml` → `secrets/omeka-api-credentials-local.yaml`) and **prod** for archive.hitsave.org when running prod-targeted scripts.
+Use **local** credentials for test Omeka (`config/omeka-catalog.yaml` → `secrets/omeka-api-credentials-local.yaml`) and **prod** for archive.hitsave.org when running prod-targeted scripts.
 
 Manual copy example:
 
@@ -75,7 +75,7 @@ These stay in **your hitsave-archiver working tree**, not in the private repo. C
 | `config/preservation/game.yml` | [`config/preservation/game.yml.example`](../config/preservation/game.yml.example) |
 | `config/preservation/batch.yml` | [`config/preservation/batch.yml.example`](../config/preservation/batch.yml.example) — `source_subpath` is relative to [`ingest.yaml`](../config/preservation/ingest.yaml) `paths.press_material_root`; expand via [`batch-expand-preservation.sh`](../scripts/batch-expand-preservation.sh) |
 
-Committed policy (no secrets): [`config/omeka-uploader.yaml`](../config/omeka-uploader.yaml), [`config/preservation/ingest.yaml`](../config/preservation/ingest.yaml), [`config/preservation/submissions.yaml`](../config/preservation/submissions.yaml).
+Committed policy (no secrets): [`config/omeka-catalog.yaml`](../config/omeka-catalog.yaml), [`config/preservation/ingest.yaml`](../config/preservation/ingest.yaml), [`config/preservation/submissions.yaml`](../config/preservation/submissions.yaml).
 
 ## Test Omeka (hitsave-omeka-test)
 
