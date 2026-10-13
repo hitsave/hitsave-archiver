@@ -9,7 +9,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
-from PIL import Image, ImageOps
+from PIL import Image, ImageFile, ImageOps, UnidentifiedImageError
+
+# Allow partial reads when generating previews; bag payload files are unchanged.
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CFG_PATH = ROOT / "config" / "preservation" / "dip-previews.yaml"
@@ -117,13 +120,19 @@ def _scale_to_fit(img: Image.Image, max_w: int, max_h: int) -> Image.Image:
     return ImageOps.contain(img, (max_w, max_h), method=Image.Resampling.LANCZOS)
 
 
+def _preview_image_error(path: Path, err: BaseException) -> None:
+    print(f"  skip preview (unreadable image): {path}: {err}", file=sys.stderr)
+
+
 def _load_image(path: Path, max_bytes: int) -> Image.Image | None:
     try:
         if path.stat().st_size > max_bytes:
             return None
         with Image.open(path) as im:
+            im.load()
             return im.convert("RGBA")
-    except OSError:
+    except (OSError, ValueError, UnidentifiedImageError) as e:
+        _preview_image_error(path, e)
         return None
 
 
@@ -180,11 +189,16 @@ def _write_grid_thumb(src: Path, dest: Path, max_edge: int, quality: int) -> boo
     dest.parent.mkdir(parents=True, exist_ok=True)
     try:
         with Image.open(src) as im:
-            im = im.convert("RGB")
-            im = ImageOps.contain(im, (max_edge, max_edge), method=Image.Resampling.LANCZOS)
-            im.save(dest, "JPEG", quality=quality, optimize=True)
-    except OSError as e:
-        print(f"  skip grid thumb (unreadable image): {src.name}: {e}", file=sys.stderr)
+            im.load()
+            rgb = im.convert("RGB")
+        thumb = ImageOps.contain(rgb, (max_edge, max_edge), method=Image.Resampling.LANCZOS)
+        try:
+            thumb.save(dest, "JPEG", quality=quality, optimize=True)
+        finally:
+            rgb.close()
+            thumb.close()
+    except (OSError, ValueError, UnidentifiedImageError) as e:
+        _preview_image_error(src, e)
         if dest.is_file():
             dest.unlink()
         return False
