@@ -10,7 +10,6 @@ from typing import Any
 try:
     import psycopg
     import requests
-    import yaml
 except ImportError as e:
     print(f"Missing dependency: {e}", file=sys.stderr)
     sys.exit(1)
@@ -31,7 +30,12 @@ from moby_omeka_fields import (  # noqa: E402
     uses_moby_catalog_data,
 )
 from moby_resolve import load_mobygames_config, moby_description_for_omeka  # noqa: E402
-from omeka_catalog_common import ensure_item_set, load_register_dip_omeka_api  # noqa: E402
+from omeka_catalog_common import (  # noqa: E402
+    ensure_item_set,
+    load_register_dip_omeka_api,
+    set_resource_public,
+)
+from omeka_staff_metadata import load_omeka_catalog_config, require_omeka_api_config  # noqa: E402
 from preservation_common import load_ingest_config, resolve_game_config  # noqa: E402
 from yaml_config import load_yaml  # noqa: E402
 
@@ -66,6 +70,126 @@ def update_ledger_omeka(game_key: str, item_id: int) -> None:
             if cur.rowcount == 0:
                 raise RuntimeError(f"No game_ingest row for game_key={game_key!r}")
         conn.commit()
+
+
+def _post_catalog_item(
+    session: requests.Session,
+    base: str,
+    creds: dict,
+    *,
+    site_id: int,
+    item_set_id: int,
+    is_public: bool,
+    rdf_values: dict[str, Any],
+    api,
+) -> int:
+    payload: dict[str, Any] = {
+        "o:is_public": is_public,
+        "o:site": [{"o:id": site_id}],
+        "o:item_set": [{"o:id": item_set_id}],
+    }
+    payload.update(rdf_values)
+    resp = session.post(
+        api.api_url(base, "items", creds),
+        json=payload,
+        headers={"Accept": "application/ld+json"},
+        timeout=120,
+    )
+    if not resp.ok:
+        raise RuntimeError(f"Create catalog item failed ({resp.status_code}): {resp.text[:2000]}")
+    return int(resp.json()["o:id"])
+
+
+def apply_handoff_dump_catalog(
+    manifest: dict[str, Any],
+    *,
+    config_root: Path | None = None,
+    patch_item_id: int | None = None,
+) -> dict[str, Any]:
+    """Metadata-only dump catalog item from GDrive/handoff YAML (no ledger Moby)."""
+    root = config_root or CONFIG_ROOT
+    uploader_cfg = load_omeka_catalog_config(root)
+    api_cfg = require_omeka_api_config(uploader_cfg)
+    dump_cfg = dump_catalog_config(uploader_cfg)
+    creds = load_yaml(root / api_cfg["credentials_file"])
+
+    base = api_cfg["base_url"].rstrip("/")
+    site_slug = api_cfg["site_slug"]
+    item_set_title = dump_cfg["item_set_title"]
+    is_public = dump_cfg["is_public"]
+    storage_uri_base = dump_cfg["storage_uri_base"]
+    ingest_cfg = load_ingest_config()
+    wasabi_ingest_cfg = ingest_cfg.get("wasabi")
+
+    api = load_register_dip_omeka_api()
+    session = requests.Session()
+    site_id = api.resolve_site_id(session, base, creds, site_slug)
+
+    if patch_item_id is not None:
+        resp = session.get(
+            api.api_url(base, f"items/{patch_item_id}", creds),
+            headers={"Accept": "application/ld+json"},
+            timeout=120,
+        )
+        if not resp.ok:
+            raise RuntimeError(f"GET item {patch_item_id} failed ({resp.status_code}): {resp.text[:800]}")
+        item_body = resp.json()
+        updates, catalog_title = build_redump_values(
+            session,
+            base,
+            creds,
+            manifest,
+            storage_uri_base=storage_uri_base,
+            api=api,
+            redump_cfg=dump_cfg,
+            existing_item=item_body,
+            wasabi_ingest_cfg=wasabi_ingest_cfg,
+        )
+        api.patch_item_rdf_values(session, base, creds, patch_item_id, updates, item_body=item_body)
+        set_resource_public(session, base, creds, "items", patch_item_id, is_public=is_public, api=api)
+        item_id = patch_item_id
+    else:
+        item_set_id = ensure_item_set(
+            session,
+            base,
+            creds,
+            item_set_title,
+            is_public=is_public,
+            api=api,
+            sync_visibility_on_existing=True,
+        )
+        rdf_values, catalog_title = build_redump_values(
+            session,
+            base,
+            creds,
+            manifest,
+            storage_uri_base=storage_uri_base,
+            api=api,
+            redump_cfg=dump_cfg,
+            wasabi_ingest_cfg=wasabi_ingest_cfg,
+        )
+        item_id = _post_catalog_item(
+            session,
+            base,
+            creds,
+            site_id=site_id,
+            item_set_id=item_set_id,
+            is_public=is_public,
+            rdf_values=rdf_values,
+            api=api,
+        )
+
+    return {
+        "item_id": item_id,
+        "omeka_item_id": item_id,
+        "game_key": manifest.get("game_key"),
+        "title": catalog_title,
+        "site_slug": site_slug,
+        "item_set": item_set_title,
+        "is_public": is_public,
+        "patched": patch_item_id is not None,
+        "catalog_only": True,
+    }
 
 
 def apply_dump_catalog(
@@ -122,8 +246,6 @@ def apply_dump_catalog(
                 inventory_json = json.loads(inventory_json)
             ledger_aip = row[3]
             ledger_prefix = row[4]
-
-    from omeka_staff_metadata import load_omeka_catalog_config, require_omeka_api_config
 
     uploader_cfg = load_omeka_catalog_config(CONFIG_ROOT)
     api_cfg = require_omeka_api_config(uploader_cfg)
@@ -189,21 +311,16 @@ def apply_dump_catalog(
         item_id = existing_item_id
     else:
         item_set_id = ensure_item_set(session, base, creds, item_set_title, is_public=is_public, api=api)
-        payload: dict[str, Any] = {
-            "o:is_public": is_public,
-            "o:site": [{"o:id": site_id}],
-            "o:item_set": [{"o:id": item_set_id}],
-        }
-        payload.update(rdf_values)
-        resp = session.post(
-            api.api_url(base, "items", creds),
-            json=payload,
-            headers={"Accept": "application/ld+json"},
-            timeout=120,
+        item_id = _post_catalog_item(
+            session,
+            base,
+            creds,
+            site_id=site_id,
+            item_set_id=item_set_id,
+            is_public=is_public,
+            rdf_values=rdf_values,
+            api=api,
         )
-        if not resp.ok:
-            raise RuntimeError(f"Create catalog item failed ({resp.status_code}): {resp.text[:2000]}")
-        item_id = int(resp.json()["o:id"])
 
     if metadata_json and uses_moby_catalog_data(metadata_json):
         apply_moby_metadata_to_item(
@@ -229,25 +346,45 @@ def apply_dump_catalog(
     }
 
 
+def _parse_item_id_flag(args: list[str]) -> tuple[list[str], int | None]:
+    patch_item_id: int | None = None
+    out: list[str] = []
+    idx = 0
+    while idx < len(args):
+        if args[idx] == "--item-id" and idx + 1 < len(args):
+            patch_item_id = int(args[idx + 1])
+            idx += 2
+        else:
+            out.append(args[idx])
+            idx += 1
+    return out, patch_item_id
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         raise SystemExit(
-            "Usage: apply-dump-catalog-omeka.py <game.yaml> [handoff.yaml] [--item-id ID]"
+            "Usage:\n"
+            "  apply-dump-catalog-omeka.py <game.yaml> [handoff.yaml] [--item-id ID]\n"
+            "  apply-dump-catalog-omeka.py --manifest <handoff.yaml> [--item-id ID]"
         )
-    game_cfg_path = Path(sys.argv[1])
+
+    argv = sys.argv[1:]
+    argv, patch_item_id = _parse_item_id_flag(argv)
+
+    if argv and argv[0] in ("--manifest", "--handoff"):
+        if len(argv) != 2:
+            raise SystemExit("Usage: apply-dump-catalog-omeka.py --manifest <handoff.yaml> [--item-id ID]")
+        manifest = load_yaml(Path(argv[1]))
+        result = apply_handoff_dump_catalog(manifest, patch_item_id=patch_item_id)
+        print(json.dumps(result, indent=2))
+        return
+
+    game_cfg_path = Path(argv[0])
     handoff_path: Path | None = None
-    patch_item_id: int | None = None
-    extra = sys.argv[2:]
-    idx = 0
-    while idx < len(extra):
-        if extra[idx] == "--item-id" and idx + 1 < len(extra):
-            patch_item_id = int(extra[idx + 1])
-            idx += 2
-        elif extra[idx].endswith((".yaml", ".yml")) and extra[idx] != game_cfg_path:
-            handoff_path = Path(extra[idx])
-            idx += 1
-        else:
-            idx += 1
+    for arg in argv[1:]:
+        if arg.endswith((".yaml", ".yml")):
+            handoff_path = Path(arg)
+            break
 
     game_cfg = resolve_game_config(load_yaml(game_cfg_path))
     game_key = str(game_cfg.get("game_key") or "")
