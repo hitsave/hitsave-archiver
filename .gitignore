@@ -13,5 +13,6 @@ data/
 fixtures/submissions-security/bombs/*.zip
 .ci/submissions/
 .ci/output/
+.ci/private-config/
 __pycache__/
 *.py[cod]

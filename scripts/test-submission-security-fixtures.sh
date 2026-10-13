@@ -12,6 +12,7 @@ if [[ -n "${CI:-}" || ! -d /tank/hitsave-archiver/submissions ]]; then
   export OUTPUT_ROOT="${OUTPUT_ROOT:-$ROOT/.ci/output}"
   export HITSAVE_PRIVATE_CONFIG="${HITSAVE_PRIVATE_CONFIG:-$ROOT/.ci/private-config}"
   mkdir -p "$SUBMISSIONS_ROOT"/{incoming,workspace,processed,failed} "$OUTPUT_ROOT" "$ROOT/.ci/empty"
+  HITSAVE_PRIVATE_CONFIG="$HITSAVE_PRIVATE_CONFIG" "$ROOT/scripts/bootstrap-private-config-from-examples.sh" --force
   HITSAVE_PRIVATE_CONFIG="$HITSAVE_PRIVATE_CONFIG" python3 "$ROOT/scripts/sync-preservation-config.py"
   COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.ci.yml)
 else

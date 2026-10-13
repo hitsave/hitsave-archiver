@@ -30,9 +30,9 @@ jobs:
       CI: "true"
     steps:
       - uses: actions/checkout@v4
-      - name: Render postgres env for compose validation
+      - name: Bootstrap CI private config from examples
         run: |
-          mkdir -p config/preservation
+          ./scripts/bootstrap-private-config-from-examples.sh --force
           HITSAVE_PRIVATE_CONFIG=./.ci/private-config python3 scripts/sync-preservation-config.py
       - name: Run unit tests in ingest-worker image
         run: |

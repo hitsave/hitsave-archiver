@@ -16,6 +16,8 @@ From this repo (public clone):
 
 Creates a sibling `../hitsave-archiver-config` (or uses `HITSAVE_PRIVATE_CONFIG`) and copies each missing file from the matching `*.example` in the table below. Replace `REPLACE_ME` / example passwords before production use.
 
+**CI and laptop Compose overrides** (`docker-compose.ci.yml`) use the same templates: `./scripts/bootstrap-private-config-from-examples.sh --force` writes gitignored `.ci/private-config/` before tests (no duplicate committed copies).
+
 Then:
 
 ```bash
