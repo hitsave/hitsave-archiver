@@ -1,13 +1,24 @@
-FROM python:3.12-slim-bookworm
+# Dev variant: pip, apk (ffmpeg, docker CLI, libpq), and Siegfried for preservation ingest.
+FROM cgr.dev/chainguard/python:latest-dev
+
+USER root
 
 ARG SIEGFRIED_VERSION=1.11.9
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl libpq5 ffmpeg docker.io unzip ca-certificates \
-    && curl -fsSL -o /tmp/siegfried.deb \
-       "https://github.com/richardlehane/siegfried/releases/download/v${SIEGFRIED_VERSION}/siegfried_${SIEGFRIED_VERSION}-1_amd64.deb" \
-    && apt-get install -y --no-install-recommends /tmp/siegfried.deb \
-    && rm -f /tmp/siegfried.deb \
-    && rm -rf /var/lib/apt/lists/*
+# Release assets use 1-11-9, not 1.11.9, in the zip filename.
+ARG SIEGFRIED_RELEASE=1-11-9
+RUN apk add --no-cache \
+      ca-certificates \
+      curl \
+      docker-cli \
+      ffmpeg-7 \
+      libpq-16 \
+      7zip \
+    && curl -fsSL -o /tmp/siegfried.zip \
+      "https://github.com/richardlehane/siegfried/releases/download/v${SIEGFRIED_VERSION}/siegfried_${SIEGFRIED_RELEASE}_linux64.zip" \
+    && 7zz x -y "/tmp/siegfried.zip" "sf" -o/usr/local/bin \
+    && chmod +x /usr/local/bin/sf \
+    && rm -f /tmp/siegfried.zip \
+    && sf -update
 
 WORKDIR /app
 
