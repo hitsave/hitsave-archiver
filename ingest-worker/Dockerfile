@@ -20,6 +20,7 @@ COPY scripts/batch-expand-preservation.py \
     scripts/reset-batch-manifest-ledger.py \
     scripts/upload-press-bag-wasabi.py \
     scripts/purge-wasabi-prefix.py \
+    scripts/delete-wasabi-letter-tar-keys.py \
     scripts/export-preservation-catalog.py \
     scripts/submission_sources.py \
     scripts/preservation_common.py \
@@ -35,7 +36,8 @@ COPY scripts/batch-expand-preservation.py \
     scripts/format_identification.py \
     scripts/source_content_policy.py \
     scripts/normalize_display_title.py \
-    scripts/ingest-game-folder.py \
+    scripts/ingest-folder.py \
+    scripts/premis_virus_check.py \
     scripts/fixity-check.py \
     scripts/read-config-yaml.py \
     scripts/omeka_dip_media.py \
@@ -62,4 +64,4 @@ COPY scripts/batch-expand-preservation.py \
     scripts/apply-external-dip-omeka.py \
     /app/scripts/
 
-ENTRYPOINT ["python", "/app/scripts/ingest-game-folder.py"]
+ENTRYPOINT ["python", "/app/scripts/ingest-folder.py"]

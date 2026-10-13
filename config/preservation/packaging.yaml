@@ -7,6 +7,10 @@ preservation:
     payload_dir: data
     metadata_dir: metadata
     manifest_algorithm: sha256
+    # Payload paths: data/{original_sip_folder_name}/… not data/… at bag root.
+    preserve_source_folder_in_payload: true
+    # PREMIS 3 virus-check event (written after ClamAV, before Wasabi upload).
+    premis_virus_check_relpath: premis/virus-check-event.xml
 
   # PRONOM / format registry via Siegfried.
   format_identification:

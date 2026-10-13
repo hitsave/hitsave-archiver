@@ -1,4 +1,5 @@
 .cursor/
+.generated/
 config/preservation/generated.env
 config/preservation/database.local.yaml
 config/preservation/generated/

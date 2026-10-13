@@ -42,6 +42,7 @@ def staff_storage_uri(
     ledger_aip_wasabi_prefix: str | None = None,
     ledger_package_storage_prefix: str | None = None,
     bucket: str | None = None,
+    wasabi_ingest_cfg: dict | None = None,
     storage_uri_base: str = "",
     game_key: str = "",
 ) -> str:
@@ -49,7 +50,11 @@ def staff_storage_uri(
     if ledger_aip_wasabi_prefix and str(ledger_aip_wasabi_prefix).startswith("s3://"):
         return str(ledger_aip_wasabi_prefix).rstrip("/") + "/"
     wasabi = (manifest or {}).get("wasabi") or {}
-    bkt = bucket or wasabi.get("bucket")
+    bkt = bucket
+    if not bkt and wasabi_ingest_cfg:
+        from preservation_common import resolve_wasabi_bucket
+
+        bkt = resolve_wasabi_bucket(wasabi_ingest_cfg, "dump")
     pfx = (
         ledger_package_storage_prefix
         or wasabi.get("package_storage_prefix")
@@ -127,6 +132,7 @@ def build_redump_values(
     existing_item: dict | None = None,
     ledger_aip_wasabi_prefix: str | None = None,
     ledger_package_storage_prefix: str | None = None,
+    wasabi_ingest_cfg: dict | None = None,
 ) -> tuple[dict[str, list], str]:
     from redump_info_lookup import redump_disc_page_url, resolve_redump_disc_by_sha1
 
@@ -188,7 +194,7 @@ def build_redump_values(
         ledger_aip_wasabi_prefix=ledger_aip_wasabi_prefix,
         ledger_package_storage_prefix=ledger_package_storage_prefix
         or manifest.get("package_storage_prefix"),
-        bucket=str(wasabi.get("bucket") or ""),
+        wasabi_ingest_cfg=wasabi_ingest_cfg,
         storage_uri_base=storage_uri_base,
         game_key=str(manifest.get("game_key") or ""),
     )

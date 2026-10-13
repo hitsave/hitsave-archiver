@@ -25,6 +25,8 @@ _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
 load_wasabi_settings = _mod.load_wasabi_settings
 
+from preservation_common import wasabi_bucket_for_storage_prefix  # noqa: E402
+
 
 def load_yaml(path: Path) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -54,9 +56,19 @@ def purge_prefix(client, bucket: str, prefix: str) -> int:
 
 def main() -> None:
     if len(sys.argv) < 2:
-        raise SystemExit("Usage: purge-wasabi-prefix.py <s3_prefix> [ingest.yaml]  e.g. press-material/F")
+        raise SystemExit(
+            "Usage: purge-wasabi-prefix.py <s3_prefix> [ingest.yaml] [bucket]  "
+            "e.g. press-material/F  or  dumps  hitsave-dumps"
+        )
     prefix = sys.argv[1].strip("/")
-    ingest_path = Path(sys.argv[2]) if len(sys.argv) > 2 else DEFAULT_INGEST
+    ingest_path = DEFAULT_INGEST
+    bucket_override = None
+    for arg in sys.argv[2:]:
+        candidate = Path(arg)
+        if candidate.suffix in (".yaml", ".yml") or candidate.is_file():
+            ingest_path = candidate
+        else:
+            bucket_override = str(arg).strip()
     if not ingest_path.is_file():
         ingest_path = REPO_ROOT / "config" / "preservation" / "ingest.yaml"
     wasabi, _ = load_wasabi_settings(ingest_path)
@@ -70,7 +82,10 @@ def main() -> None:
         aws_secret_access_key=str(creds["secret_access_key"]),
         config=Config(signature_version="s3v4"),
     )
-    bucket = str(wasabi["bucket"])
+    if bucket_override:
+        bucket = bucket_override
+    else:
+        bucket = wasabi_bucket_for_storage_prefix(wasabi, prefix)
     print(f"Purging s3://{bucket}/{prefix}/ …")
     n = purge_prefix(client, bucket, prefix)
     print(f"Done. Removed {n} objects under {prefix}/")

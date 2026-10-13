@@ -48,7 +48,7 @@ def resolve_ingest_kind(game_cfg: dict | None) -> str:
     raw = cfg.get("ingest_kind")
     if raw is None or str(raw).strip() == "":
         raise ValueError(
-            "game config must set ingest_kind (press_material, dump, or other); "
+            "game config must set ingest_kind (see config/preservation/ingest-kinds.yaml); "
             "see config/preservation/ingest-kinds.yaml"
         )
     kind = _normalize_kind_id(str(raw))
@@ -73,10 +73,10 @@ def moby_enrich_enabled(game_cfg: dict | None) -> bool:
 
 
 def storage_profile_for_kind(kind_id: str) -> str:
-    profile = str(ingest_kind_spec(kind_id).get("storage_profile") or "bagit_tar").strip().casefold()
+    profile = str(ingest_kind_spec(kind_id).get("storage_profile") or "bagit_unpacked").strip().casefold()
     if profile in ("bagit_tar", "bagit_unpacked"):
         return profile
-    return "bagit_tar"
+    return "bagit_unpacked"
 
 
 def wasabi_root_for_kind(kind_id: str) -> str:

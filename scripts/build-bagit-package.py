@@ -21,13 +21,15 @@ from package_identity import PackageIdentity  # noqa: E402
 from dump_classify import DumpClassification, classify_dump_sip  # noqa: E402
 from preservation_common import (  # noqa: E402
     bagit_package_s3_uri_for_prefix,
+    bagit_payload_relpath,
     iso_now,
     load_ingest_config,
     load_packaging_config,
     resolve_game_config,
+    resolve_wasabi_bucket,
     sha256_file,
     should_skip,
-    wasabi_bagit_unpacked_prefix,
+    wasabi_package_storage_prefix,
 )
 from ingest_kind import storage_profile_for_kind  # noqa: E402
 from submission_sources import resolve_submission_source  # noqa: E402
@@ -49,7 +51,13 @@ def load_game_config(path: Path) -> dict:
     return yaml.safe_load(path.read_text())
 
 
-def collect_files(source: Path, max_files: int, max_bytes: int) -> list[FileRow]:
+def collect_files(
+    source: Path,
+    max_files: int,
+    max_bytes: int,
+    *,
+    preserve_source_folder: bool = False,
+) -> list[FileRow]:
     rows: list[FileRow] = []
     total = 0
     for path in sorted(source.rglob("*")):
@@ -61,7 +69,9 @@ def collect_files(source: Path, max_files: int, max_bytes: int) -> list[FileRow]
             raise SystemExit(f"Would exceed max_files ({max_files})")
         if total > max_bytes:
             raise SystemExit(f"Would exceed max_total_bytes ({max_bytes})")
-        rel = path.relative_to(source).as_posix()
+        rel = bagit_payload_relpath(
+            source, path, preserve_source_folder=preserve_source_folder
+        )
         mime, _ = mimetypes.guess_type(path.name)
         rows.append(
             FileRow(
@@ -126,12 +136,18 @@ def build_bagit_package(
     bag_cfg = pkg.get("bagit") or {}
     payload_dir = str(bag_cfg.get("payload_dir") or "data")
     meta_dir = str(bag_cfg.get("metadata_dir") or "metadata")
+    preserve_source_folder = bool(bag_cfg.get("preserve_source_folder_in_payload", False))
 
     if bag_dir.exists():
         shutil.rmtree(bag_dir)
     bag_dir.mkdir(parents=True)
 
-    rows = collect_files(source, max_files, max_bytes)
+    rows = collect_files(
+        source,
+        max_files,
+        max_bytes,
+        preserve_source_folder=preserve_source_folder,
+    )
     # Stage payload at bag root; bagit.make_bag moves files into data/ (RFC 8493 payload).
     for rec in rows:
         dest = bag_dir / rec.rel
@@ -145,15 +161,15 @@ def build_bagit_package(
 
     ingest_cfg = load_ingest_config()
     wasabi = ingest_cfg.get("wasabi") or {}
-    bucket = str(wasabi.get("bucket") or "hitsave-incoming")
+    bucket = resolve_wasabi_bucket(wasabi, ingest_kind)
     if storage_profile_for_kind(ingest_kind) == "bagit_unpacked" and dump_classification:
         wasabi_key = dump_classification.package_storage_prefix
     else:
-        prefix = str(wasabi.get("prefix") or "press-material").strip("/")
-        wasabi_key = wasabi_bagit_unpacked_prefix(
-            prefix,
+        wasabi_key = wasabi_package_storage_prefix(
+            ingest_kind,
             package_id=identity.package_id,
             sort_letter=identity.sort_letter,
+            relative_sip_path=identity.relative_sip_path,
         )
     wasabi_uri = bagit_package_s3_uri_for_prefix(bucket, wasabi_key)
 
@@ -173,6 +189,7 @@ def build_bagit_package(
         "package_storage_prefix": wasabi_key,
         "storage_layout": storage_profile_for_kind(ingest_kind),
         "game_key": identity.package_id,
+        "source_folder_name": source.name,
         "ingested_at": ingested_at,
         "repository_code": repository_code,
     }
@@ -233,10 +250,17 @@ def main() -> None:
     cfg_path = Path(sys.argv[1]).resolve()
     raw = load_game_config(cfg_path)
     ingest_cfg = load_ingest_config()
-    press_root = Path(ingest_cfg["paths"]["press_material_root"])
+    paths = ingest_cfg.get("paths") or {}
+    if not raw.get("ingest_kind"):
+        raise SystemExit("game config must set ingest_kind")
+    from ingest_kind import resolve_ingest_kind  # noqa: E402
+    from preservation_common import material_root_for_kind  # noqa: E402
+
+    ingest_kind_early = resolve_ingest_kind(raw)
+    material_root = material_root_for_kind(ingest_kind_early, paths)
     if raw.get("source_subpath") and not raw.get("source_game_folder"):
         sub = str(raw["source_subpath"]).strip().strip("/")
-        raw["source_game_folder"] = str(press_root / sub)
+        raw["source_game_folder"] = str(material_root / sub)
     source = Path(raw["source_game_folder"]).resolve()
     if not source.is_dir():
         raise SystemExit(f"Source not found: {source}")
@@ -257,7 +281,7 @@ def main() -> None:
         identity = resolve_package_identity(
             conn,
             source=source,
-            press_material_root=press_root,
+            material_root=material_root,
             omeka_item_title=title,
         )
     raw["game_key"] = identity.package_id

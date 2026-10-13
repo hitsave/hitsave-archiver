@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ingest one game folder: ClamAV → BagIt → Wasabi → ledger."""
+"""Ingest one SIP folder: ClamAV → BagIt → Wasabi → ledger."""
 from __future__ import annotations
 
 import json
@@ -19,8 +19,13 @@ SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 from package_ledger import resolve_package_identity  # noqa: E402
 from dump_classify import classify_dump_sip  # noqa: E402
-from ingest_kind import moby_enrich_enabled, resolve_ingest_kind, storage_profile_for_kind  # noqa: E402
-from preservation_common import resolve_game_config  # noqa: E402
+from ingest_kind import moby_enrich_enabled, resolve_ingest_kind  # noqa: E402
+from preservation_common import (  # noqa: E402
+    material_root_for_kind,
+    resolve_game_config,
+    wasabi_package_storage_prefix,
+)
+from premis_virus_check import VirusScanReport, attach_virus_check_premis, scan_sip_tree  # noqa: E402
 from source_content_policy import (  # noqa: E402
     ContentPolicyError,
     check_source_content_policy,
@@ -56,19 +61,6 @@ def wait_for_clamd(host: str, port: int, timeout: int) -> pyclamd.ClamdNetworkSo
             last_error = e
             time.sleep(3)
     raise RuntimeError(f"ClamAV not ready at {host}:{port}: {last_error}")
-
-
-def scan_tree(clamd: pyclamd.ClamdNetworkSocket, root: Path) -> None:
-    # SCAN uses paths visible to the clamd container (same /data/press-material mount).
-    for path in sorted(root.rglob("*")):
-        if not path.is_file() or path.name.startswith("."):
-            continue
-        result = clamd.scan_file(str(path))
-        if result is None:
-            continue
-        for _scan, status in result.items():
-            if status[0] == "FOUND":
-                raise RuntimeError(f"Virus detected in {path}: {status[1]}")
 
 
 def ensure_dirs(*paths: Path) -> None:
@@ -198,6 +190,7 @@ def run_bagit_ingest(
     ingest_cfg: dict,
     source: Path,
     game_key: str,
+    virus_scan: VirusScanReport | None = None,
 ) -> tuple[Path, dict | None, dict | None, str | None, str | None]:
     bag_dir = Path(game_cfg["bagit_bag_dir"]).resolve()
 
@@ -206,6 +199,22 @@ def run_bagit_ingest(
         [sys.executable, str(SCRIPTS / "build-bagit-package.py"), str(game_cfg_path)],
         check=True,
     )
+
+    if virus_scan is not None:
+        from preservation_common import load_packaging_config  # noqa: E402
+
+        pkg = load_packaging_config()
+        bag_cfg = pkg.get("bagit") or {}
+        meta_dir = str(bag_cfg.get("metadata_dir") or "metadata")
+        premis_rel = str(bag_cfg.get("premis_virus_check_relpath") or "premis/virus-check-event.xml")
+        premis_path = attach_virus_check_premis(
+            bag_dir,
+            virus_scan,
+            metadata_dir=meta_dir,
+            premis_relpath=premis_rel,
+            linking_agent="ingest-folder.py",
+        )
+        print(f"  PREMIS virus check: {premis_path.relative_to(bag_dir)}")
 
     submission, inventory, checksum_path = read_bagit_metadata(bag_dir)
     submission_source_id = None
@@ -217,7 +226,7 @@ def run_bagit_ingest(
     wasabi_cfg = ingest_cfg.get("wasabi") or {}
     kind = str(game_cfg.get("ingest_kind") or "")
     if wasabi_cfg.get("enabled", False):
-        if storage_profile_for_kind(kind) == "bagit_unpacked":
+        if kind == "dump":
             dump_clf = classify_dump_sip(source, package_id=game_key)
             upsert_ledger(
                 conn,
@@ -289,10 +298,13 @@ def main() -> None:
         output_root / paths["quarantine_subdir"],
     )
 
-    press_root = Path(paths["press_material_root"])
+    if not raw_game_cfg.get("ingest_kind"):
+        raise SystemExit("game config must set ingest_kind")
+    kind = resolve_ingest_kind(raw_game_cfg)
+    material_root = material_root_for_kind(kind, paths)
     if raw_game_cfg.get("source_subpath") and not raw_game_cfg.get("source_game_folder"):
         sub = str(raw_game_cfg["source_subpath"]).strip().strip("/")
-        raw_game_cfg["source_game_folder"] = str(press_root / sub)
+        raw_game_cfg["source_game_folder"] = str(material_root / sub)
     source = Path(raw_game_cfg["source_game_folder"]).resolve()
 
     conn = pg_connect(db_cfg)
@@ -302,13 +314,12 @@ def main() -> None:
         identity = resolve_package_identity(
             conn,
             source=source,
-            press_material_root=press_root,
+            material_root=material_root,
             omeka_item_title=catalog_title,
         )
         game_key = identity.package_id
         package_uuid = identity.package_uuid
         raw_game_cfg["game_key"] = game_key
-        kind = resolve_ingest_kind(raw_game_cfg)
         dump_kwargs: dict = {}
         if kind == "dump":
             dump_clf = classify_dump_sip(source, package_id=identity.package_id)
@@ -318,6 +329,16 @@ def main() -> None:
                 "dump_class": dump_clf.dump_class,
                 "dump_system": dump_clf.dump_system,
                 "dump_category": dump_clf.dump_category,
+            }
+        else:
+            dump_kwargs = {
+                "storage_layout": "bagit_unpacked",
+                "package_storage_prefix": wasabi_package_storage_prefix(
+                    kind,
+                    package_id=identity.package_id,
+                    sort_letter=identity.sort_letter,
+                    relative_sip_path=identity.relative_sip_path,
+                ),
             }
         upsert_ledger(
             conn,
@@ -338,7 +359,7 @@ def main() -> None:
         conn.close()
         raise
 
-    game_cfg = resolve_game_config(raw_game_cfg, agent_version="ingest-game-folder.py")
+    game_cfg = resolve_game_config(raw_game_cfg, agent_version="ingest-folder.py")
     ingest_kind = game_cfg["ingest_kind"]
 
     clam = ingest_cfg["clamav"]
@@ -355,7 +376,7 @@ def main() -> None:
             status="scanning",
             ingest_kind=ingest_kind,
         )
-        scan_tree(clamd, source)
+        virus_scan = scan_sip_tree(clamd, source)
 
         bag_dir, _sub, inventory, checksum_manifest_path, submission_source_id, package_uuid = run_bagit_ingest(
             conn,
@@ -365,6 +386,7 @@ def main() -> None:
             ingest_cfg=ingest_cfg,
             source=source,
             game_key=game_key,
+            virus_scan=virus_scan,
         )
         file_count: int | None = None
         total_bytes: int | None = None

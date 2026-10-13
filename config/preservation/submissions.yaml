@@ -7,7 +7,7 @@ paths:
   workspace: workspace
   processed: processed
   failed: failed
-  # Per-submission game YAML for ingest-game-folder.py (on output volume, writable).
+  # Per-submission game YAML for ingest-folder.py (on output volume, writable).
   game_config_dir: /output/submissions/game-configs
 
 limits:

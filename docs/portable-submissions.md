@@ -111,7 +111,9 @@ After extract, every file under the source tree must match **`security.allowed_e
 ### Malware scanning (ClamAV)
 
 1. **`scan_file`** on the `.zip` before extract (with **`ScanArchive yes`** in [`config/clamav/clamd.conf`](../config/clamav/clamd.conf) so nested archive bytes inside the zip are inspected).
-2. **`scan_tree`** on every extracted file in [`ingest-game-folder.py`](../scripts/ingest-game-folder.py) before BagIt build.
+2. **`scan_sip_tree`** on every extracted file in [`ingest-folder.py`](../scripts/ingest-folder.py) before BagIt build.
+
+On success, ingest writes a **PREMIS 3** virus-check event at `metadata/premis/virus-check-event.xml` (linked to `package_id` / `package_uuid` in `submission.json`) and refreshes BagIt manifests before Wasabi upload. If ClamAV skips any file (daemon size limits), ingest **fails** — no “pass” PREMIS event (same rule as Archivematica).
 
 ClamAV size/recursion limits on the daemon (`MaxFileSize`, `MaxScanSize`, `MaxRecursion`, `MaxFiles`) align with large press videos and submission caps. ClamAV is signature-based; zero-days and non-malware abuse can still pass.
 

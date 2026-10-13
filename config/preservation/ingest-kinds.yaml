@@ -5,7 +5,7 @@ ingest_kinds:
     description: Community press kits under paths.press_material_root
     moby_enrich: true
     moby_omeka_profile: press_material
-    storage_profile: bagit_tar
+    storage_profile: bagit_unpacked
     wasabi_root: press-material
 
   dump:
@@ -38,5 +38,14 @@ ingest_kinds:
   other:
     description: Generic SIP with no automatic Moby or Redump catalog step
     moby_enrich: false
-    storage_profile: bagit_tar
-    wasabi_root: press-material
+    storage_profile: bagit_unpacked
+    wasabi_root: other
+
+  analog:
+    description: Digitized analog material (scans, photos, tape transfers, etc.)
+    moby_enrich: false
+    moby_omeka_profile: none
+    storage_profile: bagit_unpacked
+    wasabi_root: analog
+    # Folder tree under material root, e.g. VHS/USA/promotional/Nintendo/The Invasion of Nintendo
+    wasabi_key_pattern: "{prefix}/{relative_sip_path}"
