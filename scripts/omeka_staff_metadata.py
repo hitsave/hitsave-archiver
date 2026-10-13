@@ -189,9 +189,9 @@ def require_omeka_mariadb_config(catalog_cfg: dict) -> dict:
 
 
 def apply_staff_aip_uri_after_register(aip_cfg: dict) -> bool:
-    return bool(
-        aip_cfg.get("apply_uri_after_register", aip_cfg.get("apply_uri_after_upload", False))
-    )
+    from config_require import require_bool
+
+    return require_bool(aip_cfg, "apply_uri_after_register", where="omeka-catalog.yaml aip_wasabi")
 
 
 def ledger_aip_wasabi_prefix(db_cfg: dict, game_key: str) -> str | None:

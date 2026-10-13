@@ -8,12 +8,11 @@ Preservation behavior reads committed YAML under `config/`. Operator copies (`ga
 |-------|------|-------------------|
 | Container paths, ingest defaults, agent metadata | [`config/preservation/ingest.yaml`](../config/preservation/ingest.yaml) | `paths.*`, `defaults.max_files`, `content_policy.*` (booru blockers, `enforce`), ClamAV host/port |
 | Ingest kind → catalog routing | [`config/preservation/ingest-kinds.yaml`](../config/preservation/ingest-kinds.yaml) | `press_material`, `dump`, `other`; Wasabi unpacked prefixes — see [`dump-preservation.md`](./dump-preservation.md) |
-| MobyGames API | [`config/mobygames.yaml`](../config/mobygames.yaml) | API credentials path, ad blurb fetch; optional `block_on_failure` (default false) |
 | BagIt packaging | [`config/preservation/packaging.yaml`](../config/preservation/packaging.yaml) | BagIt dirs, Wasabi unpacked key pattern, validation |
 | Portable zip limits, allowlists | [`config/preservation/submissions.yaml`](../config/preservation/submissions.yaml) | `limits.*`, `security.*`, submission-only `preservation.video_access` |
 | Omeka catalog registration target | [`config/omeka-catalog.yaml`](../config/omeka-catalog.yaml) | API base URL, site slug, `external_dip`, `aip_wasabi` staff URI (`is_public: false`) |
-| Operator host bind paths (shell scripts) | [`config/preservation/host-paths.yaml`](../config/preservation/host-paths.yaml) | `host_paths.*_host` — see `.example`; Docker mounts still use `host.env` `HOST_*` |
-| MobyGames API + public URLs | [`config/mobygames.yaml`](../config/mobygames.yaml) | `api_base`, `public_game_url_template`, `attribution_suffix` |
+| Service host paths (shell helpers) | [`config/preservation/host-paths.yaml`](../config/preservation/host-paths.yaml) | `submissions_root`, `output_root` — collection paths stay in `ingest.yaml` / `host.env` `HOST_*` |
+| MobyGames API + public URLs | [`config/mobygames.yaml`](../config/mobygames.yaml) | `api_base`, `public_game_url_template`, ad blurb fetch, `block_on_failure` |
 | ClamAV scan caps (aligned with submissions) | [`config/clamav/clamd.conf`](../config/clamav/clamd.conf) | Must stay in sync with `submissions.yaml` `limits.max_member_bytes` / `max_archive_members` — see [`config/clamav/README.md`](../config/clamav/README.md) |
 | Private credentials | **hitsave-archiver-config** (from `config/secrets/*.example`) | Wasabi, Omeka API, Moby, ledger DB |
 | Test Omeka admin URL / site slug | **hitsave-omeka-test** `config/omeka-test/settings.yaml` | Must match `omeka-catalog.yaml` `site_slug` and API base when uploading to test |

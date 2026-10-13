@@ -1,5 +1,4 @@
-# Dev defaults — operators override via gitignored copy or private config tree.
+# Host bind paths for shell helpers (collection paths live in ingest.yaml / host.env HOST_*).
 host_paths:
-  press_material_host: ./data/press-material
-  submissions_incoming_host: ./data/submissions/incoming
-  output_root_host: ./data/output
+  submissions_root: ./data/submissions
+  output_root: ./data/output

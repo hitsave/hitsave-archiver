@@ -5,9 +5,9 @@ cd "$ROOT"
 
 python3 scripts/sync-preservation-config.py
 
-OUTPUT_HOST="$(python3 "$ROOT/scripts/read-host-path-config.py" output_root_host)"
+OUTPUT_HOST="$(python3 "$ROOT/scripts/read-host-path-config.py" output_root)"
 if [[ ! -d "$OUTPUT_HOST" ]]; then
-  echo "Create output root first (configure host_paths.output_root_host in config/preservation/host-paths.yaml):" >&2
+  echo "Create output root first (configure host_paths.output_root in config/preservation/host-paths.yaml):" >&2
   echo "  mkdir -p \"$OUTPUT_HOST\"/{dip,aip,processed,quarantine}" >&2
   exit 1
 fi

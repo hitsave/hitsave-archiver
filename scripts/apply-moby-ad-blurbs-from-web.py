@@ -29,8 +29,8 @@ from moby_resolve import (  # noqa: E402
 )
 
 
-def load_yaml(path: Path) -> dict:
-    return yaml.safe_load(path.read_text())
+from config_require import require_key  # noqa: E402
+from yaml_config import load_yaml  # noqa: E402
 
 
 def pg_connect(db_cfg: dict):
@@ -58,7 +58,7 @@ def cookie_jar(moby_cfg: dict) -> Path | None:
 def main() -> None:
     dry_run = "--dry-run" in sys.argv
     moby_cfg = load_mobygames_config(CONFIG_ROOT)
-    min_chars = int(moby_cfg.get("ad_blurb_min_chars", 80))
+    min_chars = int(require_key(moby_cfg, "ad_blurb_min_chars", where="mobygames.yaml"))
     jar = cookie_jar(moby_cfg)
 
     ingest_cfg = load_yaml(CONFIG_ROOT / "preservation/ingest.yaml")

@@ -22,6 +22,8 @@ COPY scripts/batch-expand-preservation.py \
     scripts/purge-wasabi-prefix.py \
     scripts/export-preservation-catalog.py \
     scripts/config_require.py \
+    scripts/yaml_config.py \
+    scripts/omeka_catalog_common.py \
     scripts/host_paths.py \
     scripts/read-host-path-config.py \
     scripts/submission_sources.py \

@@ -18,23 +18,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_ROOT = Path(__import__("os").environ.get("HITSAVE_CONFIG_ROOT", str(REPO_ROOT / "config")))
 
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
-import importlib.util  # noqa: E402
 
 from ingest_kind import resolve_omeka_moby_profile  # noqa: E402
+from moby_resolve import load_mobygames_config, uses_moby_catalog_data  # noqa: E402
+from omeka_catalog_common import load_register_dip_omeka_api  # noqa: E402
+from yaml_config import load_yaml  # noqa: E402
 
 # Ledger rows ingested before ingest_kind column was populated (Omeka routing only).
 _LEGACY_OMEKA_INGEST_KIND = "press_material"
-from moby_resolve import uses_moby_catalog_data  # noqa: E402
-
-
-def _register_dip_api_module():
-    path = REPO_ROOT / "scripts" / "register-dip-omeka-api.py"
-    spec = importlib.util.spec_from_file_location("register_dip_omeka_api", path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Cannot load {path}")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
 
 
 def main() -> None:
@@ -43,8 +34,7 @@ def main() -> None:
     if not apply_all and not keys:
         raise SystemExit("Usage: apply-moby-metadata-omeka.py [--all] [game_key ...]")
 
-    register_api = _register_dip_api_module()
-    load_yaml = register_api.load_yaml
+    register_api = load_register_dip_omeka_api()
     pg_connect = register_api.pg_connect
     apply_moby_metadata_to_item = register_api.apply_moby_metadata_to_item
 
@@ -54,7 +44,7 @@ def main() -> None:
         cred_rel = Path(*cred_rel.parts[1:])
     creds_path = CONFIG_ROOT / cred_rel
     creds = load_yaml(creds_path)
-    moby_cfg = load_yaml(CONFIG_ROOT / "mobygames.yaml").get("mobygames") or {}
+    moby_cfg = load_mobygames_config(CONFIG_ROOT)
 
     ingest_cfg = load_yaml(CONFIG_ROOT / "preservation/ingest.yaml")
     db_cfg = load_yaml(Path(ingest_cfg["database"]["config_file"]))["postgres"]

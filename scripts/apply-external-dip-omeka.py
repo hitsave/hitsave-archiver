@@ -36,20 +36,8 @@ from package_ledger import ledger_bagit_wasabi_paths  # noqa: E402
 CONFIG_ROOT = Path(__import__("os").environ.get("HITSAVE_CONFIG_ROOT", str(REPO_ROOT / "config")))
 
 
-def load_yaml(path: Path) -> dict:
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-
-
-def _register_dip_api_module():
-    import importlib.util
-
-    path = SCRIPTS / "register-dip-omeka-api.py"
-    spec = importlib.util.spec_from_file_location("register_dip_omeka_api", path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Cannot load {path}")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+from omeka_catalog_common import load_register_dip_omeka_api  # noqa: E402
+from yaml_config import load_yaml  # noqa: E402
 
 
 def patch_media_external_dip(
@@ -208,7 +196,7 @@ def main() -> None:
     creds = load_yaml(cred_path)
     base = api_cfg["base_url"].rstrip("/")
 
-    api = _register_dip_api_module()
+    api = load_register_dip_omeka_api()
     session = requests.Session()
 
     metadata_json: dict | None = None

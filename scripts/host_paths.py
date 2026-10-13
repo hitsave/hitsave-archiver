@@ -21,10 +21,14 @@ def host_paths_yaml_path() -> Path:
 
 
 def load_host_paths_config() -> dict:
+    from config_require import require_str
+
     data = yaml.safe_load(host_paths_yaml_path().read_text(encoding="utf-8")) or {}
     paths = data.get("host_paths")
     if not isinstance(paths, dict):
         raise ValueError("host-paths.yaml must define host_paths:")
+    for key in ("submissions_root", "output_root"):
+        require_str(paths, key, where="host_paths")
     return paths
 
 

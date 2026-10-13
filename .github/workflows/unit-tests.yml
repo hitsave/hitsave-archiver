@@ -1,0 +1,42 @@
+name: unit-tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/**"
+      - "tests/**"
+      - "config/**"
+      - "fixtures/**"
+      - "ingest-worker/**"
+      - "docker-compose.yml"
+      - "docker-compose.ci.yml"
+      - ".github/workflows/unit-tests.yml"
+  pull_request:
+    paths:
+      - "scripts/**"
+      - "tests/**"
+      - "config/**"
+      - "fixtures/**"
+      - "ingest-worker/**"
+      - "docker-compose.yml"
+      - "docker-compose.ci.yml"
+      - ".github/workflows/unit-tests.yml"
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run unit tests in ingest-worker image
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml build ingest-worker
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml run --rm --no-deps \
+            --entrypoint "" \
+            -v "$PWD:/repo:ro" \
+            -w /repo \
+            -e PYTHONPATH=/repo/scripts \
+            ingest-worker \
+            sh -c "pip install -q pytest && pytest tests -q"

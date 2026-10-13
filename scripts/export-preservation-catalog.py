@@ -23,8 +23,7 @@ from submission_sources import load_submission_sources_config  # noqa: E402
 CATALOG_VERSION = 1
 
 
-def load_yaml(path: Path) -> dict:
-    return yaml.safe_load(path.read_text()) or {}
+from yaml_config import load_yaml  # noqa: E402
 
 
 def pg_connect(db_cfg: dict):

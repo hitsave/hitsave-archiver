@@ -22,8 +22,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from normalize_display_title import TITLE_SUFFIX_SEP, normalize_display_title  # noqa: E402
 
 
-def load_yaml(path: Path) -> dict:
-    return yaml.safe_load(path.read_text())
+from yaml_config import load_yaml  # noqa: E402
 
 
 def api_url(base: str, path: str, creds: dict) -> str:

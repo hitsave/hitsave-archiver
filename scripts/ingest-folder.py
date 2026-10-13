@@ -33,8 +33,7 @@ from source_content_policy import (  # noqa: E402
 )
 
 
-def load_yaml(path: Path) -> dict:
-    return yaml.safe_load(path.read_text())
+from yaml_config import load_yaml  # noqa: E402
 
 
 def pg_connect(db_cfg: dict):

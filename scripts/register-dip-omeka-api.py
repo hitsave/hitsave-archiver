@@ -22,7 +22,12 @@ CONFIG_ROOT = Path(os.environ.get("HITSAVE_CONFIG_ROOT", str(REPO_ROOT / "config
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from ingest_kind import resolve_ingest_kind, resolve_omeka_moby_profile  # noqa: E402
 from moby_omeka_fields import append_moby_fields_to_payload  # noqa: E402
-from moby_resolve import moby_description_for_omeka, uses_moby_catalog_data  # noqa: E402
+from moby_resolve import (  # noqa: E402
+    load_mobygames_config,
+    moby_description_for_omeka,
+    uses_moby_catalog_data,
+)
+from yaml_config import load_yaml  # noqa: E402
 from press_material_description import press_material_description  # noqa: E402
 from normalize_display_title import catalog_item_title  # noqa: E402
 from omeka_dip_media import find_dip_media_id_on_item  # noqa: E402
@@ -42,10 +47,6 @@ from dip_mount_preflight import (  # noqa: E402
     DipNotAvailableError,
     assert_bagit_external_dip_available,
 )
-
-
-def load_yaml(path: Path) -> dict:
-    return yaml.safe_load(path.read_text())
 
 
 def _external_dip_helpers():
@@ -444,7 +445,7 @@ def main() -> None:
                 "(package_storage_prefix empty); run ingest first"
             )
 
-        moby_cfg = load_yaml(CONFIG_ROOT / "mobygames.yaml").get("mobygames") or {}
+        moby_cfg = load_mobygames_config(CONFIG_ROOT)
         existing_item_id = int(row[0]) if row and row[0] else None
         dip_media_id = None
         if existing_item_id:
@@ -513,7 +514,7 @@ def main() -> None:
     finally:
         conn.close()
 
-    moby_cfg = load_yaml(CONFIG_ROOT / "mobygames.yaml").get("mobygames") or {}
+    moby_cfg = load_mobygames_config(CONFIG_ROOT)
     extra: dict[str, list] = {}
     desc_pid = resolve_property_id(session, base, creds, "dcterms:description")
     if (

@@ -2,7 +2,6 @@
 """Create or update an Omeka catalog item for ingest kind dump (Redump + Moby metadata)."""
 from __future__ import annotations
 
-import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -31,24 +30,12 @@ from moby_omeka_fields import (  # noqa: E402
     apply_moby_metadata_to_item,
     uses_moby_catalog_data,
 )
-from moby_resolve import moby_description_for_omeka  # noqa: E402
+from moby_resolve import load_mobygames_config, moby_description_for_omeka  # noqa: E402
+from omeka_catalog_common import ensure_item_set, load_register_dip_omeka_api  # noqa: E402
 from preservation_common import load_ingest_config, resolve_game_config  # noqa: E402
+from yaml_config import load_yaml  # noqa: E402
 
 CONFIG_ROOT = Path(__import__("os").environ.get("HITSAVE_CONFIG_ROOT", str(REPO_ROOT / "config")))
-
-
-def _register_dip_api_module():
-    path = SCRIPTS / "register-dip-omeka-api.py"
-    spec = importlib.util.spec_from_file_location("register_dip_omeka_api", path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Cannot load {path}")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def load_yaml(path: Path) -> dict:
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
 
 def pg_connect(db_cfg: dict):
@@ -81,18 +68,6 @@ def update_ledger_omeka(game_key: str, item_id: int) -> None:
         conn.commit()
 
 
-def ensure_item_set(session, base, creds, title: str, *, is_public: bool, api) -> int:
-    try:
-        item_set_id = api.resolve_item_set_id(session, base, creds, title)
-    except RuntimeError:
-        url = api.api_url(base, "item_sets", creds)
-        resp = session.post(url, json={"o:title": title, "o:is_public": is_public}, timeout=120)
-        if not resp.ok:
-            raise RuntimeError(f"Create item set failed ({resp.status_code}): {resp.text[:800]}")
-        item_set_id = int(resp.json()["o:id"])
-    return item_set_id
-
-
 def apply_dump_catalog(
     *,
     game_key: str,
@@ -100,7 +75,7 @@ def apply_dump_catalog(
     handoff_path: Path | None = None,
     patch_item_id: int | None = None,
 ) -> dict[str, Any]:
-    api = _register_dip_api_module()
+    api = load_register_dip_omeka_api()
     game_cfg = resolve_game_config(load_yaml(game_cfg_path), agent_version="apply-dump-catalog-omeka.py")
     if resolve_ingest_kind(game_cfg) != "dump":
         raise RuntimeError(f"ingest_kind must be dump for {game_cfg_path}")
@@ -163,7 +138,7 @@ def apply_dump_catalog(
 
     session = requests.Session()
     site_id = api.resolve_site_id(session, base, creds, site_slug)
-    moby_cfg = load_yaml(CONFIG_ROOT / "mobygames.yaml").get("mobygames") or {}
+    moby_cfg = load_mobygames_config(CONFIG_ROOT)
 
     existing_body = None
     if existing_item_id:
