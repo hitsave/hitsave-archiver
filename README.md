@@ -71,7 +71,7 @@ Set `HITSAVE_PRIVATE_CONFIG` and the `HOST_*` variables in a host env file (not 
 - Before pushing changes, scan for accidental secrets:
 
 ```bash
-git grep -iE 'secret_access|AKIA[0-9A-Z]{16}|BEGIN (RSA|OPENSSH)' -- ':!*.example' ':!docs/' ':!.ci/private-config/'
+git grep -iE 'secret_access|AKIA[0-9A-Z]{16}|BEGIN (RSA|OPENSSH)' -- ':!*.example' ':!docs/'
 ```
 
 ## License

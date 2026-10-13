@@ -21,7 +21,7 @@ Gitignored on the public archiver clone (operator batch configs):
 
 Omeka test stack operator files live in **hitsave-omeka-test** (see that repo’s `.gitignore`).
 
-CI uses committed placeholders under `.ci/private-config/` (no live keys).
+CI materializes `.ci/private-config/` from `config/**/*.example` via `scripts/bootstrap-private-config-from-examples.sh --force` (gitignored; never live keys).
 
 ## Bootstrap
 
@@ -33,7 +33,7 @@ CI uses committed placeholders under `.ci/private-config/` (no live keys).
 
 ```bash
 git grep -iE 'key_credential|secret_access|password.*[0-9]{6}|BEGIN (RSA|OPENSSH)|AKIA[0-9A-Z]{16}' \
-  -- ':!*.example' ':!docs/' ':!.ci/private-config/'
+  -- ':!*.example' ':!docs/'
 ```
 
 Rotate credentials if they ever appeared in public git history.
