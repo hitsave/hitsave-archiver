@@ -17,7 +17,7 @@ fi
   echo '"""Parse Redump submissionInfo.txt — synced from hitsave-archiver/scripts/dump_redump.py."""'
   echo "# Run: hitsave-archiver/scripts/sync-redump-parser-to-gdrive.sh"
   echo
-  tail -n +2 "$SRC" | sed '1d'
+  tail -n +3 "$SRC"
 } > "$TARGET"
 chmod +x "$TARGET" 2>/dev/null || true
 echo "Synced $SRC → $TARGET"
