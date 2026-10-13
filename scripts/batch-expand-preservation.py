@@ -59,15 +59,6 @@ def resolve_source_parent(batch: dict, cfg_root: Path) -> Path:
         if not sub:
             raise SystemExit("source_subpath must not be empty")
         return press_root / sub
-    if batch.get("source_parent"):
-        legacy = Path(batch["source_parent"])
-        try:
-            legacy.relative_to(press_root)
-        except ValueError as exc:
-            raise SystemExit(
-                f"source_parent must be under press_material_root ({press_root}); use source_subpath instead."
-            ) from exc
-        return legacy
     raise SystemExit(
         "batch.yml needs source_subpath (relative to paths.press_material_root in ingest.yaml)"
     )

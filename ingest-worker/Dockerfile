@@ -18,7 +18,8 @@ COPY scripts/batch-expand-preservation.py \
     scripts/build-bagit-package.py \
     scripts/dip_package_previews.py \
     scripts/reset-batch-manifest-ledger.py \
-    scripts/upload-press-bag-wasabi.py \
+    scripts/upload-bag-wasabi.py \
+    scripts/upload_bag_wasabi.py \
     scripts/purge-wasabi-prefix.py \
     scripts/export-preservation-catalog.py \
     scripts/config_require.py \
@@ -32,7 +33,6 @@ COPY scripts/batch-expand-preservation.py \
     scripts/dump_redump.py \
     scripts/dump_classify.py \
     scripts/dump_catalog_omeka.py \
-    scripts/upload-dump-wasabi.py \
     scripts/apply_dump_catalog_omeka.py \
     scripts/batch_ledger.py \
     scripts/package_identity.py \
@@ -57,13 +57,13 @@ COPY scripts/batch-expand-preservation.py \
     scripts/moby_web_search.py \
     scripts/apply-moby-ad-blurbs-from-web.py \
     scripts/moby_enrich_game.py \
+    scripts/omeka_backfill_helpers.py \
     scripts/backfill-ledger-omeka-ids.py \
     scripts/dedupe-omeka-test-items.py \
     scripts/reset-batch-ledger.py \
     scripts/submission_common.py \
     scripts/ingest-submission.py \
     scripts/redump_info_lookup.py \
-    scripts/apply-redump-catalog-omeka.py \
     scripts/apply-external-dip-omeka.py \
     /app/scripts/
 

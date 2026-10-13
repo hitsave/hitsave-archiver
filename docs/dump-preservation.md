@@ -69,9 +69,7 @@ Ledger: `dump_class = other`, `dump_system` / `dump_category` null.
 
 1. **`ingest-folder.py`** — after ClamAV, **`dump_classify.classify_dump_sip()`** on the SIP folder; ledger columns `dump_class`, `dump_system`, `dump_category`, `package_storage_prefix`, `storage_layout = bagit_unpacked`.
 2. **`build-bagit-package.py`** — writes `wasabi_key` / staff URI into `metadata/submission.json` from the same classification.
-3. **`upload-dump-wasabi.py`** — syncs the unpacked bag tree to the computed prefix.
-
-Press ingest uses the same unpacked layout via **`upload-press-bag-wasabi.py`**.
+3. **`upload-bag-wasabi.py`** — syncs the unpacked bag tree (all ingest kinds; bucket/prefix from ledger + `ingest-kinds.yaml`).
 
 ## Catalog enrichment
 
@@ -90,7 +88,7 @@ Migration **`schema/009_backfill_ingest_kind_dump.sql`**: `game_dump` / `disc_du
 
 - **`apply_dump_catalog_omeka.py`** — one CLI for metadata-only dump catalog items (unpacked BagIt on Wasabi, not Omeka file storage):
   - Ledger: `apply-dump-catalog-omeka.py <game.yaml> [handoff.yaml] [--item-id ID]` — Redump RDF from SIP + SHA-1 lookup, Moby from ledger, staff **`bibo:uri`** = ledger `aip_wasabi_prefix`.
-  - Handoff YAML only: `apply-dump-catalog-omeka.py --manifest <handoff.yaml> [--item-id ID]` (via **`apply_handoff_dump_catalog()`**). **`apply-redump-catalog-omeka.py`** is an alias for **`--manifest`**.
+  - Handoff YAML only: `apply-dump-catalog-omeka.py --manifest <handoff.yaml> [--item-id ID]` (via **`apply_handoff_dump_catalog()`**).
 - **`register-dip-omeka-api.py`** delegates to **`apply_dump_catalog()`** when **`ingest_kind: dump`**.
 - Redump sidecar parser SSOT: **`scripts/dump_redump.py`** (sync to gdrive via **`scripts/sync-redump-parser-to-gdrive.sh`**).
 

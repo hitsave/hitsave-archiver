@@ -238,17 +238,6 @@ def run_bagit_ingest(
                 dump_system=dump_clf.dump_system,
                 dump_category=dump_clf.dump_category,
             )
-            subprocess.run(
-                [
-                    sys.executable,
-                    str(SCRIPTS / "upload-dump-wasabi.py"),
-                    str(bag_dir),
-                    game_key,
-                    dump_clf.package_storage_prefix,
-                    str(ingest_cfg_path),
-                ],
-                check=True,
-            )
         else:
             upsert_ledger(
                 conn,
@@ -257,16 +246,16 @@ def run_bagit_ingest(
                 status="uploading_package",
                 storage_layout="bagit_unpacked",
             )
-            subprocess.run(
-                [
-                    sys.executable,
-                    str(SCRIPTS / "upload-press-bag-wasabi.py"),
-                    str(bag_dir),
-                    game_key,
-                    str(ingest_cfg_path),
-                ],
-                check=True,
-            )
+        subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPTS / "upload-bag-wasabi.py"),
+                str(bag_dir),
+                game_key,
+                str(ingest_cfg_path),
+            ],
+            check=True,
+        )
     else:
         print("Wasabi package upload skipped (wasabi.enabled is false or section missing)")
 
