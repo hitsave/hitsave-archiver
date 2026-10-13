@@ -71,7 +71,8 @@ def fetch_complete_games(conn) -> list[dict]:
                 created_at,
                 updated_at,
                 aip_uploaded_at,
-                aip_wasabi_prefix
+                aip_wasabi_prefix,
+                package_storage_prefix
             FROM game_ingest
             WHERE status = 'complete'
             ORDER BY game_key
@@ -81,18 +82,22 @@ def fetch_complete_games(conn) -> list[dict]:
 
 
 def wasabi_from_row(row: dict) -> tuple[str | None, str | None]:
-    key = row.get("package_tar_key")
-    if key:
-        ingest = load_ingest_config()
-        bucket = str((ingest.get("wasabi") or {}).get("bucket") or "")
-        return bucket or None, str(key)
-    prefix = row.get("aip_wasabi_prefix")
-    if prefix and str(prefix).startswith("s3://"):
-        rest = str(prefix)[5:]
-        if "/" in rest:
-            bucket, key = rest.split("/", 1)
-            return bucket, key
-    return None, key
+    ingest = load_ingest_config()
+    bucket = str((ingest.get("wasabi") or {}).get("bucket") or "") or None
+    for field in ("package_storage_prefix", "aip_wasabi_prefix"):
+        raw = row.get(field)
+        if not raw:
+            continue
+        text = str(raw).strip().strip("/")
+        if text.startswith("s3://"):
+            rest = text[5:]
+            if "/" in rest:
+                b, key = rest.split("/", 1)
+                return b, key.strip("/")
+            continue
+        if bucket and text:
+            return bucket, text
+    return bucket, None
 
 
 def build_catalog(rows: list[dict], *, repository_code: str) -> dict:

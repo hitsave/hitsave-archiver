@@ -201,7 +201,7 @@ def ledger_preservation_package_s3_uri(db_cfg: dict, game_key: str, bucket: str)
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT package_storage_prefix, aip_wasabi_prefix, package_tar_key
+                SELECT package_storage_prefix, aip_wasabi_prefix
                 FROM game_ingest WHERE game_key = %s
                 """,
                 (game_key,),
@@ -211,17 +211,12 @@ def ledger_preservation_package_s3_uri(db_cfg: dict, game_key: str, bucket: str)
         conn.close()
     if not row:
         return None
-    storage_prefix, aip_prefix, tar_key = row[0], row[1], row[2]
+    storage_prefix, aip_prefix = row[0], row[1]
     if storage_prefix:
         raw = str(storage_prefix).strip()
         if raw.startswith("s3://"):
             return raw.rstrip("/") + "/"
         return aip_s3_uri(bucket=bucket, storage_prefix=raw)
-    if tar_key:
-        legacy = str(tar_key).lstrip("/")
-        if legacy.lower().endswith(".tar"):
-            legacy = legacy[:-4]
-        return aip_s3_uri(bucket=bucket, storage_prefix=legacy)
     if aip_prefix:
         prefix = aip_prefix
         raw = str(prefix).strip()

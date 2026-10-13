@@ -83,9 +83,6 @@ class PackageIdentity:
     submission_source_id: str
     omeka_item_title: str
 
-    def wasabi_object_basename(self) -> str:
-        return f"{self.package_id}.tar"
-
     def external_identifier(self) -> str:
         return f"hitsave:package:{self.package_uuid}"
 
