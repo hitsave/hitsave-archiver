@@ -7,7 +7,7 @@
 | [**hitsave-archiver**](https://github.com/hitsave/hitsave-archiver) | Public (Apache-2.0) | Ingest worker, BagIt scripts, Compose stack, schema, CI fixtures |
 | [**hitsave-archiver-config**](https://github.com/hitsave/hitsave-archiver-config) | **Private** | Wasabi, Omeka API, MobyGames credentials; `preservation/database.yaml` |
 | [**hitsave-omeka-test**](https://github.com/hitsave/hitsave-omeka-test) | Public (Apache-2.0) | Local Omeka S stack, theme/DIP QA, prod mirror scripts |
-| [**hitsave-archive-theme**](https://github.com/hitsave/hitsave-archive-theme) | Public | Foundation overlay theme build |
+| [**hitsave-archive-theme**](https://github.com/hitsave/hitsave-archive-theme) | Public (GPL-3.0-or-later) | Foundation overlay theme build |
 | [**omeka-dip-viewer**](https://github.com/hitsave/omeka-dip-viewer) | Public (Apache-2.0) | Omeka S module `OmekaDipViewer` — BagIt browse on Wasabi S3 (`omeka_dip_package`) |
 
 ## Never commit to the public archiver
