@@ -28,8 +28,7 @@ load_wasabi_settings = _mod.load_wasabi_settings
 from preservation_common import wasabi_bucket_for_storage_prefix, wasabi_s3_region  # noqa: E402
 
 
-def load_yaml(path: Path) -> dict:
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+from yaml_config import load_yaml  # noqa: E402
 
 
 def purge_prefix(client, bucket: str, prefix: str) -> int:

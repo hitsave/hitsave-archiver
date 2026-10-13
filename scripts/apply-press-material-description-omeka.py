@@ -9,7 +9,6 @@ from pathlib import Path
 try:
     import psycopg
     import requests
-    import yaml
 except ImportError as e:
     print(e, file=sys.stderr)
     sys.exit(1)
@@ -18,18 +17,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_ROOT = Path(__import__("os").environ.get("HITSAVE_CONFIG_ROOT", str(REPO_ROOT / "config")))
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-import importlib.util  # noqa: E402
-
+from omeka_catalog_common import load_register_dip_omeka_api  # noqa: E402
 from press_material_description import press_material_description  # noqa: E402
-
-
-def _register_dip_api():
-    path = REPO_ROOT / "scripts" / "register-dip-omeka-api.py"
-    spec = importlib.util.spec_from_file_location("register_dip_omeka_api", path)
-    mod = importlib.util.module_from_spec(spec)
-    assert spec and spec.loader
-    spec.loader.exec_module(mod)
-    return mod
+from yaml_config import load_yaml  # noqa: E402
 
 
 def main() -> None:
@@ -37,19 +27,19 @@ def main() -> None:
     if not keys:
         raise SystemExit("Usage: apply-press-material-description-omeka.py <game_key> [...]")
 
-    register_api = _register_dip_api()
-    api_cfg = register_api.load_yaml(CONFIG_ROOT / "omeka-catalog.yaml")["api"]
+    register_api = load_register_dip_omeka_api()
+    api_cfg = load_yaml(CONFIG_ROOT / "omeka-catalog.yaml")["api"]
     cred_path = CONFIG_ROOT / "secrets" / "omeka-api-credentials-local.yaml"
     if not cred_path.is_file():
         cred_path = CONFIG_ROOT / api_cfg["credentials_file"]
-    creds = register_api.load_yaml(cred_path)
-    ingest_cfg = register_api.load_yaml(CONFIG_ROOT / "preservation/ingest.yaml")
-    db_cfg = register_api.load_yaml(Path(ingest_cfg["database"]["config_file"]))["postgres"]
+    creds = load_yaml(cred_path)
+    ingest_cfg = load_yaml(CONFIG_ROOT / "preservation/ingest.yaml")
+    db_cfg = load_yaml(Path(ingest_cfg["database"]["config_file"]))["postgres"]
 
     session = requests.Session()
     base = api_cfg["base_url"]
 
-    conn = upload.pg_connect(db_cfg)
+    conn = register_api.pg_connect(db_cfg)
     try:
         with conn.cursor() as cur:
             cur.execute(
@@ -69,15 +59,15 @@ def main() -> None:
             inventory_json = json.loads(inventory_json)
         if isinstance(metadata_json, str):
             metadata_json = json.loads(metadata_json)
-        title = upload.resolve_omeka_item_title(game_key, metadata_json)
+        title = register_api.resolve_omeka_item_title(game_key, metadata_json)
         desc = press_material_description(title, inventory_json)
-        pid = upload.resolve_property_id(session, base, creds, "dcterms:description")
-        upload.patch_item_rdf_values(
+        pid = register_api.resolve_property_id(session, base, creds, "dcterms:description")
+        register_api.patch_item_rdf_values(
             session,
             base,
             creds,
             int(item_id),
-            {"dcterms:description": [upload.literal_value(pid, desc)]},
+            {"dcterms:description": [register_api.literal_value(pid, desc)]},
         )
         print(json.dumps({"game_key": game_key, "omeka_item_id": item_id, "description": desc}))
 

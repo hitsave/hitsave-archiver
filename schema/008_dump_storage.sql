@@ -1,4 +1,4 @@
--- Dump ingest: unpacked Wasabi layout (system/category) vs press tar.
+-- Dump ingest: unpacked Wasabi layout (system/category); press uses unpacked BagIt too.
 ALTER TABLE game_ingest
     ADD COLUMN IF NOT EXISTS storage_layout TEXT,
     ADD COLUMN IF NOT EXISTS package_storage_prefix TEXT,

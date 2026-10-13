@@ -142,6 +142,23 @@ def load_mobygames_config(config_root: Path) -> dict:
     return require_dict(raw, "mobygames", where="mobygames.yaml")
 
 
+def moby_credentials_path(config_root: Path, moby_cfg: dict) -> Path:
+    from config_require import require_str
+
+    cred_rel = require_str(moby_cfg, "credentials_file", where="mobygames.yaml")
+    rel = Path(cred_rel)
+    if rel.is_absolute():
+        if not rel.is_file():
+            raise FileNotFoundError(f"Moby credentials not found: {rel}")
+        return rel
+    if rel.parts and rel.parts[0] == "config":
+        rel = Path(*rel.parts[1:])
+    for cand in (config_root / rel, config_root.parent / Path(cred_rel)):
+        if cand.is_file():
+            return cand
+    raise FileNotFoundError(f"Moby credentials not found (tried {config_root / rel})")
+
+
 def moby_public_game_url(moby_cfg: dict, game_id: int | str) -> str:
     from config_require import require_str
 
@@ -310,11 +327,14 @@ def fetch_official_ad_blurb(
     moby_url: str | None = None,
 ) -> tuple[str, str]:
     """Best-effort official ad blurb from documented Moby API fields, then optional HTML."""
-    moby_cfg = moby_cfg or {}
-    min_chars = int(moby_cfg.get("ad_blurb_min_chars", 80))
+    from config_require import require_bool, require_key
+
+    if not moby_cfg:
+        raise ValueError("moby_cfg is required")
+    min_chars = int(require_key(moby_cfg, "ad_blurb_min_chars", where="mobygames.yaml"))
     best = ""
     best_source = ""
-    if moby_cfg.get("fetch_ad_blurbs_api", True):
+    if require_bool(moby_cfg, "fetch_ad_blurbs_api", where="mobygames.yaml"):
         for platform_id in platform_ids:
             try:
                 plat_detail = client._get(f"games/{game_id}/platforms/{platform_id}")
@@ -335,7 +355,7 @@ def fetch_official_ad_blurb(
                     best, best_source = desc, source
     if (
         len(best) < min_chars
-        and moby_cfg.get("fetch_ad_blurbs_html", True)
+        and require_bool(moby_cfg, "fetch_ad_blurbs_html", where="mobygames.yaml")
         and moby_url
     ):
         from moby_page_scrape import fetch_ad_blurb_from_web
@@ -595,16 +615,13 @@ def resolve_for_game(
     moby_game_id: int | None = None,
     moby_search_title: str | None = None,
 ) -> MobyResult:
+    from config_require import require_bool
+
     moby_cfg = load_mobygames_config(config_root)
-    if not moby_cfg.get("enabled", True):
+    if not require_bool(moby_cfg, "enabled", where="mobygames.yaml"):
         return MobyResult("skipped", None, None, None, None, None)
 
-    cred_rel = Path(moby_cfg.get("credentials_file", "config/mobygames-credentials.yaml"))
-    if cred_rel.parts and cred_rel.parts[0] == "config":
-        cred_rel = Path(*cred_rel.parts[1:])
-    cred_path = config_root / cred_rel
-    if not cred_path.is_file():
-        cred_path = config_root.parent / moby_cfg.get("credentials_file", "")
+    cred_path = moby_credentials_path(config_root, moby_cfg)
 
     if moby_search_title:
         search = normalize_name_fragment(moby_search_title)
@@ -627,7 +644,7 @@ def resolve_for_game(
                 best = result
         if best is not None and best.status == "ambiguous":
             return best
-        if moby_cfg.get("web_search_fallback", True) and (
+        if require_bool(moby_cfg, "web_search_fallback", where="mobygames.yaml") and (
             best is None or best.status in ("no_match", "error")
         ):
             from moby_web_search import duckduckgo_moby_game_id

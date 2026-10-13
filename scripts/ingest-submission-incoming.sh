@@ -4,7 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-INCOMING="$(python3 "$ROOT/scripts/read-host-path-config.py" submissions_incoming_host)"
+SUBMISSIONS_ROOT="$(python3 "$ROOT/scripts/read-host-path-config.py" submissions_root)"
+INCOMING="$SUBMISSIONS_ROOT/incoming"
 shopt -s nullglob
 
 if [[ $# -ge 1 ]]; then

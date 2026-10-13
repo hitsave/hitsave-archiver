@@ -17,75 +17,17 @@ except ImportError as e:
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = REPO_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
-import importlib.util  # noqa: E402
 
 CONFIG_ROOT = Path(__import__("os").environ.get("HITSAVE_CONFIG_ROOT", str(REPO_ROOT / "config")))
 
-
-def _register_dip_api_module():
-    path = SCRIPTS / "register-dip-omeka-api.py"
-    spec = importlib.util.spec_from_file_location("register_dip_omeka_api", path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Cannot load {path}")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def load_yaml(path: Path) -> dict:
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-
-
-def _set_resource_public(
-    session: requests.Session,
-    base: str,
-    creds: dict,
-    resource: str,
-    resource_id: int,
-    *,
-    is_public: bool,
-    api,
-) -> None:
-    url = api.api_url(base, f"{resource}/{resource_id}", creds)
-    resp = session.patch(
-        url,
-        headers={"Accept": "application/ld+json", "Content-Type": "application/json"},
-        json={"o:is_public": is_public},
-        timeout=120,
-    )
-    if not resp.ok:
-        raise RuntimeError(
-            f"PATCH {resource} {resource_id} visibility failed ({resp.status_code}): {resp.text[:800]}"
-        )
-
-
-def ensure_item_set(
-    session: requests.Session,
-    base: str,
-    creds: dict,
-    title: str,
-    *,
-    is_public: bool,
-    api,
-) -> int:
-    try:
-        item_set_id = api.resolve_item_set_id(session, base, creds, title)
-    except RuntimeError:
-        url = api.api_url(base, "item_sets", creds)
-        payload = {"o:title": title, "o:is_public": is_public}
-        resp = session.post(url, json=payload, headers={"Accept": "application/ld+json"}, timeout=120)
-        if not resp.ok:
-            raise RuntimeError(f"Create item set failed ({resp.status_code}): {resp.text[:800]}")
-        item_set_id = int(resp.json()["o:id"])
-    else:
-        _set_resource_public(
-            session, base, creds, "item_sets", item_set_id, is_public=is_public, api=api
-        )
-    return item_set_id
-
-
 from dump_catalog_omeka import build_redump_values, dump_catalog_config  # noqa: E402
+from omeka_catalog_common import (  # noqa: E402
+    ensure_item_set,
+    load_register_dip_omeka_api,
+    set_resource_public,
+)
 from preservation_common import load_ingest_config  # noqa: E402
+from yaml_config import load_yaml  # noqa: E402
 
 
 def patch_catalog_item(
@@ -118,7 +60,7 @@ def patch_catalog_item(
         wasabi_ingest_cfg=wasabi_ingest_cfg,
     )
     api.patch_item_rdf_values(session, base, creds, item_id, updates, item_body=item_body)
-    _set_resource_public(session, base, creds, "items", item_id, is_public=is_public, api=api)
+    set_resource_public(session, base, creds, "items", item_id, is_public=is_public, api=api)
     return catalog_title
 
 
@@ -173,7 +115,7 @@ def main() -> None:
     storage_uri_base = redump_cfg["storage_uri_base"]
     wasabi_ingest_cfg = load_ingest_config().get("wasabi")
 
-    api = _register_dip_api_module()
+    api = load_register_dip_omeka_api()
     session = requests.Session()
     site_id = api.resolve_site_id(session, base, creds, site_slug)
     if patch_item_id is not None:
@@ -192,7 +134,13 @@ def main() -> None:
         item_id = patch_item_id
     else:
         item_set_id = ensure_item_set(
-            session, base, creds, item_set_title, is_public=is_public, api=api
+            session,
+            base,
+            creds,
+            item_set_title,
+            is_public=is_public,
+            api=api,
+            sync_visibility_on_existing=True,
         )
         rdf_values, catalog_title = build_redump_values(
             session,

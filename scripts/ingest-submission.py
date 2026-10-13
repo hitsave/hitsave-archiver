@@ -34,8 +34,7 @@ from normalize_display_title import normalize_display_title  # noqa: E402
 from preservation_common import resolve_game_config  # noqa: E402
 
 
-def load_yaml(path: Path) -> dict:
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+from yaml_config import load_yaml  # noqa: E402
 
 
 def wait_for_clamd(host: str, port: int, timeout: int) -> pyclamd.ClamdNetworkSocket:

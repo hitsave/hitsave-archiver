@@ -21,15 +21,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INGEST_CONFIG = Path("/config/preservation/ingest.yaml")
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from dump_classify import package_storage_s3_uri  # noqa: E402
+from config_require import require_bool  # noqa: E402
 from preservation_common import (  # noqa: E402
     resolve_wasabi_bucket,
+    sha256_file,
     wasabi_s3_region,
     wasabi_unpacked_prefix,
 )
-
-
-def load_yaml(path: Path) -> dict:
-    return yaml.safe_load(path.read_text()) or {}
+from yaml_config import load_yaml  # noqa: E402
 
 
 def resolve_config_path(raw: str, config_root: Path) -> Path:
@@ -37,14 +36,6 @@ def resolve_config_path(raw: str, config_root: Path) -> Path:
     if path.is_absolute():
         return path
     return config_root / path
-
-
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -102,12 +93,12 @@ def upload_bag_to_prefix(
         raise RuntimeError(f"Bag directory not found: {bag_dir}")
 
     wasabi, _ = load_wasabi_settings(ingest_config_path)
-    if not wasabi.get("enabled", True):
+    if not require_bool(wasabi, "enabled", where="ingest.yaml wasabi"):
         raise RuntimeError("Wasabi upload is disabled (wasabi.enabled: false)")
 
     bucket = str(bucket or resolve_wasabi_bucket(wasabi, "dump"))
     root = wasabi_unpacked_prefix(package_storage_prefix)
-    verify = bool(wasabi.get("verify_upload", True))
+    verify = require_bool(wasabi, "verify_upload", where="ingest.yaml wasabi")
     creds = load_yaml(resolve_config_path(str(wasabi["credentials_file"]), ingest_config_path.parent.parent))
     client = make_s3_client(wasabi, creds)
 
