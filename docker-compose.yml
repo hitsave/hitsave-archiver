@@ -1,10 +1,11 @@
 # Preservation ingest stack (Postgres ledger, ClamAV, ingest worker, Omeka catalog register, status UI).
+# Base images: Chainguard (cgr.dev) where available; ClamAV stays on Docker Hub (no public cgr.dev/clamav).
 # Secrets and operator database.yaml: sibling private repo hitsave-archiver-config (see README).
 name: hitsave-preservation
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: cgr.dev/chainguard/postgres:latest
     restart: unless-stopped
     env_file:
       - config/preservation/generated.env
