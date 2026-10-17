@@ -28,14 +28,16 @@ Archivist packages should converge on: **one game per zip**, either a **single r
 
 ## Optional manifest inside the zip
 
-Include [`examples/hitsave-submission.yaml`](../examples/hitsave-submission.yaml) at the zip root (or inside a single top-level folder) to set `game_key` and `omeka_item_title`:
+Include [`examples/hitsave-submission.yaml`](../examples/hitsave-submission.yaml) at the zip root (or inside a single top-level folder) to set catalog title and ingest kind:
 
 ```yaml
-game_key: mygame-press-2026
+ingest_kind: press_material
 omeka_item_title: "My Game — press and marketing materials"
 material_type: press
 submitter: archivist@example.org
 ```
+
+Ledger **`game_key`** (`package_id`) is assigned at ingest — do not set it in the zip manifest.
 
 Manifest files must be **≤ 64 KiB** (`limits.max_manifest_bytes`). Parsing uses `yaml.safe_load` only (no executable content).
 
@@ -64,7 +66,7 @@ Overrides:
 ```bash
 docker compose run --rm --entrypoint python ingest-worker \
   /app/scripts/ingest-submission.py /data/submissions/incoming/materials.zip \
-  --game-key mygame-2026 --title "My Game — press materials"
+  --title "My Game — press materials"
 ```
 
 Unpack-only (no ingest yet):

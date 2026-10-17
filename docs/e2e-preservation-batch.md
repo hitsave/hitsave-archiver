@@ -24,14 +24,14 @@ Batch manifests are **operator-local** (see `AGENTS.md`). Start from the templat
 
 ```bash
 cp config/preservation/batch.yml.example config/preservation/batch-my-run.yml
-# edit select / paths, then:
+# edit source_subpath / select, then:
 python3 scripts/sync-preservation-config.py
 ./scripts/batch-expand-preservation.sh config/preservation/batch-my-run.yml
 ```
 
-Generated per-game YAML lives under `config/preservation/generated/<batch_key>/`.
+`batch_key` is the slug in the batch file name (`batch-my-run.yml` → `my-run`). Generated per-game YAML lives under `config/preservation/generated/<batch_key>/` (three fields per game; ledger **`game_key`** is assigned at ingest).
 
-Single-game pilot (committed): `config/preservation/pilot-game.yaml` → ledger `game_key` `pilot-wog1`.
+Single-game pilot (committed): `config/preservation/pilot-game.yaml`.
 
 ## Full E2E: ingest + Omeka catalog registration
 
@@ -42,7 +42,7 @@ cd hitsave-archiver
 docker compose up -d postgres clamav
 bash scripts/run-batch-resume-omeka.sh config/preservation/batch-my-run.yml
 docker compose run --rm -T ingest-worker /config/preservation/pilot-game.yaml </dev/null
-docker compose run --rm -T omeka-catalog pilot-wog1 /config/preservation/pilot-game.yaml </dev/null
+docker compose run --rm -T omeka-catalog /config/preservation/pilot-game.yaml </dev/null
 ```
 
 `run-batch-resume-omeka.sh` skips **ingest** when ledger `status=complete`, then runs **omeka-catalog** only when ingest finished `complete` (quarantine/failed rows are skipped). Ingest or Omeka errors **log and continue** to the next game in the manifest.

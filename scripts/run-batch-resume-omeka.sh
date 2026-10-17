@@ -12,7 +12,9 @@ if [[ "${1:-}" == "--ingest-only" ]]; then
 fi
 
 BATCH="${1:-config/preservation/batch.yml}"
-MANIFEST="config/preservation/generated/$(python3 -c "import yaml; from pathlib import Path; print(yaml.safe_load(Path('$BATCH').read_text())['batch_key'])")/manifest.yaml"
+BATCH_KEY="$(python3 scripts/batch_manifest.py derive-key "$BATCH")"
+MANIFEST="config/preservation/generated/${BATCH_KEY}/manifest.yaml"
+export HITSAVE_BATCH_KEY="$BATCH_KEY"
 
 mapfile -t CONFIGS < <(python3 -c "
 import yaml
@@ -31,17 +33,28 @@ ledger_status() {
     /app/scripts/batch_ledger.py status "/config/preservation/$rel" 2>/dev/null | tr -d '[:space:]' || true
 }
 
+game_label() {
+  local cfg="$1"
+  python3 -c "
+import yaml
+from pathlib import Path
+d = yaml.safe_load(Path('$cfg').read_text()) or {}
+print(d.get('omeka_item_title') or d.get('source_subpath') or Path('$cfg').stem)
+"
+}
+
 for cfg in "${CONFIGS[@]}"; do
-  key="$(python3 -c "import yaml; print(yaml.safe_load(open('$cfg'))['game_key'])")"
+  label="$(game_label "$cfg")"
   status="$(ledger_status "$cfg")"
   if [[ "$status" != "complete" && "$status" != "quarantine" ]]; then
-    echo "=== ingest: $key ==="
-    if ! docker compose run --rm -T ingest-worker "/config/preservation/${cfg#config/preservation/}" </dev/null; then
-      echo "=== ingest failed (continuing batch): $key ===" >&2
+    echo "=== ingest: $label ==="
+    if ! docker compose run --rm -T -e HITSAVE_BATCH_KEY="$BATCH_KEY" ingest-worker \
+      "/config/preservation/${cfg#config/preservation/}" </dev/null; then
+      echo "=== ingest failed (continuing batch): $label ===" >&2
     fi
     status="$(ledger_status "$cfg")"
   elif [[ "$status" == "quarantine" ]]; then
-    echo "=== ingest skipped (quarantine): $key ==="
+    echo "=== ingest skipped (quarantine): $label ==="
   fi
   if [[ "$INGEST_ONLY" -eq 0 ]]; then
     if [[ "$status" == "complete" ]]; then
@@ -49,18 +62,18 @@ for cfg in "${CONFIGS[@]}"; do
       needs_moby="$(docker compose run --rm --entrypoint python ingest-worker \
         /app/scripts/batch_ledger.py needs_moby "/config/preservation/$rel" 2>/dev/null | tr -d '[:space:]' || echo 0)"
       if [[ "$needs_moby" == "1" ]]; then
-        echo "=== moby enrich (ledger backfill): $key ==="
-        docker compose run --rm -T --entrypoint python ingest-worker \
+        echo "=== moby enrich (ledger backfill): $label ==="
+        docker compose run --rm -T -e HITSAVE_BATCH_KEY="$BATCH_KEY" --entrypoint python ingest-worker \
           /app/scripts/moby_enrich_game.py "/config/preservation/$rel" </dev/null || true
       fi
       pkg_key="$(docker compose run --rm --entrypoint python ingest-worker \
         /app/scripts/batch_ledger.py game_key "/config/preservation/$rel" 2>/dev/null | tr -d '[:space:]' || true)"
-      echo "=== omeka catalog register: ${pkg_key:-$key} ==="
+      echo "=== omeka catalog register: ${pkg_key:-$label} ==="
       if ! docker compose run --rm -T omeka-catalog "/config/preservation/${cfg#config/preservation/}" </dev/null; then
-        echo "=== omeka catalog register failed (continuing batch): $key ===" >&2
+        echo "=== omeka catalog register failed (continuing batch): $label ===" >&2
       fi
     else
-      echo "=== omeka catalog register skipped: $key (ledger status=${status:-none}) ==="
+      echo "=== omeka catalog register skipped: $label (ledger status=${status:-none}) ==="
     fi
   fi
 done

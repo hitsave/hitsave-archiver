@@ -281,30 +281,21 @@ def load_manifest(
 def build_game_config(
     *,
     source_game_folder: Path,
-    game_key: str,
     omeka_item_title: str,
     ingest_kind: str,
-    paths: dict,
     batch_key: str,
     video_access: dict | None = None,
+    source_zip: str | None = None,
 ) -> dict:
-    """Submission layout under output/{dip,aip,.staging}/submissions/{batch_key}/ (not batch/)."""
-    output_root = Path(paths["output_root"])
-    dip_sub = paths.get("dip_subdir", "dip")
-    aip_sub = paths.get("aip_subdir", "aip")
-    dip_dir = output_root / dip_sub / "submissions" / batch_key
-    aip_dir = output_root / aip_sub / "submissions" / batch_key
-    staging_root = output_root / ".staging" / "submissions" / batch_key
+    """Minimal submission game YAML; paths and ledger game_key are resolved at ingest."""
     cfg: dict = {
         "source_game_folder": str(source_game_folder),
         "ingest_kind": ingest_kind,
-        "staging_dir": str(staging_root / game_key),
-        "bagit_bag_dir": str(aip_dir / game_key),
-        "aip_bag_dir": str(aip_dir / game_key),
-        "game_key": game_key,
         "omeka_item_title": omeka_item_title,
         "submission": {"batch_key": batch_key},
     }
     if video_access is not None:
         cfg["video_access"] = video_access
+    if source_zip:
+        cfg["submission"]["source_zip"] = source_zip
     return cfg

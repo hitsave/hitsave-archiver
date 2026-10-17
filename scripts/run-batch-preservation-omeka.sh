@@ -21,13 +21,4 @@ fi
 docker compose up -d postgres clamav
 sleep 3
 
-MANIFEST="config/preservation/generated/$(python3 -c "import yaml; from pathlib import Path; print(yaml.safe_load(Path('$BATCH').read_text())['batch_key'])")/manifest.yaml"
-mapfile -t CONFIGS < <(python3 -c "
-import yaml
-from pathlib import Path
-m = yaml.safe_load(Path('$MANIFEST').read_text())
-for g in m['games']:
-    print(g['config'])
-")
-
 exec bash "$ROOT/scripts/run-batch-resume-omeka.sh" "$BATCH"

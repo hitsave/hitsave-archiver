@@ -1,8 +1,9 @@
-# Copy to batch.yml (gitignored). See docs/config-contract.md.
-# Expand: ./scripts/batch-expand-preservation.sh config/preservation/batch.yml
-# Run:    bash scripts/run-batch-preservation-omeka.sh config/preservation/batch.yml
+# Copy to batch-<slug>.yml (gitignored). batch_key is derived from the file name
+# (e.g. batch-repcopies-f-5.yml → repcopies-f-5).
+#
+# Expand: ./scripts/batch-expand-preservation.sh config/preservation/batch-my-run.yml
+# Run:    bash scripts/run-batch-preservation-omeka.sh config/preservation/batch-my-run.yml
 
-batch_key: my-batch-key
 ingest_kind: press_material
 source_subpath: Representation_Copies/T
 

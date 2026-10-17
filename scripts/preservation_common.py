@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,6 +44,15 @@ def resolve_game_config(cfg: dict, *, agent_version: str | None = None) -> dict:
     ingest = load_ingest_config()
     paths = require_dict(ingest, "paths", where="ingest.yaml")
     out = dict(cfg)
+    submission_meta = out.get("submission") or {}
+    if not out.get("batch_key"):
+        sub_batch = str(submission_meta.get("batch_key") or "").strip()
+        if sub_batch:
+            out["batch_key"] = sub_batch
+    if not out.get("batch_key"):
+        env_batch = os.environ.get("HITSAVE_BATCH_KEY", "").strip()
+        if env_batch:
+            out["batch_key"] = env_batch
     press_root = Path(require_str(paths, "press_material_root", where="ingest.yaml paths"))
     output_root = Path(require_str(paths, "output_root", where="ingest.yaml paths"))
     bag_sub = require_str(paths, "bag_subdir", where="ingest.yaml paths")
@@ -60,7 +70,11 @@ def resolve_game_config(cfg: dict, *, agent_version: str | None = None) -> dict:
         out["game_key"] = game_key
 
     batch_key = out.get("batch_key")
-    batch_segment = Path("batch") / batch_key if batch_key else None
+    portable_submission = bool(submission_meta.get("batch_key"))
+    if portable_submission and batch_key:
+        batch_segment = Path("submissions") / batch_key
+    else:
+        batch_segment = Path("batch") / batch_key if batch_key else None
 
     if game_key and not out.get("staging_dir"):
         stag_base = output_root / ".staging"

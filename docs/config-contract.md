@@ -23,15 +23,16 @@ Remote contributor ingest (Drive, Wasabi incoming, lane routing): **[remote-inta
 
 [`scripts/preservation_common.py`](../scripts/preservation_common.py) **`resolve_game_config()`** merges operator YAML with `ingest.yaml`:
 
-- **`source_subpath`** — folder under `paths.press_material_root` (preferred in examples).
-- **`game_key`**, **`omeka_item_title`** — required for single-game ingest.
-- **`ingest_kind`** — **required** on every game YAML and on `batch.yml` for expand (see `ingest-kinds.yaml`).
-- **`batch_key`** — set on generated batch configs; output paths go under `…/batch/{batch_key}/`.
+- **`source_subpath`** — folder under the material root for the ingest kind (preferred in examples).
+- **`omeka_item_title`** — catalog title for package identity and Omeka.
+- **`ingest_kind`** — **required** on every game YAML and on batch files for expand (see `ingest-kinds.yaml`).
+- **`batch_key`** — **not** in operator game YAML. Derived from the batch file name (`batch-<slug>.yml` → `<slug>`) and passed at ingest via `HITSAVE_BATCH_KEY` (batch shell scripts set this). Output paths go under `…/batch/{batch_key}/`.
+- **`game_key`** — **not** in operator YAML. Assigned at ingest as ledger **`package_id`** (`title-slug` + UUID v7).
 - Derived unless overridden: `source_game_folder`, `bagit_bag_dir`, `staging_dir`, `aip_bag_dir`, `max_files`, `max_total_bytes`, `preservation.*`.
 
 Examples: [`game.yml.example`](../config/preservation/game.yml.example), [`batch.yml.example`](../config/preservation/batch.yml.example).
 
-Batch expand writes **minimal** per-game YAML under `config/preservation/generated/{batch_key}/` (`source_subpath`, `game_key`, `omeka_item_title`, `batch_key` only). Ingest resolves paths at runtime via **`resolve_game_config()`**. Batch output dirs come from **`batch_output_dirs()`** unless `batch.yml` `output:` overrides (`bag_dir`, `aip_dir`, `staging_dir`) — that override is intentional for one-off runs, not a script fallback.
+Batch expand writes **minimal** per-game YAML under `config/preservation/generated/{batch_key}/` (`ingest_kind`, `source_subpath`, `omeka_item_title` only). Generated filenames use a folder slug; **`batch_manifest.py`** derives **`batch_key`**. Ingest resolves paths at runtime via **`resolve_game_config()`**. Batch output dirs come from **`batch_output_dirs()`** unless `batch.yml` `output:` overrides (`bag_dir`, `aip_dir`, `staging_dir`) — that override is intentional for one-off runs, not a script fallback.
 
 ## Intentional duplication (documented)
 

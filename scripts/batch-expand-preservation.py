@@ -3,12 +3,14 @@
 
 Run inside ingest-worker (same /data/press-material mount as ingest):
   docker compose run --rm --entrypoint python ingest-worker \\
-    /app/scripts/batch-expand-preservation.py /config/preservation/batch.yml
+    /app/scripts/batch-expand-preservation.py /config/preservation/batch-repcopies-f-5.yml
+
+batch_key is derived from the batch file name (batch-<slug>.yml). Per-game YAML lists only
+ingest_kind, source_subpath, and omeka_item_title; ledger game_key is assigned at ingest.
 """
 from __future__ import annotations
 
 import os
-import re
 import sys
 from pathlib import Path
 
@@ -20,6 +22,7 @@ except ImportError:
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(APP_ROOT / "scripts"))
+from batch_manifest import derive_batch_key, folder_config_slug  # noqa: E402
 from normalize_display_title import normalize_display_title  # noqa: E402
 from preservation_common import batch_output_dirs, load_ingest_config  # noqa: E402
 
@@ -64,20 +67,12 @@ def resolve_source_parent(batch: dict, cfg_root: Path) -> Path:
     )
 
 
-def slug_key(_batch_key: str, folder_name: str) -> str:
-    """Title-style slug from folder name (package_id assigned at ingest with UUID v7)."""
-    base = re.sub(r"[^a-zA-Z0-9]+", "-", folder_name.strip()).strip("-").lower()
-    if not base:
-        base = "game"
-    return base[:120]
-
-
 def main() -> None:
     cfg_root = config_root()
     default_batch = cfg_root / "preservation/batch.yml"
     batch_path = Path(sys.argv[1]) if len(sys.argv) > 1 else default_batch
-    batch = yaml.safe_load(batch_path.read_text())
-    batch_key = batch["batch_key"]
+    batch = yaml.safe_load(batch_path.read_text()) or {}
+    batch_key = derive_batch_key(batch_path, batch)
     source_parent = resolve_source_parent(batch, cfg_root)
     if not source_parent.is_dir():
         raise SystemExit(
@@ -118,14 +113,14 @@ def main() -> None:
             "batch.yml must set ingest_kind (e.g. press_material); see config/preservation/ingest-kinds.yaml"
         )
     press_root = Path(ingest["paths"]["press_material_root"])
-    batch_output_dirs(batch_key, ingest, batch.get("output") or {})  # validate / override dirs exist in batch.yml
+    batch_output_dirs(batch_key, ingest, batch.get("output") or {})
 
     gen_dir = cfg_root / "preservation" / "generated" / batch_key
     gen_dir.mkdir(parents=True, exist_ok=True)
     manifest = []
 
     for size, child in chosen:
-        game_key = slug_key(batch_key, child.name)
+        config_slug = folder_config_slug(child.name)
         container_source = source_parent / child.name
         try:
             subpath = container_source.relative_to(press_root).as_posix()
@@ -136,29 +131,29 @@ def main() -> None:
         game_cfg = {
             "source_subpath": subpath,
             "ingest_kind": str(batch_ingest_kind).strip(),
-            "game_key": game_key,
             "omeka_item_title": title,
-            "batch_key": batch_key,
         }
-        out_path = gen_dir / f"{game_key}.yaml"
+        out_path = gen_dir / f"{config_slug}.yaml"
         out_path.write_text(yaml.safe_dump(game_cfg, sort_keys=False), encoding="utf-8")
         manifest.append(
             {
-                "game_key": game_key,
+                "config_slug": config_slug,
                 "folder_name": child.name,
+                "source_subpath": subpath,
                 "source_bytes": size,
-                "config": f"config/preservation/generated/{batch_key}/{game_key}.yaml",
+                "config": f"config/preservation/generated/{batch_key}/{config_slug}.yaml",
             }
         )
 
     manifest_path = gen_dir / "manifest.yaml"
     manifest_path.write_text(
-        yaml.safe_dump({"batch_key": batch_key, "games": manifest}, sort_keys=False),
+        yaml.safe_dump({"batch_key": batch_key, "batch_file": batch_path.name, "games": manifest}, sort_keys=False),
         encoding="utf-8",
     )
+    print(f"batch_key={batch_key} (from {batch_path.name})")
     print(f"Wrote {len(manifest)} game configs under {gen_dir}")
     for row in manifest:
-        print(f"  {row['game_key']}\t{row['source_bytes'] // 1024} KiB\t{row['folder_name']}")
+        print(f"  {row['config_slug']}\t{row['source_bytes'] // 1024} KiB\t{row['folder_name']}")
 
 
 if __name__ == "__main__":
