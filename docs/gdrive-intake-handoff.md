@@ -1,0 +1,52 @@
+# Google Drive intake handoff (community dumps)
+
+**Lane overview (all remote ingest types):** [remote-intake-lanes.md](./remote-intake-lanes.md).
+
+Remote contributors upload **community dumps** (Redump, No-Intro, and other org sidecars) to Google Drive or Wasabi incoming; [**hitsave-gdrive-intake**](https://github.com/hitsave/hitsave-gdrive-intake) downloads, **verifies sidecar checksums**, and writes a local **ready** tree. **This repo** runs the preservation pipeline (ClamAV → BagIt → Wasabi `hitsave-dumps` → ledger → Omeka catalog). **Redump** is the reference sidecar implemented today; other org formats follow the same flow as parsers land.
+
+**Full Drive batch (operator):** prefer **`run-gdrive-redump-per-folder.sh`** (each package: stage if needed → ingest before the next folder). Legacy all-stage-then-all-ingest: `process-gdrive-all-redump.sh` then `ingest-gdrive-all-redump.sh`.
+
+## Layout after gdrive `process`
+
+Mount the gdrive **ready** tree into the ingest-worker (default host: `/tank/hitsave-archiver/gdrive-intake/ready` → container `/data/gdrive-intake/ready`; set `HOST_GDRIVE_INTAKE` in `host.env` if different):
+
+```text
+/data/gdrive-intake/ready/{game_key}/
+  game.ingest.yaml
+  hitsave-submission.yaml
+  !submissionInfo.txt
+  *.iso / *.bin …
+```
+
+`game.ingest.yaml` is produced by gdrive-intake with `source_game_folder` pointing at that SIP folder (via `handoff.archiver_source_root` in gdrive `config/intake.yaml`).
+
+## Ingest one package
+
+Requires a matching entry in `config/preservation/submission-sources.yaml` (`container_path_prefix: /data/gdrive-intake/ready`).
+
+```bash
+docker compose run --rm ingest-worker \
+  /data/gdrive-intake/ready/<game_key>/game.ingest.yaml
+```
+
+Dump classification, Wasabi prefix (`dumps/{System}/{Category}/{game_key}/`), and BagIt upload use the same code path as on-site dump ingest ([`dump-preservation.md`](./dump-preservation.md)).
+
+## Omeka (optional)
+
+After each ingest (or on reconcile): **`register-dump-omeka.sh --slug <ready-folder>`**. Full Drive batch does this in `run-gdrive-redump-per-folder.sh`; end-of-batch **`register-prod-dumps-omeka.sh`** catches rows still missing `omeka_item_id`. See [design note](./design-notes/gdrive-redump-omeka-after-ingest.md).
+
+```bash
+docker compose run --rm omeka-catalog \
+  /app/scripts/apply_dump_catalog_omeka.py \
+  …
+```
+
+(Use the per-game register YAML + handoff paths documented in `register-prod-dumps-omeka.sh` / `apply_dump_catalog_omeka.py`.)
+
+## What stays in gdrive-intake only
+
+- Google Drive API poll and quiescence (`upload_stable_seconds`)
+- Resumable download
+- **MD5/SHA1/Size fixity** against `!submissionInfo.txt` (fail closed before handoff)
+
+No Wasabi credentials are required in the gdrive-intake container.

@@ -1,0 +1,77 @@
+# Copy to hitsave-archiver-config/preservation/lane-inventory.yaml (private, gitignored).
+# Do not commit filled values to hitsave-archiver. See docs/remote-intake-lanes.md.
+
+schema_version: 1
+
+# Host env (names only — set values in private host.env)
+host_env:
+  HITSAVE_PRIVATE_CONFIG: REPLACE_ME
+  HOST_GDRIVE_INTAKE: REPLACE_ME
+  HOST_ANALOG: REPLACE_ME
+  HOST_OUTPUT: REPLACE_ME
+  HOST_PRESS_MATERIAL: REPLACE_ME
+  HOST_SUBMISSIONS: REPLACE_ME
+
+lanes:
+  community_dumps:
+    status: live
+    description: >-
+      Sidecar-verified dumps reported to community catalogs (Redump, No-Intro, …).
+      Same gdrive-intake → archiver pipeline for all org sidecars.
+    ingest_kind: dump
+    archiver_submission_source_key: gdrive_redump_remote_intake
+    container_ready_prefix: /data/gdrive-intake/ready
+    # Target layout: /data/gdrive-intake/ready/dumps/{slug}
+    gdrive_intake:
+      shared_folder_id: REPLACE_ME
+      profile: redump
+    wasabi_incoming:
+      enabled: true
+      config_file: preservation/wasabi-redump-intake.yaml
+      bucket: REPLACE_ME
+      source_roots:
+        - prefix: REPLACE_ME
+    preservation_bucket_key: dumps
+
+  community_dumps_extra_drop_zones:
+    status: planned
+    description: >-
+      Additional Drive folders or Wasabi prefixes (e.g. console-specific drops).
+      Same sidecar pipeline as community_dumps — see GitHub issue #18.
+    ingest_kind: dump
+    inherits_pipeline: community_dumps
+    gdrive_intake:
+      shared_folder_id: REPLACE_ME
+      profile: REPLACE_ME
+    wasabi_incoming:
+      enabled: false
+      bucket: REPLACE_ME
+      source_roots: []
+
+  analog:
+    status: planned
+    ingest_kind: analog
+    archiver_submission_source_key: REPLACE_ME
+    container_sip_root: /data/analog
+    gdrive_intake:
+      shared_folder_id: REPLACE_ME
+      profile: analog
+    wasabi_incoming:
+      enabled: false
+      bucket: REPLACE_ME
+      source_roots: []
+    preservation_bucket_key: analog
+
+  press_material:
+    status: sunset
+    ingest_kind: press_material
+    archiver_submission_source_key: press_material_community_donation
+    container_sip_root: /data/press-material
+    sunset_after: REPLACE_ME
+    notes: Batch ingest only; no new batches after sunset date
+
+  portable_submissions:
+    status: live
+    ingest_kind: press_material
+    container_incoming: /data/submissions/incoming
+    config_ssot: config/preservation/submissions.yaml

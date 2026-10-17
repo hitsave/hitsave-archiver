@@ -38,6 +38,8 @@ hitsave-archiver-config/
     omeka-api-credentials-prod.yaml
   preservation/
     database.yaml
+    lane-inventory.yaml       # optional; Drive IDs / Wasabi prefixes — not in git
+    wasabi-redump-intake.yaml # optional; Wasabi incoming roots for Redump
 ```
 
 ## Example files in this repo (hitsave-archiver)
@@ -49,6 +51,7 @@ hitsave-archiver-config/
 | `secrets/omeka-api-credentials-local.yaml` | [`config/secrets/omeka-api-credentials-local.yaml.example`](../config/secrets/omeka-api-credentials-local.yaml.example) |
 | `secrets/omeka-api-credentials-prod.yaml` | [`config/secrets/omeka-api-credentials-prod.yaml.example`](../config/secrets/omeka-api-credentials-prod.yaml.example) |
 | `preservation/database.yaml` | [`config/preservation/database.yaml.example`](../config/preservation/database.yaml.example) |
+| `preservation/lane-inventory.yaml` | [`config/preservation/lane-inventory.template.yaml`](../config/preservation/lane-inventory.template.yaml) |
 | `host.env` (shell exports for `HOST_*`) | [`config/host.env.example`](../config/host.env.example) |
 
 Use **local** credentials for test Omeka (`config/omeka-catalog.yaml` → `secrets/omeka-api-credentials-local.yaml`) and **prod** for archive.hitsave.org when running prod-targeted scripts.
@@ -87,5 +90,6 @@ End-to-end DIP QA: [hitsave-omeka-test `docs/build-real-dip.md`](https://github.
 
 ## See also
 
+- [remote-intake-lanes.md](./remote-intake-lanes.md) — lane SSOT and private inventory
 - [public-repos.md](./public-repos.md) — repo split and git hygiene
 - [portable-submissions.md](./portable-submissions.md) — zip intake paths (`HOST_SUBMISSIONS`)
