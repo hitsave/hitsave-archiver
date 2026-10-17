@@ -24,13 +24,11 @@ echo "=== full Wasabi Redump batch started $(date -Is) skip_build=$SKIP_BUILD ==
 
 if [[ "$SKIP_BUILD" != true ]]; then
   echo "=== docker build gdrive-intake $(date -Is) ==="
-  cd "$ROOT/hitsave-gdrive-intake"
-  
-  
+  cd "$GDRIVE"
   docker compose build gdrive-intake
 
   echo "=== docker build archiver ingest + omeka-catalog $(date -Is) ==="
-  cd "$ROOT/hitsave-archiver"
+  cd "$ARCHIVER"
   
   docker compose build ingest-worker omeka-catalog
 fi
