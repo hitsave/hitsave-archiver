@@ -21,6 +21,7 @@ from preservation_common import (  # noqa: E402
     resolve_wasabi_bucket,
     wasabi_unpacked_prefix,
 )
+from dump_redump import DISC_IMAGE_SUFFIXES  # noqa: E402
 from upload_bag_wasabi import load_wasabi_settings, make_s3_client  # noqa: E402
 from yaml_config import load_yaml  # noqa: E402
 
@@ -56,21 +57,36 @@ def list_s3_keys(client, bucket: str, prefix: str) -> list[str]:
     return keys
 
 
-def validate_keys(keys: list[str], *, prefix: str) -> tuple[bool, str]:
+def _relative_keys(keys: list[str], *, prefix: str) -> list[str]:
     root = wasabi_unpacked_prefix(prefix)
+    return [k[len(root) :] if k.startswith(root) else k for k in keys]
+
+
+def has_disc_payload(rels: list[str]) -> bool:
+    """True when bag data/ contains a Redump-class disc image (ISO, Audio CD .bin, etc.)."""
+    for rel in rels:
+        if not rel.startswith("data/"):
+            continue
+        lower = rel.lower()
+        if any(lower.endswith(suffix) for suffix in DISC_IMAGE_SUFFIXES):
+            return True
+    return False
+
+
+def validate_keys(keys: list[str], *, prefix: str) -> tuple[bool, str]:
     if not keys:
         return False, "no objects under prefix"
-    rels = [k[len(root) :] if k.startswith(root) else k for k in keys]
+    rels = _relative_keys(keys, prefix=prefix)
     has_bagit = any(r == "bagit.txt" for r in rels)
     has_manifest = any(r == "manifest-sha256.txt" for r in rels)
-    has_iso = any(".iso" in r.lower() for r in rels)
     if not has_bagit:
         return False, "missing bagit.txt"
     if not has_manifest:
         return False, "missing manifest-sha256.txt"
-    if not has_iso:
-        return False, "missing .iso under prefix"
-    return True, f"{len(keys)} objects, bagit+manifest+iso present"
+    if not has_disc_payload(rels):
+        suffixes = ", ".join(DISC_IMAGE_SUFFIXES)
+        return False, f"missing disc image under data/ (expected suffix: {suffixes})"
+    return True, f"{len(keys)} objects, bagit+manifest+disc payload present"
 
 
 def main() -> None:
