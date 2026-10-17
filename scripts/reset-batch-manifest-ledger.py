@@ -15,6 +15,7 @@ except ImportError as e:
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from batch_ledger import config_root, pg_connect, source_path_from_game_config  # noqa: E402
+from batch_manifest import resolve_game_config_path, resolve_manifest_path  # noqa: E402
 
 
 def main() -> None:
@@ -25,24 +26,12 @@ def main() -> None:
         candidate = config_root() / raw
         if candidate.is_file():
             raw = candidate
-    path = raw.resolve()
-    if path.name == "manifest.yaml" or path.parent.name.startswith("repcopies-"):
-        manifest_path = path if path.name == "manifest.yaml" else path.parent / "manifest.yaml"
-        if not manifest_path.is_file():
-            batch = yaml.safe_load(path.read_text())
-            batch_key = batch["batch_key"]
-            manifest_path = config_root() / "preservation/generated" / batch_key / "manifest.yaml"
-    else:
-        batch = yaml.safe_load(path.read_text())
-        manifest_path = config_root() / "preservation/generated" / batch["batch_key"] / "manifest.yaml"
+    cfg_root = config_root()
+    manifest_path = resolve_manifest_path(raw, cfg_root)
     manifest = yaml.safe_load(manifest_path.read_text())
     sources: list[str] = []
     for game in manifest.get("games") or []:
-        cfg = Path(game["config"])
-        if not cfg.is_absolute():
-            cfg = config_root() / "preservation/generated" / manifest["batch_key"] / cfg.name
-            if not cfg.is_file():
-                cfg = ROOT / game["config"]
+        cfg = resolve_game_config_path(manifest, game, cfg_root=cfg_root, repo_root=ROOT)
         sources.append(source_path_from_game_config(cfg))
     conn = pg_connect()
     n = 0

@@ -2,10 +2,11 @@
 # via resolve_game_config (see docs/config-contract.md).
 #
 # Run: docker compose run --rm ingest-worker /config/preservation/game.yml
+#
+# Ledger game_key (package_id) is assigned at ingest — do not set game_key here.
 
 ingest_kind: press_material
 source_subpath: Example/Publisher/GameFolder
-game_key: example-game
 omeka_item_title: "Example Game — press material"
 
 # Optional overrides (container paths; defaults from resolve_game_config):

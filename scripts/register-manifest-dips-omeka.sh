@@ -7,7 +7,7 @@
 #
 # Usage:
 #   source /path/to/hitsave-archiver-config/host.env
-#   export HOST_OUTPUT=/path/to/existing/aip-dip-output   # optional
+#   export HOST_OUTPUT=/path/to/existing/aip-dip/output   # optional
 #   ./scripts/register-manifest-dips-omeka.sh config/preservation/batch-repcopies-s.yml
 #   ./scripts/register-manifest-dips-omeka.sh --pilot   # pilot-wog1 only
 set -euo pipefail
@@ -20,21 +20,24 @@ register_manifest() {
   local manifest="$1"
   local label="$2"
   echo "===== $label =====" | tee -a "$LOG"
-  while IFS=$'\t' read -r key cfg || [[ -n "${key:-}" ]]; do
-    [[ -z "${key:-}" ]] && continue
-    echo "--- omeka catalog register: $key ($(date -Is)) ---" | tee -a "$LOG"
-    if docker compose run --rm -T omeka-catalog "$key" "/config/preservation/${cfg#config/preservation/}" </dev/null >>"$LOG" 2>&1; then
-      echo "OK $key" | tee -a "$LOG"
+  while IFS=$'\t' read -r game_label cfg || [[ -n "${game_label:-}" ]]; do
+    [[ -z "${cfg:-}" ]] && continue
+    echo "--- omeka catalog register: $game_label ($(date -Is)) ---" | tee -a "$LOG"
+    if docker compose run --rm -T omeka-catalog "/config/preservation/${cfg#config/preservation/}" </dev/null >>"$LOG" 2>&1; then
+      echo "OK $game_label" | tee -a "$LOG"
     else
-      echo "FAILED $key (see $LOG)" | tee -a "$LOG"
+      echo "FAILED $game_label (see $LOG)" | tee -a "$LOG"
     fi
   done < <(
     python3 -c "
-import yaml
+import sys
 from pathlib import Path
+sys.path.insert(0, 'scripts')
+import yaml
+from batch_manifest import manifest_game_label
 m = yaml.safe_load(Path('$manifest').read_text())
 for g in m['games']:
-    print(g['game_key'] + '\t' + g['config'])
+    print(manifest_game_label(g) + '\t' + g['config'])
 "
   )
 }
@@ -44,14 +47,14 @@ docker compose build omeka-catalog >/dev/null
 if [[ "${1:-}" == "--pilot" ]]; then
   echo "Register run started $(date -Is)" | tee -a "$LOG"
   echo "--- omeka catalog register: pilot-wog1 ---" | tee -a "$LOG"
-  docker compose run --rm -T omeka-catalog pilot-wog1 /config/preservation/pilot-game.yaml </dev/null >>"$LOG" 2>&1 \
+  docker compose run --rm -T omeka-catalog /config/preservation/pilot-game.yaml </dev/null >>"$LOG" 2>&1 \
     || echo "FAILED pilot-wog1" | tee -a "$LOG"
   echo "Register run finished $(date -Is)" | tee -a "$LOG"
   exit 0
 fi
 
 BATCH="${1:?Usage: register-manifest-dips-omeka.sh <batch.yml> | --pilot}"
-BATCH_KEY="$(python3 -c "import yaml; from pathlib import Path; print(yaml.safe_load(Path('$BATCH').read_text())['batch_key'])")"
+BATCH_KEY="$(python3 scripts/batch_manifest.py derive-key "$BATCH")"
 MANIFEST="config/preservation/generated/${BATCH_KEY}/manifest.yaml"
 if [[ ! -f "$MANIFEST" ]]; then
   echo "Missing $MANIFEST; run: ./scripts/batch-expand-preservation.sh $BATCH" >&2

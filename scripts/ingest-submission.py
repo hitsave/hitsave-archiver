@@ -17,6 +17,7 @@ except ImportError as e:
 
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
+from batch_manifest import folder_config_slug  # noqa: E402
 from submission_common import (  # noqa: E402
     SubmissionError,
     SubmissionManifest,
@@ -27,7 +28,6 @@ from submission_common import (  # noqa: E402
     load_manifest,
     resolve_source_folder,
     security_from_dict,
-    slug_game_key,
     validate_allowlist,
 )
 from normalize_display_title import normalize_display_title  # noqa: E402
@@ -82,7 +82,6 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Path to submission .zip inside the container (e.g. /data/submissions/incoming/pkg.zip)",
     )
-    parser.add_argument("--game-key", help="Override game_key (must be unique in ledger)")
     parser.add_argument("--title", help="Override Omeka item title")
     parser.add_argument(
         "--submissions-config",
@@ -138,7 +137,7 @@ def main() -> None:
         manifest = load_manifest(
             extract_root, manifest_names, max_manifest_bytes=limits.max_manifest_bytes
         )
-        if not manifest.game_key and not manifest.omeka_item_title:
+        if not manifest.omeka_item_title:
             inner = load_manifest(
                 source_folder,
                 manifest_names,
@@ -153,9 +152,14 @@ def main() -> None:
                 notes=inner.notes or manifest.notes,
             )
 
-        game_key = args.game_key or manifest.game_key or slug_game_key(zip_path.stem)
-        title_raw = args.title or manifest.omeka_item_title or zip_path.stem.replace("_", " ")
+        title_raw = (
+            args.title
+            or manifest.omeka_item_title
+            or source_folder.name
+            or zip_path.stem.replace("_", " ")
+        )
         omeka_title = normalize_display_title(title_raw)
+        config_slug = folder_config_slug(source_folder.name or zip_path.stem)
 
         batch_key = str((sub_cfg.get("preservation") or {}).get("batch_key") or "portable-submissions")
         pres_block = sub_cfg.get("preservation") or {}
@@ -173,12 +177,11 @@ def main() -> None:
             )
         game_cfg = build_game_config(
             source_game_folder=source_folder,
-            game_key=game_key,
             omeka_item_title=omeka_title,
             ingest_kind=str(ingest_kind).strip(),
-            paths=ingest_cfg["paths"],
             batch_key=batch_key,
             video_access=video_access,
+            source_zip=str(zip_path),
         )
         game_cfg = resolve_game_config(game_cfg, agent_version="ingest-submission.py")
         if pres_block.get("max_files") is not None:
@@ -199,11 +202,11 @@ def main() -> None:
                 }
             )
 
-        game_cfg_path = paths["game_config_dir"] / f"{game_key}.yaml"
+        game_cfg_path = paths["game_config_dir"] / f"{config_slug}.yaml"
         game_cfg_path.write_text(yaml.safe_dump(game_cfg, sort_keys=False), encoding="utf-8")
         print(f"Wrote game config: {game_cfg_path}")
         print(f"  source_game_folder: {source_folder}")
-        print(f"  game_key: {game_key}")
+        print(f"  config_slug: {config_slug}")
 
         if args.skip_ingest:
             dest = paths["processed"] / zip_path.name
@@ -211,9 +214,14 @@ def main() -> None:
             print(f"Zip moved to {dest} (--skip-ingest)")
             return
 
+        import os
+
+        env = os.environ.copy()
+        env["HITSAVE_BATCH_KEY"] = batch_key
         subprocess.run(
             [sys.executable, str(SCRIPTS / "ingest-folder.py"), str(game_cfg_path)],
             check=True,
+            env=env,
         )
         dest = paths["processed"] / zip_path.name
         if zip_path.is_file():

@@ -4,7 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 BATCH="${1:?Usage: backfill-batch-moby.sh config/preservation/batch-repcopies-f-full.yml}"
-MANIFEST="config/preservation/generated/$(python3 -c "import yaml; from pathlib import Path; print(yaml.safe_load(Path('$BATCH').read_text())['batch_key'])")/manifest.yaml"
+BATCH_KEY="$(python3 scripts/batch_manifest.py derive-key "$BATCH")"
+MANIFEST="config/preservation/generated/${BATCH_KEY}/manifest.yaml"
 
 mapfile -t CONFIGS < <(python3 -c "
 import yaml

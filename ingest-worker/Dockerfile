@@ -26,6 +26,7 @@ COPY ingest-worker/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY scripts/batch-expand-preservation.py \
+    scripts/batch_manifest.py \
     scripts/build-bagit-package.py \
     scripts/dip_package_previews.py \
     scripts/reset-batch-manifest-ledger.py \

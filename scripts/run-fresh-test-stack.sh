@@ -6,7 +6,7 @@ OMEKA="${HITSAVE_OMEKA_TEST_ROOT:-$ROOT/../hitsave-omeka-test}"
 cd "$ROOT"
 
 BATCH="${1:-config/preservation/batch.yml}"
-BATCH_KEY="$(python3 -c "import yaml; from pathlib import Path; print(yaml.safe_load(Path('$BATCH').read_text())['batch_key'])")"
+BATCH_KEY="$(python3 scripts/batch_manifest.py derive-key "$BATCH")"
 
 bash scripts/ensure-local-config.sh
 python3 scripts/sync-preservation-config.py

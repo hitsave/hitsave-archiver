@@ -44,7 +44,7 @@ run_case() {
   out="$("${COMPOSE[@]}" run --rm --entrypoint python ingest-worker \
     /app/scripts/ingest-submission.py "/data/submissions/incoming/test-$base" \
     --submissions-config "$sub_cfg" \
-    --game-key "fixture-test-${base%.zip}" --skip-ingest 2>&1)"
+    --skip-ingest 2>&1)"
   code=$?
   set -e
   rm -f "$INCOMING/test-$base"
