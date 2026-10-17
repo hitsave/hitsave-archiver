@@ -66,22 +66,27 @@ def is_audio_cd_submission(submission: RedumpSubmission) -> bool:
     return (submission.system or "").strip().casefold() == "audio cd"
 
 
-def audio_cd_submission_valid(submission: RedumpSubmission) -> bool:
-    """Redump Audio CD: per-track <rom /> checksums instead of Size & Checksum block."""
-    if not is_audio_cd_submission(submission):
+def rom_track_submission_valid(submission: RedumpSubmission) -> bool:
+    """Multi-file Redump discs: per-track <rom /> checksums instead of Size & Checksum."""
+    if not submission.roms:
+        return False
+    if not (submission.system or "").strip():
         return False
     if not (submission.category or "").strip():
         return False
-    if not submission.roms:
-        return False
-    return all(rom.md5 and rom.sha1 for rom in submission.roms)
+    return all(rom.md5 and rom.sha1 and rom.crc32 for rom in submission.roms)
+
+
+def audio_cd_submission_valid(submission: RedumpSubmission) -> bool:
+    """Audio CD is a rom-track layout; kept for callers that filter by system."""
+    return is_audio_cd_submission(submission) and rom_track_submission_valid(submission)
 
 
 def redump_catalog_sha1(submission: RedumpSubmission) -> str | None:
-    """SHA-1 for redump.info /discs?q= lookup (disc block or first Audio CD track ROM)."""
+    """SHA-1 for redump.info /discs?q= lookup (disc block or first track ROM)."""
     if submission.checksums.sha1:
         return submission.checksums.sha1
-    if is_audio_cd_submission(submission) and submission.roms:
+    if rom_track_submission_valid(submission):
         return submission.roms[0].sha1
     return None
 
