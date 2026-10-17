@@ -21,6 +21,7 @@ from package_identity import parse_package_id, title_slug  # noqa: E402
 from upload_bag_wasabi import load_wasabi_settings, make_s3_client  # noqa: E402
 from wasabi_rename import wasabi_move_prefix  # noqa: E402
 from preservation_common import wasabi_bucket_for_storage_prefix  # noqa: E402
+from sync_dump_bag_metadata_from_ledger import sync_bag_from_ledger  # noqa: E402
 from yaml_config import load_yaml  # noqa: E402
 
 
@@ -41,6 +42,11 @@ def main() -> None:
     parser.add_argument(
         "--title",
         help="Override catalog title for new slug (default: read from ready handoff YAML)",
+    )
+    parser.add_argument(
+        "--skip-bag-metadata-sync",
+        action="store_true",
+        help="Do not patch Wasabi bag-info/submission.json after MOVE (default: sync when --execute)",
     )
     args = parser.parse_args()
 
@@ -131,6 +137,27 @@ def main() -> None:
             )
         conn.commit()
     print(f"Ledger updated: {game_key} -> {new_game_key}")
+
+    if args.skip_bag_metadata_sync:
+        print("Skipped bag metadata sync (--skip-bag-metadata-sync).")
+        return
+
+    ledger_row = {
+        "game_key": new_game_key,
+        "title_slug": new_slug,
+        "package_storage_prefix": new_p,
+        "aip_wasabi_prefix": aip_uri,
+        "sort_letter": sort_letter,
+    }
+    print("Syncing BagIt tag metadata from ledger…")
+    sync_plan = sync_bag_from_ledger(
+        s3,
+        bucket=bucket,
+        storage_prefix=new_p,
+        ledger_row=ledger_row,
+        execute=True,
+    )
+    print(f"Bag metadata synced: {sync_plan.get('files')}")
 
 
 if __name__ == "__main__":
