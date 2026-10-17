@@ -3,19 +3,43 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 import requests
 
 from dump_classify import classify_dump_sip, find_submission_info_path
-from dump_redump import parse_submission_info
+from dump_redump import parse_submission_info, redump_catalog_sha1
 from ingest_kind import ingest_kind_spec
 
 
 def _redump_field(fields: dict[str, str], key: str) -> str | None:
     raw = (fields.get(key) or "").strip()
     if not raw or raw.startswith("(OPTIONAL)") or raw.startswith("(REQUIRED"):
+        return None
+    return raw
+
+
+def _omeka_format_from_redump(field: str, value: str | None) -> str | None:
+    """Map Redump submissionInfo labels to Omeka dcterms:format display (e.g. DVD-ROM-5 → DVD-5)."""
+    if not value:
+        return None
+    text = value.strip()
+    if field == "Media Type":
+        media = re.fullmatch(r"DVD-ROM-(\d+)", text, flags=re.IGNORECASE)
+        if media:
+            return f"DVD-{media.group(1)}"
+    return text
+
+
+def _redump_languages(fields: dict[str, str]) -> str | None:
+    """Redump template leaves Languages unset as an instruction line — not a real value."""
+    raw = _redump_field(fields, "Languages")
+    if raw is None:
+        return None
+    normalized = " ".join(raw.split()).casefold()
+    if normalized.startswith("add languages here"):
         return None
     return raw
 
@@ -81,18 +105,46 @@ def manifest_from_sip_and_handoff(
     dump_layout = (ingest_kind_spec("dump").get("dump_layout") or {}).get("redump") or {}
     sub_names = list(dump_layout.get("submission_info_names") or [])
     sub_path = find_submission_info_path(source_dir, sub_names) if sub_names else None
-    if not parsed.get("fields") and sub_path is not None:
+    if sub_path is not None:
         submission = parse_submission_info(sub_path.read_text(encoding="utf-8", errors="replace"))
-        parsed = {
-            "fields": submission.fields,
-            "checksums": {
-                "size": submission.checksums.size,
-                "crc32": submission.checksums.crc32,
-                "md5": submission.checksums.md5,
-                "sha1": submission.checksums.sha1,
-            },
-            "alternate_titles": submission.alternate_titles,
-        }
+        lookup_sha1 = redump_catalog_sha1(submission)
+        if not parsed.get("fields"):
+            parsed = {
+                "fields": submission.fields,
+                "checksums": {
+                    "size": submission.checksums.size,
+                    "crc32": submission.checksums.crc32,
+                    "md5": submission.checksums.md5,
+                    "sha1": lookup_sha1 or submission.checksums.sha1,
+                },
+                "alternate_titles": submission.alternate_titles,
+                "roms": [
+                    {
+                        "name": rom.name,
+                        "size": rom.size,
+                        "crc32": rom.crc32,
+                        "md5": rom.md5,
+                        "sha1": rom.sha1,
+                    }
+                    for rom in submission.roms
+                ],
+            }
+        else:
+            checksums = dict(parsed.get("checksums") or {})
+            if lookup_sha1 and not checksums.get("sha1"):
+                checksums["sha1"] = lookup_sha1
+                parsed["checksums"] = checksums
+            if submission.roms and not parsed.get("roms"):
+                parsed["roms"] = [
+                    {
+                        "name": rom.name,
+                        "size": rom.size,
+                        "crc32": rom.crc32,
+                        "md5": rom.md5,
+                        "sha1": rom.sha1,
+                    }
+                    for rom in submission.roms
+                ]
     manifest: dict[str, Any] = {
         "game_key": game_key,
         "omeka_item_title": omeka_title,
@@ -138,6 +190,10 @@ def build_redump_values(
     cfg = redump_cfg or {}
     checksums = (manifest.get("redump") or {}).get("parsed", {}).get("checksums") or {}
     sha1 = checksums.get("sha1") or fields.get("SHA1")
+    if not sha1:
+        roms = (manifest.get("redump") or {}).get("parsed", {}).get("roms") or []
+        if roms and isinstance(roms[0], dict) and roms[0].get("sha1"):
+            sha1 = roms[0]["sha1"]
     resolved = resolve_redump_disc_by_sha1(session, sha1=str(sha1) if sha1 else None, redump_cfg=cfg)
 
     description: str | None = None
@@ -159,7 +215,9 @@ def build_redump_values(
         if not value or not str(value).strip():
             return
         pid = api.resolve_property_id(session, base, creds, term)
-        values.setdefault(term, []).append(api.literal_value(pid, str(value).strip()))
+        row = api.literal_value(pid, str(value).strip())
+        row["is_public"] = True
+        values.setdefault(term, []).append(row)
 
     append_literal("dcterms:title", title)
     for alt in _catalog_alternates(title, foreign, extra_alts):
@@ -177,11 +235,14 @@ def build_redump_values(
         id_rows.append(api.literal_value(pid, serial))
         values["dcterms:identifier"] = id_rows
 
-    for fmt in (_redump_field(fields, "System"), _redump_field(fields, "Media Type")):
-        append_literal("dcterms:format", fmt)
+    for field in ("System", "Media Type"):
+        append_literal(
+            "dcterms:format",
+            _omeka_format_from_redump(field, _redump_field(fields, field)),
+        )
     append_literal("dcterms:type", _redump_field(fields, "Category"))
     append_literal("dcterms:coverage", _redump_field(fields, "Region"))
-    append_literal("dcterms:language", _redump_field(fields, "Languages"))
+    append_literal("dcterms:language", _redump_languages(fields))
 
     staff_uri = staff_storage_uri(
         manifest=manifest,
@@ -194,7 +255,10 @@ def build_redump_values(
     )
     if staff_uri:
         bibo_pid = api.resolve_property_id(session, base, creds, "bibo:uri")
-        values["bibo:uri"] = [api.uri_value(bibo_pid, staff_uri)]
+        storage_public = bool(cfg.get("storage_uri_is_public", False))
+        values["bibo:uri"] = [
+            api.uri_value(bibo_pid, staff_uri, is_public=storage_public)
+        ]
 
     if disc_id is not None:
         redump_url = redump_disc_page_url(disc_id, cfg)
@@ -216,8 +280,18 @@ def dump_catalog_config(uploader_cfg: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(dump, dict):
         raise ValueError("omeka-catalog.yaml must define dump_catalog")
     where = "omeka-catalog.yaml dump_catalog"
+    ignore_ledger = dump.get("ignore_ledger_omeka_item_id", False)
+    if not isinstance(ignore_ledger, bool):
+        raise ValueError(f"{where}.ignore_ledger_omeka_item_id must be a boolean")
+    item_set_id = dump.get("item_set_id")
+    if item_set_id is not None:
+        item_set_id = int(item_set_id)
     return {
         "item_set_title": require_str(dump, "item_set_title", where=where),
+        "item_set_id": item_set_id,
+        "resource_template_label": require_str(dump, "resource_template_label", where=where),
+        "ignore_ledger_omeka_item_id": ignore_ledger,
+        "storage_uri_is_public": require_bool(dump, "storage_uri_is_public", where=where),
         "is_public": require_bool(dump, "is_public", where=where),
         "storage_uri_base": require_str(dump, "storage_uri_base", where=where),
         "site_url": require_str(dump, "site_url", where=where),

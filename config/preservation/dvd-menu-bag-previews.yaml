@@ -1,0 +1,9 @@
+dvd_menu_bag_previews:
+  run_report_path: /input/batch-full/run_report.json
+  preview_root: /input/batch-full
+  bag_root: /output/bag
+  # Writable in apply container (/output is bag_root mount; /input/batch-full is :ro).
+  summary_path: /output/dvd-menu-bag-apply-summary.json
+  ingest_config: /config/preservation/ingest.yaml
+  upload_wasabi: true
+  refresh_omeka: false

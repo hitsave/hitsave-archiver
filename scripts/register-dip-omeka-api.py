@@ -121,6 +121,9 @@ def resolve_item_set_id(session: requests.Session, base: str, creds: dict, title
     rows = resp.json()
     if not rows:
         raise RuntimeError(f"Item set not found: {title!r}; run ensure-press-item-set.php")
+    for row in rows:
+        if row.get("o:title") == title:
+            return int(row["o:id"])
     return int(rows[0]["o:id"])
 
 

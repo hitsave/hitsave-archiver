@@ -17,7 +17,7 @@ Legacy aliases (`game_dump`, `disc_dump`, `redump`) normalize to **`dump`**.
 | Kind | Wasabi layout | Moby | Redump |
 |------|---------------|------|--------|
 | `press_material` | `press-material/{sort_letter}/{package_id}/` (unpacked bag) | yes (`press_material`) | no |
-| `dump` | unpacked prefix (below) | yes (`game_catalog`) | when sidecar + SHA-1 |
+| `dump` | unpacked prefix (below) | no (opt-in via `moby_enrich: true`) | when sidecar + SHA-1 |
 | `other` | same as press (unpacked bag) | no | no |
 
 ## Wasabi prefix layout
@@ -35,7 +35,7 @@ Detected automatically when the SIP contains a Redump **`!submissionInfo.txt`** 
 Storage path (system first, then category):
 
 ```text
-dumps/{System}/{Category}/{package_id}/
+dumps/{System}/{Category}/{sort_letter}/{package_id}/
   bagit.txt
   manifest-sha256.txt
   bag-info.txt
@@ -48,19 +48,19 @@ dumps/{System}/{Category}/{package_id}/
 
 Examples:
 
-- `dumps/DVD-Video/Coverdiscs/{package_id}/` — coverdisc such as [disc 91919](https://redump.info/disc/91919)
-- `dumps/PlayStation/Games/{package_id}/` — e.g. [disc 134898](https://redump.info/disc/134898)
+- `dumps/DVD-Video/Coverdiscs/F/{package_id}/` — coverdisc such as [disc 91919](https://redump.info/disc/91919)
+- `dumps/PlayStation/Games/T/{package_id}/` — e.g. [disc 134898](https://redump.info/disc/134898)
 
 Path segments use Redump **System** and **Category** strings with `/` and `\` replaced by `-`. **`package_id`** is the same `{title_slug}-{uuid_v7}` identity as press ingest.
 
-Staff URI (Omeka / ledger): `s3://hitsave-incoming/dumps/PlayStation/Games/{package_id}/`
+Staff URI (Omeka / ledger): `s3://hitsave-dumps/dumps/PlayStation/Games/{package_id}/`
 
 ### Other dumps
 
 SIPs without a valid Redump sidecar are stored until dedicated automation exists:
 
 ```text
-dumps/Others/{package_id}/
+dumps/Others/{sort_letter}/{package_id}/
 ```
 
 Ledger: `dump_class = other`, `dump_system` / `dump_category` null.
@@ -94,7 +94,7 @@ Migration **`schema/009_backfill_ingest_kind_dump.sql`**: `game_dump` / `disc_du
 
 ## GDrive intake
 
-Drive poller uploads raw dump folders to the **same Wasabi prefix** (`intake/dump_layout.py`) before archiver BagIt ingest.
+[**hitsave-gdrive-intake**](https://github.com/hitsave/hitsave-gdrive-intake) downloads from Drive, verifies Redump sidecar checksums, and stages **`ready/{game_key}/`** with `game.ingest.yaml` + `hitsave-submission.yaml`. Archiver **`ingest-folder.py`** performs BagIt and Wasabi upload (see [`gdrive-intake-handoff.md`](./gdrive-intake-handoff.md)).
 
 ## Related docs
 

@@ -27,14 +27,14 @@ def test_missing_ingest_kind_raises() -> None:
 def test_dump_kind_uses_game_catalog_moby_profile() -> None:
     assert resolve_ingest_kind({"ingest_kind": "dump"}) == "dump"
     assert moby_omeka_profile_for_kind("dump") == "game_catalog"
-    assert moby_enrich_enabled({"ingest_kind": "dump"}) is True
+    assert moby_enrich_enabled({"ingest_kind": "dump"}) is False
     assert storage_profile_for_kind("dump") == "bagit_unpacked"
 
 
 def test_legacy_game_and_disc_dump_aliases_normalize_to_dump() -> None:
     assert resolve_ingest_kind({"ingest_kind": "game_dump"}) == "dump"
     assert resolve_ingest_kind({"ingest_kind": "disc_dump"}) == "dump"
-    assert moby_enrich_enabled({"ingest_kind": "disc_dump"}) is True
+    assert moby_enrich_enabled({"ingest_kind": "disc_dump"}) is False
 
 
 def test_ingest_kind_aliases_hyphens() -> None:

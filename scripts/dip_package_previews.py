@@ -277,3 +277,61 @@ def write_hitsave_previews(
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     return manifest
+
+
+def write_dvd_menu_packaged_previews(
+    bag_dir: Path,
+    *,
+    menu_jpg: Path,
+    package_id: str,
+    metadata_dir: str = "metadata",
+    config: dict | None = None,
+) -> dict:
+    """Pack a single DVD menu JPEG as metadata/hitsave browse + grid previews."""
+    cfg = config or load_preview_config()
+    meta_hitsave = bag_dir / metadata_dir / "hitsave"
+    meta_hitsave.mkdir(parents=True, exist_ok=True)
+
+    grid_key = "menu"
+    grid_rel = f"{metadata_dir}/hitsave/thumbnails/grid/{grid_key}.jpg"
+    grid_dest = bag_dir / grid_rel
+    max_edge = int(cfg.get("grid_thumbnail_max_edge", 640))
+    quality = int(cfg.get("grid_jpeg_quality", 88))
+    if not _write_grid_thumb(menu_jpg, grid_dest, max_edge, quality):
+        raise RuntimeError(f"Could not build grid thumb from {menu_jpg}")
+
+    with Image.open(menu_jpg) as im:
+        im.load()
+        base = im.convert("RGBA")
+
+    canvases = cfg.get("browse_canvas") or {}
+    browse: dict[str, str] = {}
+    for type_name, size in (
+        ("medium", canvases.get("medium", [640, 480])),
+        ("square", canvases.get("square", [400, 400])),
+    ):
+        w, h = int(size[0]), int(size[1])
+        fitted = _scale_to_fit(base, w, h)
+        canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        ox = (w - fitted.width) // 2
+        oy = (h - fitted.height) // 2
+        canvas.alpha_composite(fitted, (ox, oy))
+        rel = f"{metadata_dir}/hitsave/browse-{type_name}.png"
+        canvas.save(bag_dir / rel, "PNG", optimize=True)
+        canvas.close()
+        browse[type_name] = rel.replace("\\", "/")
+
+    base.close()
+
+    manifest: dict = {
+        "manifest_version": MANIFEST_VERSION,
+        "package_id": package_id,
+        "browse": browse,
+        "grid": {grid_key: grid_rel.replace("\\", "/")},
+        "gallery_file_keys": [grid_key],
+        "dvd_menu_preview": True,
+    }
+    manifest_path = bag_dir / str(cfg.get("manifest_inner_path") or "metadata/hitsave/preview-manifest.json")
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    return manifest

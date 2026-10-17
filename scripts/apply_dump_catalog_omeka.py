@@ -24,15 +24,18 @@ from dump_catalog_omeka import (  # noqa: E402
     manifest_from_sip_and_handoff,
 )
 from ingest_kind import resolve_ingest_kind  # noqa: E402
-from moby_omeka_fields import (  # noqa: E402
-    append_moby_fields_to_payload,
-    apply_moby_metadata_to_item,
+from moby_omeka_fields import append_moby_fields_to_payload  # noqa: E402
+from moby_resolve import (  # noqa: E402
+    load_mobygames_config,
+    moby_description_for_omeka,
     uses_moby_catalog_data,
 )
-from moby_resolve import load_mobygames_config, moby_description_for_omeka  # noqa: E402
 from omeka_catalog_common import (  # noqa: E402
-    ensure_item_set,
+    apply_item_item_sets,
+    apply_item_resource_template,
     load_register_dip_omeka_api,
+    resolve_dump_item_set_id,
+    resolve_resource_template,
     set_resource_public,
 )
 from omeka_staff_metadata import load_omeka_catalog_config, require_omeka_api_config  # noqa: E402
@@ -79,6 +82,8 @@ def _post_catalog_item(
     *,
     site_id: int,
     item_set_id: int,
+    resource_template_id: int | None,
+    resource_class_id: int | None,
     is_public: bool,
     rdf_values: dict[str, Any],
     api,
@@ -88,6 +93,10 @@ def _post_catalog_item(
         "o:site": [{"o:id": site_id}],
         "o:item_set": [{"o:id": item_set_id}],
     }
+    if resource_template_id is not None:
+        payload["o:resource_template"] = {"o:id": resource_template_id}
+    if resource_class_id is not None:
+        payload["o:resource_class"] = {"o:id": resource_class_id}
     payload.update(rdf_values)
     resp = session.post(
         api.api_url(base, "items", creds),
@@ -124,6 +133,12 @@ def apply_handoff_dump_catalog(
     api = load_register_dip_omeka_api()
     session = requests.Session()
     site_id = api.resolve_site_id(session, base, creds, site_slug)
+    resource_template_id, resource_class_id = resolve_resource_template(
+        session, base, creds, dump_cfg["resource_template_label"], api=api
+    )
+    item_set_id = resolve_dump_item_set_id(
+        session, base, creds, dump_cfg, is_public=is_public, api=api
+    )
 
     if patch_item_id is not None:
         resp = session.get(
@@ -146,18 +161,19 @@ def apply_handoff_dump_catalog(
             wasabi_ingest_cfg=wasabi_ingest_cfg,
         )
         api.patch_item_rdf_values(session, base, creds, patch_item_id, updates, item_body=item_body)
-        set_resource_public(session, base, creds, "items", patch_item_id, is_public=is_public, api=api)
-        item_id = patch_item_id
-    else:
-        item_set_id = ensure_item_set(
+        apply_item_resource_template(
             session,
             base,
             creds,
-            item_set_title,
-            is_public=is_public,
+            patch_item_id,
+            resource_template_id,
+            resource_class_id=resource_class_id,
             api=api,
-            sync_visibility_on_existing=True,
         )
+        apply_item_item_sets(session, base, creds, patch_item_id, [item_set_id], api=api)
+        set_resource_public(session, base, creds, "items", patch_item_id, is_public=is_public, api=api)
+        item_id = patch_item_id
+    else:
         rdf_values, catalog_title = build_redump_values(
             session,
             base,
@@ -174,6 +190,8 @@ def apply_handoff_dump_catalog(
             creds,
             site_id=site_id,
             item_set_id=item_set_id,
+            resource_template_id=resource_template_id,
+            resource_class_id=resource_class_id,
             is_public=is_public,
             rdf_values=rdf_values,
             api=api,
@@ -186,6 +204,7 @@ def apply_handoff_dump_catalog(
         "title": catalog_title,
         "site_slug": site_slug,
         "item_set": item_set_title,
+        "resource_template_label": dump_cfg["resource_template_label"],
         "is_public": is_public,
         "patched": patch_item_id is not None,
         "catalog_only": True,
@@ -200,6 +219,7 @@ def apply_dump_catalog(
     patch_item_id: int | None = None,
 ) -> dict[str, Any]:
     api = load_register_dip_omeka_api()
+    apply_moby_metadata_to_item = api.apply_moby_metadata_to_item
     game_cfg = resolve_game_config(load_yaml(game_cfg_path), agent_version="apply-dump-catalog-omeka.py")
     if resolve_ingest_kind(game_cfg) != "dump":
         raise RuntimeError(f"ingest_kind must be dump for {game_cfg_path}")
@@ -213,6 +233,9 @@ def apply_dump_catalog(
         omeka_title=title_raw,
         handoff=handoff,
     )
+
+    uploader_cfg = load_omeka_catalog_config(CONFIG_ROOT)
+    dump_cfg = dump_catalog_config(uploader_cfg)
 
     ingest_cfg = load_ingest_config()
     db_cfg = load_yaml(Path(ingest_cfg["database"]["config_file"]))["postgres"]
@@ -236,7 +259,11 @@ def apply_dump_catalog(
         if row:
             if row[5] and row[5] != "complete":
                 return {"game_key": game_key, "skipped": True, "reason": f"ledger status {row[5]!r}"}
-            if existing_item_id is None and row[0]:
+            if (
+                not dump_cfg.get("ignore_ledger_omeka_item_id")
+                and existing_item_id is None
+                and row[0]
+            ):
                 existing_item_id = int(row[0])
             metadata_json = row[1]
             inventory_json = row[2]
@@ -247,9 +274,7 @@ def apply_dump_catalog(
             ledger_aip = row[3]
             ledger_prefix = row[4]
 
-    uploader_cfg = load_omeka_catalog_config(CONFIG_ROOT)
     api_cfg = require_omeka_api_config(uploader_cfg)
-    dump_cfg = dump_catalog_config(uploader_cfg)
     cred_path = CONFIG_ROOT / api_cfg["credentials_file"]
     creds = load_yaml(cred_path)
     base = api_cfg["base_url"].rstrip("/")
@@ -260,6 +285,12 @@ def apply_dump_catalog(
 
     session = requests.Session()
     site_id = api.resolve_site_id(session, base, creds, site_slug)
+    resource_template_id, resource_class_id = resolve_resource_template(
+        session, base, creds, dump_cfg["resource_template_label"], api=api
+    )
+    item_set_id = resolve_dump_item_set_id(
+        session, base, creds, dump_cfg, is_public=is_public, api=api
+    )
     moby_cfg = load_mobygames_config(CONFIG_ROOT)
 
     existing_body = None
@@ -308,15 +339,26 @@ def apply_dump_catalog(
 
     if existing_item_id:
         api.patch_item_rdf_values(session, base, creds, existing_item_id, rdf_values, item_body=existing_body)
+        apply_item_resource_template(
+            session,
+            base,
+            creds,
+            existing_item_id,
+            resource_template_id,
+            resource_class_id=resource_class_id,
+            api=api,
+        )
+        apply_item_item_sets(session, base, creds, existing_item_id, [item_set_id], api=api)
         item_id = existing_item_id
     else:
-        item_set_id = ensure_item_set(session, base, creds, item_set_title, is_public=is_public, api=api)
         item_id = _post_catalog_item(
             session,
             base,
             creds,
             site_id=site_id,
             item_set_id=item_set_id,
+            resource_template_id=resource_template_id,
+            resource_class_id=resource_class_id,
             is_public=is_public,
             rdf_values=rdf_values,
             api=api,

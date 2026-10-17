@@ -226,7 +226,13 @@ def run_bagit_ingest(
     kind = str(game_cfg.get("ingest_kind") or "")
     if wasabi_cfg.get("enabled", False):
         if kind == "dump":
-            dump_clf = classify_dump_sip(source, package_id=game_key)
+            letter = str((submission or {}).get("sort_letter") or "X")
+            package_id = str((submission or {}).get("package_id") or game_key)
+            dump_clf = classify_dump_sip(
+                source,
+                package_id=package_id,
+                sort_letter=letter,
+            )
             upsert_ledger(
                 conn,
                 game_key=game_key,
@@ -310,7 +316,11 @@ def main() -> None:
         raw_game_cfg["game_key"] = game_key
         dump_kwargs: dict = {}
         if kind == "dump":
-            dump_clf = classify_dump_sip(source, package_id=identity.package_id)
+            dump_clf = classify_dump_sip(
+                source,
+                package_id=identity.package_id,
+                sort_letter=identity.sort_letter,
+            )
             dump_kwargs = {
                 "storage_layout": "bagit_unpacked",
                 "package_storage_prefix": dump_clf.package_storage_prefix,
@@ -417,7 +427,11 @@ def main() -> None:
         print(f"  sort_letter: {identity.sort_letter}")
         print(f"  sip_fingerprint: {identity.sip_fingerprint[:16]}…")
         if ingest_kind == "dump":
-            dump_clf = classify_dump_sip(source, package_id=identity.package_id)
+            dump_clf = classify_dump_sip(
+                source,
+                package_id=identity.package_id,
+                sort_letter=identity.sort_letter,
+            )
             print(f"  dump_class: {dump_clf.dump_class}")
             print(f"  wasabi prefix: {dump_clf.package_storage_prefix}/")
         print(f"  Bag dir: {bag_dir}")

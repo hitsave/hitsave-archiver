@@ -4,7 +4,7 @@
 
 Remote contributors upload **community dumps** (Redump, No-Intro, and other org sidecars) to Google Drive or Wasabi incoming; [**hitsave-gdrive-intake**](https://github.com/hitsave/hitsave-gdrive-intake) downloads, **verifies sidecar checksums**, and writes a local **ready** tree. **This repo** runs the preservation pipeline (ClamAV → BagIt → Wasabi `hitsave-dumps` → ledger → Omeka catalog). **Redump** is the reference sidecar implemented today; other org formats follow the same flow as parsers land.
 
-**Full Drive batch (operator):** prefer **`run-gdrive-redump-per-folder.sh`** (each package: stage if needed → ingest before the next folder). Legacy all-stage-then-all-ingest: `process-gdrive-all-redump.sh` then `ingest-gdrive-all-redump.sh`.
+**Full Drive batch (operator):** [`scripts/remote-intake/run-gdrive-redump-per-folder.sh`](../scripts/remote-intake/run-gdrive-redump-per-folder.sh) (stage → ingest → Omeka per package). Wasabi incoming: `run-wasabi-redump-per-folder.sh` in the same directory.
 
 ## Layout after gdrive `process`
 
@@ -33,7 +33,7 @@ Dump classification, Wasabi prefix (`dumps/{System}/{Category}/{game_key}/`), an
 
 ## Omeka (optional)
 
-After each ingest (or on reconcile): **`register-dump-omeka.sh --slug <ready-folder>`**. Full Drive batch does this in `run-gdrive-redump-per-folder.sh`; end-of-batch **`register-prod-dumps-omeka.sh`** catches rows still missing `omeka_item_id`. See [design note](./design-notes/gdrive-redump-omeka-after-ingest.md).
+After each ingest (or on reconcile): **`scripts/remote-intake/register-dump-omeka.sh --slug <ready-folder>`**. Per-folder batch scripts call this automatically; **`register-prod-dumps-omeka.sh`** reconciles rows still missing `omeka_item_id`. See [design note](./design-notes/gdrive-redump-omeka-after-ingest.md).
 
 ```bash
 docker compose run --rm omeka-catalog \

@@ -23,4 +23,6 @@ Omeka reads **press** packages via S3 API — see [dip-wasabi-s3.md](./dip-wasab
 
 With `wasabi.enabled: true`, `ingest-folder.py` runs ClamAV → BagIt build → Wasabi sync → ledger `complete` with `package_storage_prefix` and `inventory_json`.
 
+Objects larger than 5 GiB (typical DVD-9 ISOs) use **S3 multipart upload** in `upload_bag_wasabi.py`. With `verify_upload: true`, small objects are re-downloaded for SHA-256 check; objects over 256 MiB get a **Content-Length** check only after upload.
+
 Register in Omeka is a separate step: `docker compose run --rm omeka-catalog <game_key> …`.

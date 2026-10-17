@@ -31,6 +31,10 @@ omeka_app:
 # Dump ingest (Redump sidecar + Moby): metadata-only Omeka items; files on Wasabi prefix.
 dump_catalog:
   item_set_title: Dumps
+  # item_set_id: optional; set in prod private config (e.g. Famitsu Wave = 511)
+  resource_template_label: Press and Marketing Material
+  ignore_ledger_omeka_item_id: false
+  storage_uri_is_public: false
   is_public: true
   storage_uri_base: http://10.1.1.60:8088/staff/dumps
   # Disc pages and SHA-1 search on redump.info only (never redump.org).

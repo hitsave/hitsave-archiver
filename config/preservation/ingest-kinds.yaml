@@ -11,8 +11,8 @@ ingest_kinds:
   dump:
     description: >-
       Preserved dumps (Redump disc images, ROM sets, install trees, coverdiscs, etc.).
-      Unpacked BagIt prefix on Wasabi; Moby + Redump catalog when evidence exists.
-    moby_enrich: true
+      Unpacked BagIt prefix on Wasabi; Redump catalog when sidecar + SHA-1 evidence exists.
+    moby_enrich: false
     moby_omeka_profile: game_catalog
     storage_profile: bagit_unpacked
     wasabi_root: dumps
@@ -31,9 +31,9 @@ ingest_kinds:
           - Category
         require_checksums:
           - sha1
-        path_pattern: "{system}/{category}/{package_id}"
+        path_pattern: "{system}/{category}/{sort_letter}/{package_id}"
       other:
-        path_pattern: "Others/{package_id}"
+        path_pattern: "Others/{sort_letter}/{package_id}"
 
   other:
     description: Generic SIP with no automatic Moby or Redump catalog step

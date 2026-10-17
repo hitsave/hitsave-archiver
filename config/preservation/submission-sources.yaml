@@ -2,6 +2,16 @@
 # Matched by longest container_path_prefix against source_game_folder.
 
 sources:
+  gdrive_redump_remote_intake:
+    id: hitsave-submission:gdrive-redump-remote-intake
+    type: remote_intake
+    submission_date: "2026-01-01"
+    host_path_prefix: /tank/hitsave-archiver/gdrive-intake/ready
+    container_path_prefix: /data/gdrive-intake/ready
+    bag_info_external_identifier: hitsave-submission:gdrive-redump-remote-intake
+    omeka_provenance_text: >-
+      Redump-style disc dumps ingested via Google Drive remote intake (verified sidecar fixity).
+
   press_material_community_donation:
     id: hitsave-submission:press-material-community-2020-07-23
     type: community_donation

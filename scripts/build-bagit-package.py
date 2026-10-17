@@ -73,6 +73,11 @@ def collect_files(
             source, path, preserve_source_folder=preserve_source_folder
         )
         mime, _ = mimetypes.guess_type(path.name)
+        if size >= 500_000_000:
+            print(
+                f"  BagIt manifest SHA-256 (ingest, not Redump fixity): {path.name} ({size} bytes)…",
+                flush=True,
+            )
         rows.append(
             FileRow(
                 rel=rel,
@@ -289,7 +294,11 @@ def main() -> None:
     ingest_kind = str(cfg["ingest_kind"])
     dump_clf = None
     if ingest_kind == "dump":
-        dump_clf = classify_dump_sip(source, package_id=identity.package_id)
+        dump_clf = classify_dump_sip(
+            source,
+            package_id=identity.package_id,
+            sort_letter=identity.sort_letter,
+        )
     bag_dir = Path(cfg["bagit_bag_dir"]).resolve()
     pres = cfg.get("preservation") or {}
     max_files = int(cfg["max_files"])
