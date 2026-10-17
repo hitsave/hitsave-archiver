@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 
 _ALT_TAG = re.compile(r"\[T:ALT\]\s*(.+)", re.I)
@@ -83,6 +84,48 @@ def redump_catalog_sha1(submission: RedumpSubmission) -> str | None:
     if is_audio_cd_submission(submission) and submission.roms:
         return submission.roms[0].sha1
     return None
+
+
+def normalize_redump_text(value: str) -> str:
+    return unicodedata.normalize("NFC", (value or "").strip())
+
+
+def _contains_japanese_script(text: str) -> bool:
+    for ch in text:
+        o = ord(ch)
+        if 0x3040 <= o <= 0x30FF or 0x4E00 <= o <= 0x9FFF:
+            return True
+    return False
+
+
+def _title_has_non_ascii_latin(text: str) -> bool:
+    for ch in text:
+        if ord(ch) > 127:
+            return True
+    return False
+
+
+def pick_omeka_title_from_submission(submission: RedumpSubmission) -> str:
+    """
+    Omeka display title from submissionInfo.
+
+    When Foreign Title uses Japanese script and Title is macron-heavy romanization
+    (common on Famitsu / Weekly Famitsu coverdiscs), prefer the foreign title.
+    """
+    title = normalize_redump_text(submission.title or "")
+    foreign = normalize_redump_text(submission.foreign_title or "")
+    if foreign and _contains_japanese_script(foreign):
+        if not title or _title_has_non_ascii_latin(title):
+            return foreign
+    if title:
+        return title
+    if foreign:
+        return foreign
+    for alt in submission.alternate_titles:
+        alt_norm = normalize_redump_text(alt)
+        if alt_norm:
+            return alt_norm
+    return ""
 
 
 def _normalize_hex(value: str | None) -> str | None:

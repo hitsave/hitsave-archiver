@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -17,7 +18,20 @@ _PACKAGE_UUID_SUFFIX = re.compile(
 )
 
 
+def transliterate_for_slug(text: str) -> str:
+    """Fold Unicode (macrons, accents) to ASCII before slugging package_id segments."""
+    normalized = unicodedata.normalize("NFKD", (text or "").strip())
+    return "".join(ch for ch in normalized if not unicodedata.combining(ch))
+
+
 def title_slug(text: str) -> str:
+    folded = transliterate_for_slug(text)
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", folded).strip("-").lower()
+    return (slug[:100] or "game").strip("-")
+
+
+def title_slug_legacy_no_transliteration(text: str) -> str:
+    """Pre-macron-fix slug (audit only): non-ASCII stripped to dash boundaries."""
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", (text or "").strip()).strip("-").lower()
     return (slug[:100] or "game").strip("-")
 

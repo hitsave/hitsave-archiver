@@ -14,6 +14,7 @@ from package_identity import (  # noqa: E402
     sip_fingerprint_sha256,
     sort_letter,
     title_slug,
+    title_slug_legacy_no_transliteration,
 )
 
 
@@ -21,6 +22,14 @@ def test_title_slug_and_sort_letter() -> None:
     assert title_slug("Tekken 7") == "tekken-7"
     assert sort_letter("Tekken 7") == "T"
     assert sort_letter("007 Agent") == "0-9"
+
+
+def test_title_slug_transliterates_macron_romanization() -> None:
+    title = "Famitsu DVD 2002 E3 Tokuh\u014d saishin g\u0113mu eiz\u014d katarogu"
+    assert title_slug_legacy_no_transliteration(title) == (
+        "famitsu-dvd-2002-e3-tokuh-saishin-g-mu-eiz-katarogu"
+    )
+    assert title_slug(title) == "famitsu-dvd-2002-e3-tokuho-saishin-gemu-eizo-katarogu"
 
 
 def test_sip_fingerprint_stable() -> None:

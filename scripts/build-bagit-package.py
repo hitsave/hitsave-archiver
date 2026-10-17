@@ -2,7 +2,6 @@
 """Build RFC 8493 BagIt package (payload under data/) for OAIS AIP/DIP."""
 from __future__ import annotations
 
-import json
 import mimetypes
 import shutil
 import sys
@@ -18,6 +17,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import bagit  # noqa: E402
 
 from package_identity import PackageIdentity  # noqa: E402
+from yaml_config import dumps_json  # noqa: E402
 from dump_classify import DumpClassification, classify_dump_sip  # noqa: E402
 from preservation_common import (  # noqa: E402
     bagit_package_s3_uri_for_prefix,
@@ -227,10 +227,10 @@ def build_bagit_package(
     meta_root = bag_dir / meta_dir
     meta_root.mkdir(parents=True, exist_ok=True)
     (meta_root / "submission.json").write_text(
-        json.dumps(submission_json, indent=2) + "\n", encoding="utf-8"
+        dumps_json(submission_json, indent=2), encoding="utf-8"
     )
     (meta_root / "inventory.json").write_text(
-        json.dumps(inventory, indent=2) + "\n", encoding="utf-8"
+        dumps_json(inventory, indent=2), encoding="utf-8"
     )
     preview_cfg = load_preview_config()
     preview_manifest = write_hitsave_previews(

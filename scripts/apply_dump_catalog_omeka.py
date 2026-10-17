@@ -227,12 +227,6 @@ def apply_dump_catalog(
     source = Path(game_cfg["source_game_folder"]).resolve()
     handoff = load_yaml(handoff_path) if handoff_path and handoff_path.is_file() else {}
     title_raw = str(game_cfg.get("omeka_item_title") or source.name)
-    manifest = manifest_from_sip_and_handoff(
-        source_dir=source,
-        game_key=game_key,
-        omeka_title=title_raw,
-        handoff=handoff,
-    )
 
     uploader_cfg = load_omeka_catalog_config(CONFIG_ROOT)
     dump_cfg = dump_catalog_config(uploader_cfg)
@@ -243,6 +237,7 @@ def apply_dump_catalog(
     inventory_json = None
     ledger_aip: str | None = None
     ledger_prefix: str | None = None
+    ledger_sort_letter: str | None = None
     existing_item_id: int | None = patch_item_id
 
     with pg_connect(db_cfg) as conn:
@@ -250,7 +245,7 @@ def apply_dump_catalog(
             cur.execute(
                 """
                 SELECT omeka_item_id, metadata_json, inventory_json,
-                       aip_wasabi_prefix, package_storage_prefix, status
+                       aip_wasabi_prefix, package_storage_prefix, status, sort_letter
                 FROM game_ingest WHERE game_key = %s
                 """,
                 (game_key,),
@@ -273,6 +268,15 @@ def apply_dump_catalog(
                 inventory_json = json.loads(inventory_json)
             ledger_aip = row[3]
             ledger_prefix = row[4]
+            ledger_sort_letter = row[6]
+
+    manifest = manifest_from_sip_and_handoff(
+        source_dir=source,
+        game_key=game_key,
+        omeka_title=title_raw,
+        handoff=handoff,
+        sort_letter=ledger_sort_letter,
+    )
 
     api_cfg = require_omeka_api_config(uploader_cfg)
     cred_path = CONFIG_ROOT / api_cfg["credentials_file"]
@@ -383,7 +387,7 @@ def apply_dump_catalog(
         "omeka_item_id": item_id,
         "title": catalog_title,
         "dump_class": manifest.get("dump_class"),
-        "package_storage_prefix": manifest.get("package_storage_prefix"),
+        "package_storage_prefix": ledger_prefix or manifest.get("package_storage_prefix"),
         "catalog_only": True,
     }
 
@@ -418,7 +422,9 @@ def main() -> None:
             raise SystemExit("Usage: apply-dump-catalog-omeka.py --manifest <handoff.yaml> [--item-id ID]")
         manifest = load_yaml(Path(argv[1]))
         result = apply_handoff_dump_catalog(manifest, patch_item_id=patch_item_id)
-        print(json.dumps(result, indent=2))
+        from yaml_config import dumps_json
+
+        print(dumps_json(result, indent=2), end="")
         return
 
     game_cfg_path = Path(argv[0])
@@ -439,7 +445,9 @@ def main() -> None:
         handoff_path=handoff_path,
         patch_item_id=patch_item_id,
     )
-    print(json.dumps(result, indent=2))
+    from yaml_config import dumps_json
+
+    print(dumps_json(result, indent=2), end="")
 
 
 if __name__ == "__main__":
