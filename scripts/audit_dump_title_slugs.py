@@ -41,9 +41,14 @@ def pg_connect(db_cfg: dict):
 
 def host_ready_root() -> Path | None:
     host = os.environ.get("HOST_GDRIVE_INTAKE", "").strip()
-    if not host:
-        return None
-    return Path(host) / "ready"
+    if host:
+        ready = Path(host) / "ready"
+        if ready.is_dir():
+            return ready
+    container_ready = Path(_READY_CONTAINER)
+    if container_ready.is_dir():
+        return container_ready
+    return Path(host) / "ready" if host else None
 
 
 def catalog_title_for_row(source_path: str, ready_root: Path | None) -> str | None:
