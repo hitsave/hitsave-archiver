@@ -50,9 +50,15 @@ def resolve_package_identity(
             f"No submission-sources.yaml match for SIP {source}; cannot assign package_id"
         )
     submission_id = str(submission["id"])
+    prefix = str(submission.get("container_path_prefix") or "").rstrip("/")
+    if not prefix:
+        raise RuntimeError(
+            f"submission source for {source} missing container_path_prefix in submission-sources.yaml"
+        )
+    sip_root = Path(prefix)
     draft = build_package_identity(
         source=source,
-        press_material_root=material_root,
+        press_material_root=sip_root,
         submission_source_id=submission_id,
         omeka_item_title=omeka_item_title,
     )
@@ -60,7 +66,7 @@ def resolve_package_identity(
     if existing and existing.get("package_id"):
         return build_package_identity(
             source=source,
-            press_material_root=material_root,
+            press_material_root=sip_root,
             submission_source_id=submission_id,
             omeka_item_title=omeka_item_title,
             existing_package_id=str(existing["package_id"]),

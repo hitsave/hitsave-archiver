@@ -9,6 +9,7 @@ from pathlib import Path
 try:
     import boto3
     import psycopg
+    from boto3.s3.transfer import TransferConfig
     from botocore.config import Config
     from botocore.exceptions import ClientError
 except ImportError as e:
@@ -32,6 +33,15 @@ from preservation_common import (  # noqa: E402
 )
 from yaml_config import load_yaml  # noqa: E402
 
+# Full re-download SHA-256 verify is skipped above this size (after upload).
+VERIFY_DOWNLOAD_MAX_BYTES = 256 * 1024 * 1024
+
+S3_TRANSFER = TransferConfig(
+    multipart_threshold=64 * 1024 * 1024,
+    multipart_chunksize=64 * 1024 * 1024,
+    max_concurrency=4,
+)
+
 
 def resolve_config_path(raw: str, config_root: Path) -> Path:
     path = Path(raw)
@@ -54,6 +64,39 @@ def iter_package_files(package_root: Path) -> list[Path]:
 def object_key(storage_root: str, bag_dir: Path, file_path: Path) -> str:
     rel = file_path.relative_to(bag_dir).as_posix()
     return f"{storage_root}{rel}"
+
+
+def verify_uploaded_object(
+    client,
+    *,
+    bucket: str,
+    key: str,
+    size: int,
+    local_digest: str | None,
+) -> None:
+    if local_digest is None:
+        return
+    if size > VERIFY_DOWNLOAD_MAX_BYTES:
+        head = client.head_object(Bucket=bucket, Key=key)
+        remote_size = int(head["ContentLength"])
+        if remote_size != size:
+            raise RuntimeError(
+                f"Size mismatch after upload: s3://{bucket}/{key} ({remote_size} != {size})"
+            )
+        print(f"  verified size s3://{bucket}/{key} ({size} bytes; sha256 re-fetch skipped)")
+        return
+    resp = client.get_object(Bucket=bucket, Key=key)
+    remote = resp["Body"].read()
+    if len(remote) != size:
+        raise RuntimeError(f"Size mismatch after upload: s3://{bucket}/{key}")
+    if sha256_bytes(remote) != local_digest:
+        raise RuntimeError(f"SHA-256 mismatch after upload: s3://{bucket}/{key}")
+
+
+def upload_file_to_s3(client, *, bucket: str, key: str, path: Path) -> None:
+    # Always use transfer manager (multipart above multipart_threshold). Never PutObject
+    # for bag payloads — DVD ISOs exceed the 5 GiB single-put limit on S3/Wasabi.
+    client.upload_file(str(path), bucket, key, Config=S3_TRANSFER)
 
 
 def make_s3_client(wasabi: dict, creds: dict):
@@ -169,17 +212,16 @@ def upload_bag_to_prefix(
     uploaded = 0
     for path in files:
         key = object_key(root, bag_dir, path)
-        local_digest = sha256_file(path) if verify else None
         size = path.stat().st_size
-        with path.open("rb") as body:
-            client.put_object(Bucket=bucket, Key=key, Body=body, ContentLength=size)
-        if verify:
-            resp = client.get_object(Bucket=bucket, Key=key)
-            remote = resp["Body"].read()
-            if len(remote) != size:
-                raise RuntimeError(f"Size mismatch after upload: s3://{bucket}/{key}")
-            if sha256_bytes(remote) != local_digest:
-                raise RuntimeError(f"SHA-256 mismatch after upload: s3://{bucket}/{key}")
+        local_digest = sha256_file(path) if verify else None
+        upload_file_to_s3(client, bucket=bucket, key=key, path=path)
+        verify_uploaded_object(
+            client,
+            bucket=bucket,
+            key=key,
+            size=size,
+            local_digest=local_digest,
+        )
         uploaded += 1
         print(f"  uploaded s3://{bucket}/{key} ({size} bytes)")
 

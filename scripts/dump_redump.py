@@ -10,6 +10,10 @@ _ALTF_TAG = re.compile(r"\[T:ALTF\]\s*(.+)", re.I)
 _SECTION_HEADER = re.compile(r"^([^:\t].*):\s*$")
 _ROOT_FIELD = re.compile(r"^([^:\t]+):\s*(.*)$")
 _SECTION_FIELD = re.compile(r"^\t([^:]+):\s*(.*)$")
+_ROM_TAG = re.compile(
+    r'<rom name="([^"]+)" size="(\d+)" crc="([a-f0-9]+)" md5="([a-f0-9]+)" sha1="([a-f0-9]+)"\s*/>',
+    re.I,
+)
 
 
 @dataclass(frozen=True)
@@ -20,6 +24,17 @@ class DiscChecksums:
     sha1: str | None = None
 
 
+@dataclass(frozen=True)
+class RomChecksum:
+    """Per-file checksum from Audio CD (and similar) <rom /> entries in submissionInfo."""
+
+    name: str
+    size: int
+    crc32: str
+    md5: str
+    sha1: str
+
+
 @dataclass
 class RedumpSubmission:
     fields: dict[str, str] = field(default_factory=dict)
@@ -27,6 +42,7 @@ class RedumpSubmission:
     alternate_titles: list[str] = field(default_factory=list)
     foreign_alternate_titles: list[str] = field(default_factory=list)
     checksums: DiscChecksums = field(default_factory=DiscChecksums)
+    roms: list[RomChecksum] = field(default_factory=list)
 
     @property
     def title(self) -> str | None:
@@ -45,6 +61,30 @@ class RedumpSubmission:
         return (self.fields.get("Category") or "").strip() or None
 
 
+def is_audio_cd_submission(submission: RedumpSubmission) -> bool:
+    return (submission.system or "").strip().casefold() == "audio cd"
+
+
+def audio_cd_submission_valid(submission: RedumpSubmission) -> bool:
+    """Redump Audio CD: per-track <rom /> checksums instead of Size & Checksum block."""
+    if not is_audio_cd_submission(submission):
+        return False
+    if not (submission.category or "").strip():
+        return False
+    if not submission.roms:
+        return False
+    return all(rom.md5 and rom.sha1 for rom in submission.roms)
+
+
+def redump_catalog_sha1(submission: RedumpSubmission) -> str | None:
+    """SHA-1 for redump.info /discs?q= lookup (disc block or first Audio CD track ROM)."""
+    if submission.checksums.sha1:
+        return submission.checksums.sha1
+    if is_audio_cd_submission(submission) and submission.roms:
+        return submission.roms[0].sha1
+    return None
+
+
 def _normalize_hex(value: str | None) -> str | None:
     if not value:
         return None
@@ -52,6 +92,26 @@ def _normalize_hex(value: str | None) -> str | None:
     if cleaned.startswith("0x"):
         cleaned = cleaned[2:]
     return cleaned or None
+
+
+def _parse_rom_tags(text: str) -> list[RomChecksum]:
+    out: list[RomChecksum] = []
+    for name, size_raw, crc, md5, sha1 in _ROM_TAG.findall(text):
+        md5_n = _normalize_hex(md5)
+        sha1_n = _normalize_hex(sha1)
+        crc_n = _normalize_hex(crc)
+        if not md5_n or not sha1_n or not crc_n:
+            continue
+        out.append(
+            RomChecksum(
+                name=name.strip(),
+                size=int(size_raw),
+                crc32=crc_n,
+                md5=md5_n,
+                sha1=sha1_n,
+            )
+        )
+    return out
 
 
 def _parse_checksums(section: dict[str, str]) -> DiscChecksums:
@@ -133,7 +193,8 @@ def parse_submission_info(text: str) -> RedumpSubmission:
     flush_field()
 
     checksums = _parse_checksums(sections.get("Size & Checksum") or {})
-    sub = RedumpSubmission(fields=fields, sections=sections, checksums=checksums)
+    roms = _parse_rom_tags(text)
+    sub = RedumpSubmission(fields=fields, sections=sections, checksums=checksums, roms=roms)
     comments = fields.get("Comments") or ""
     for match in _ALT_TAG.finditer(text):
         title = match.group(1).strip()

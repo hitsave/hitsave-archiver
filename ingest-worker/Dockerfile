@@ -29,10 +29,14 @@ COPY scripts/batch-expand-preservation.py \
     scripts/batch_manifest.py \
     scripts/build-bagit-package.py \
     scripts/dip_package_previews.py \
+    scripts/apply_dvd_menu_bag_previews.py \
     scripts/reset-batch-manifest-ledger.py \
     scripts/upload-bag-wasabi.py \
     scripts/upload_bag_wasabi.py \
+    scripts/validate_dump_wasabi_packages.py \
     scripts/purge-wasabi-prefix.py \
+    scripts/wasabi_rename.py \
+    scripts/relocate_dump_bags_by_sort_letter.py \
     scripts/export-preservation-catalog.py \
     scripts/config_require.py \
     scripts/yaml_config.py \
@@ -77,6 +81,7 @@ COPY scripts/batch-expand-preservation.py \
     scripts/ingest-submission.py \
     scripts/redump_info_lookup.py \
     scripts/apply-external-dip-omeka.py \
+    scripts/attach_dump_external_dip_omeka.py \
     /app/scripts/
 
 ENTRYPOINT ["python", "/app/scripts/ingest-folder.py"]

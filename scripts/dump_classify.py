@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from dump_redump import RedumpSubmission, parse_submission_info
+from dump_redump import RedumpSubmission, audio_cd_submission_valid, parse_submission_info
 from ingest_kind import ingest_kind_spec, load_ingest_kinds_config
 
 _UNSAFE_KEY = re.compile(r"[/\\]+")
@@ -63,6 +63,10 @@ def redump_submission_valid(
     require_fields: list[str],
     require_checksums: list[str],
 ) -> bool:
+    if audio_cd_submission_valid(submission):
+        require_sections = [s for s in require_sections if s != "Size & Checksum"]
+        require_checksums = []
+
     for section in require_sections:
         if section == "Common Disc Info":
             if "Common Disc Info" not in submission.sections and "System" not in submission.fields:
@@ -78,7 +82,12 @@ def redump_submission_valid(
     return _checksum_ok(submission, require_checksums)
 
 
-def classify_dump_sip(sip_dir: Path, *, package_id: str) -> DumpClassification:
+def classify_dump_sip(
+    sip_dir: Path,
+    *,
+    package_id: str,
+    sort_letter: str = "X",
+) -> DumpClassification:
     """Detect Redump !submissionInfo.txt layout or classify as Other."""
     layout = _dump_layout_cfg()
     redump_cfg = layout.get("redump") or {}
@@ -96,10 +105,14 @@ def classify_dump_sip(sip_dir: Path, *, package_id: str) -> DumpClassification:
         ):
             system = storage_path_segment(submission.system or "Unknown")
             category = storage_path_segment(submission.category or "Unknown")
-            pattern = str(redump_cfg.get("path_pattern") or "{system}/{category}/{package_id}")
+            letter = (sort_letter or "X").strip("/") or "X"
+            pattern = str(
+                redump_cfg.get("path_pattern") or "{system}/{category}/{sort_letter}/{package_id}"
+            )
             prefix = pattern.format(
                 system=system,
                 category=category,
+                sort_letter=letter,
                 package_id=package_id,
             ).strip("/")
             wasabi_root = str(ingest_kind_spec("dump").get("wasabi_root") or "dumps").strip("/")
@@ -111,8 +124,9 @@ def classify_dump_sip(sip_dir: Path, *, package_id: str) -> DumpClassification:
                 redump_submission=submission,
             )
 
-    pattern = str(other_cfg.get("path_pattern") or "Others/{package_id}")
-    prefix = pattern.format(package_id=package_id).strip("/")
+    letter = (sort_letter or "X").strip("/") or "X"
+    pattern = str(other_cfg.get("path_pattern") or "Others/{sort_letter}/{package_id}")
+    prefix = pattern.format(sort_letter=letter, package_id=package_id).strip("/")
     wasabi_root = str(ingest_kind_spec("dump").get("wasabi_root") or "dumps").strip("/")
     return DumpClassification(
         dump_class="other",
