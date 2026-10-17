@@ -34,6 +34,8 @@ COPY scripts/batch-expand-preservation.py \
     scripts/upload-bag-wasabi.py \
     scripts/upload_bag_wasabi.py \
     scripts/validate_dump_wasabi_packages.py \
+    scripts/audit_dump_title_slugs.py \
+    scripts/rename_dump_package_slug.py \
     scripts/purge-wasabi-prefix.py \
     scripts/wasabi_rename.py \
     scripts/relocate_dump_bags_by_sort_letter.py \

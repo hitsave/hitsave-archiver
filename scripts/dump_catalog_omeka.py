@@ -10,7 +10,13 @@ from typing import Any
 import requests
 
 from dump_classify import classify_dump_sip, find_submission_info_path
-from dump_redump import parse_submission_info, redump_catalog_sha1
+from package_identity import sort_letter as catalog_sort_letter
+from dump_redump import (
+    RedumpSubmission,
+    parse_submission_info,
+    pick_omeka_title_from_submission,
+    redump_catalog_sha1,
+)
 from ingest_kind import ingest_kind_spec
 
 
@@ -97,9 +103,11 @@ def manifest_from_sip_and_handoff(
     game_key: str,
     omeka_title: str,
     handoff: dict[str, Any] | None = None,
+    sort_letter: str | None = None,
 ) -> dict[str, Any]:
     handoff = handoff or {}
-    clf = classify_dump_sip(source_dir, package_id=game_key)
+    letter = (sort_letter or catalog_sort_letter(omeka_title) or "X").strip() or "X"
+    clf = classify_dump_sip(source_dir, package_id=game_key, sort_letter=letter)
     redump_block = dict(handoff.get("redump") or {})
     parsed = (redump_block.get("parsed") or {}).copy()
     dump_layout = (ingest_kind_spec("dump").get("dump_layout") or {}).get("redump") or {}
@@ -185,7 +193,15 @@ def build_redump_values(
     fields = (manifest.get("redump") or {}).get("parsed", {}).get("fields") or {}
     alternates = (manifest.get("redump") or {}).get("parsed", {}).get("alternate_titles") or []
     wasabi = manifest.get("wasabi") or {}
-    fallback_title = str(manifest.get("omeka_item_title") or fields.get("Title") or "")
+    sidecar = RedumpSubmission(
+        fields=dict(fields),
+        alternate_titles=list(alternates) if isinstance(alternates, list) else [],
+    )
+    fallback_title = (
+        str(manifest.get("omeka_item_title") or "").strip()
+        or pick_omeka_title_from_submission(sidecar)
+        or str(fields.get("Title") or "").strip()
+    )
 
     cfg = redump_cfg or {}
     checksums = (manifest.get("redump") or {}).get("parsed", {}).get("checksums") or {}
