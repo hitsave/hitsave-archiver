@@ -9,9 +9,11 @@
 
 Compose expects `HITSAVE_PRIVATE_CONFIG` (default sibling `../hitsave-archiver-config`). Run `./scripts/ensure-local-config.sh` after clone.
 
+**Cursor:** Glob rules in **`.cursor/rules/`** (compose/ingest, `config/**`). Parent **`hitsave-e2e/`** has prefixed rules when that folder is the workspace.
+
 **Preservation direction:** OAIS + BagIt (unpacked on Wasabi, payload under `data/`). See **`docs/oais-bagit-preservation-plan.md`** and **`config/preservation/submission-sources.yaml`**.
 
-**Cursor:** Glob rules in **`.cursor/rules/`** (compose/ingest, `config/**`). Parent **`hitsave-e2e/`** has prefixed rules when that folder is the workspace.
+**Remote intake lanes:** **`docs/remote-intake-lanes.md`** (gdrive-intake handoff → archiver; private lane inventory template in `config/preservation/lane-inventory.template.yaml`).
 
 ## Docker
 

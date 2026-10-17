@@ -4,6 +4,8 @@ Public preservation machinery for [HitSave](https://hitsave.org): press-material
 
 **Credentials never belong in this repo.** Operator secrets use a separate checkout mounted at runtime; build it from `config/**/*.example` — see **[docs/operator-config.md](docs/operator-config.md)**, **[docs/config-contract.md](docs/config-contract.md)**, and [docs/public-repos.md](docs/public-repos.md).
 
+**Remote ingest (Drive / Wasabi incoming → preservation):** **[docs/remote-intake-lanes.md](docs/remote-intake-lanes.md)** — lane SSOT (community dumps: Redump / No-Intro / …; analog; press material sunset).
+
 Related public repos:
 
 - [`hitsave-omeka-test`](https://github.com/hitsave/hitsave-omeka-test) — local Omeka S QA stack (theme, DipViewer, prod mirror)
@@ -60,6 +62,7 @@ See `docs/portable-submissions.md` and `docs/preservation-wasabi.md`.
 | `~/hitsave-archiver-config` | Private secrets checkout |
 | `~/hitsave-omeka-test` | Local Omeka test stack |
 | `/tank/hitsave-archiver/submissions` | Portable zip intake |
+| `/tank/hitsave-archiver/gdrive-intake` | GDrive Redump downloads (`ready/`, `staging/`, `failed/`) |
 | `/tank2/press-material` | Press-material source tree |
 | `/tank/hitsave-archiver/output` | AIP/DIP output |
 

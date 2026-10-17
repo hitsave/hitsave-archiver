@@ -2,6 +2,8 @@
 
 Preservation behavior reads committed YAML under `config/`. Operator copies (`game.yml`, `batch.yml`, private secrets) should **extend** these files, not restate paths or limits unless you mean to override.
 
+Remote contributor ingest (Drive, Wasabi incoming, lane routing): **[remote-intake-lanes.md](./remote-intake-lanes.md)**. Operator-filled lane IDs live in private **`preservation/lane-inventory.yaml`** (from [`lane-inventory.template.yaml`](../config/preservation/lane-inventory.template.yaml)).
+
 ## Primary SSOT files
 
 | Topic | File | What belongs here |
