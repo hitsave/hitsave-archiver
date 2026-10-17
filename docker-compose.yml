@@ -26,7 +26,7 @@ services:
       - ./config/clamav/clamd.conf:/etc/clamav/clamd.conf:ro
       - ${HOST_PRESS_MATERIAL:-./data/press-material}:/data/press-material:ro
       - ${HOST_SUBMISSIONS:-./data/submissions}:/data/submissions:ro
-      - ${HOST_GDRIVE_INTAKE:-/tank/hitsave-archiver/gdrive-intake}/ready:/data/gdrive-intake/ready:ro
+      - ${HOST_GDRIVE_INTAKE:-./data/gdrive-intake}/ready:/data/gdrive-intake/ready:ro
 
   ingest-worker:
     build:
@@ -37,12 +37,11 @@ services:
       - ./config/preservation/generated:/config/preservation/generated
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/secrets:/config/secrets:ro
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/preservation/database.yaml:/config/preservation/database.yaml:ro
-      - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/preservation/ingest.yaml:/config/preservation/ingest.yaml:ro
       - ./fixtures:/fixtures
       - ${HOST_PRESS_MATERIAL:-./data/press-material}:/data/press-material:ro
       - ${HOST_SUBMISSIONS:-./data/submissions}:/data/submissions
       - ${HOST_OUTPUT:-./data/output}:/output
-      - ${HOST_GDRIVE_INTAKE:-/tank/hitsave-archiver/gdrive-intake}/ready:/data/gdrive-intake/ready:ro
+      - ${HOST_GDRIVE_INTAKE:-./data/gdrive-intake}/ready:/data/gdrive-intake/ready:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -60,9 +59,8 @@ services:
       - ./config:/config:ro
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/secrets:/config/secrets:ro
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/preservation/database.yaml:/config/preservation/database.yaml:ro
-      - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/preservation/ingest.yaml:/config/preservation/ingest.yaml:ro
       - ${HOST_OUTPUT:-./data/output}:/output:ro
-      - ${HOST_GDRIVE_INTAKE:-/tank/hitsave-archiver/gdrive-intake}/ready:/data/gdrive-intake/ready:ro
+      - ${HOST_GDRIVE_INTAKE:-./data/gdrive-intake}/ready:/data/gdrive-intake/ready:ro
       - /var/run/docker.sock:/var/run/docker.sock
     extra_hosts:
       - "host.docker.internal:host-gateway"
