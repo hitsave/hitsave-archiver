@@ -1,0 +1,26 @@
+---
+description: hitsave-archiver — compose runtime, ingest security, OAIS/BagIt
+globs: ingest-worker/**,docker-compose*.yml,**/Dockerfile
+alwaysApply: false
+---
+
+# Archiver — Docker & ingest
+
+Full guide: **`AGENTS.md`**. Preservation model: **`docs/oais-bagit-preservation-plan.md`**.
+
+## Runtime
+
+- Use **`docker compose`** (ingest worker, omeka-catalog, uploader). **No bare host Python** for preservation paths the stack owns.
+- Private credentials: sibling **`hitsave-archiver-config`** via **`HITSAVE_PRIVATE_CONFIG`** — run **`./scripts/ensure-local-config.sh`** after clone. **Never commit** secrets or operator **`config/preservation/batch*.yml`** with real tank paths.
+
+## After security / ingest code changes
+
+```bash
+CI=1 ./scripts/test-submission-security-fixtures.sh
+```
+
+## Cross-repo
+
+Omeka site slug / API alignment: **`config/omeka-catalog.yaml`** ↔ **hitsave-omeka-test** `settings.yaml` (manual SSOT — see omeka test `docs/config-contract.md`).
+
+One-off scripts in parent **`hitsave-e2e/`** should delegate to **`docker compose`** in this repo, not host `pip install`.

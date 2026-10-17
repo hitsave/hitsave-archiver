@@ -1,0 +1,13 @@
+---
+description: hitsave-archiver config — preservation SSOT, submission sources, no secrets in git
+globs: config/**
+alwaysApply: false
+---
+
+# Archiver config
+
+- **Submission sources / preservation policy:** **`config/preservation/submission-sources.yaml`** and **`docs/oais-bagit-preservation-plan.md`**.
+- **Examples only in git:** `batch.yml.example`, templates under **`config/`** — copy to ignored local names for real batches.
+- **Do not commit** `data/` from test runs, ClamAV prod paths, or Wasabi/Omeka credentials (private config repo).
+
+Changing catalog or ingest limits: update **`docs/config-contract.md`** (if present) and keep Omeka test stack fields aligned per **`hitsave-omeka-test/docs/config-contract.md`**.
