@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from dump_redump import RedumpSubmission, audio_cd_submission_valid, parse_submission_info
+from dump_redump import RedumpSubmission, parse_submission_info, rom_track_submission_valid
 from ingest_kind import ingest_kind_spec, load_ingest_kinds_config
 
 _UNSAFE_KEY = re.compile(r"[/\\]+")
@@ -63,7 +63,7 @@ def redump_submission_valid(
     require_fields: list[str],
     require_checksums: list[str],
 ) -> bool:
-    if audio_cd_submission_valid(submission):
+    if rom_track_submission_valid(submission):
         require_sections = [s for s in require_sections if s != "Size & Checksum"]
         require_checksums = []
 

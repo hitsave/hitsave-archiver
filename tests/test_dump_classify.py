@@ -55,6 +55,32 @@ def test_audio_cd_classifies_as_redump() -> None:
         )
 
 
+PS_COVERDISC_SUBMISSION = """\
+Common Disc Info:
+\tTitle: Famitsu Wave Test
+\tSystem: Sony PlayStation
+\tCategory: Coverdiscs
+
+Tracks and Write Offsets:
+\tDAT:
+
+<rom name="SLPM_80312 (Track 1).bin" size="4" crc="364b8887" md5="ab356a337456ca17f73b4270b0f5220f" sha1="ebf1d1d4511bc11d7a9704c0a39b1d1c1c1c1c1c" />
+"""
+
+
+def test_playstation_rom_track_classifies_as_redump() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        sip = Path(tmp)
+        (sip / "!submissionInfo.txt").write_text(PS_COVERDISC_SUBMISSION, encoding="utf-8")
+        clf = classify_dump_sip(sip, package_id="slpm-80312-test", sort_letter="F")
+        assert clf.dump_class == "redump"
+        assert clf.dump_system == "Sony PlayStation"
+        assert clf.dump_category == "Coverdiscs"
+        assert clf.package_storage_prefix == (
+            "dumps/Sony PlayStation/Coverdiscs/F/slpm-80312-test"
+        )
+
+
 def test_missing_sidecar_is_other() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         sip = Path(tmp)
