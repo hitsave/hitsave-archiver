@@ -50,6 +50,7 @@ COPY scripts/batch-expand-preservation.py \
     scripts/preservation_common.py \
     scripts/ingest_kind.py \
     scripts/dump_redump.py \
+    scripts/dump_nointro.py \
     scripts/dump_classify.py \
     scripts/dump_catalog_omeka.py \
     scripts/apply_dump_catalog_omeka.py \

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from dump_nointro import NoIntroSubmission, nointro_submission_valid, parse_nointro_submission
 from dump_redump import RedumpSubmission, parse_submission_info, rom_track_submission_valid
 from ingest_kind import ingest_kind_spec, load_ingest_kinds_config
 
@@ -15,7 +16,7 @@ _UNSAFE_KEY = re.compile(r"[/\\]+")
 
 @dataclass(frozen=True)
 class DumpClassification:
-    dump_class: str  # redump | other
+    dump_class: str  # redump | no-intro | other
     dump_system: str | None
     dump_category: str | None
     package_storage_prefix: str  # no bucket, no trailing slash
@@ -88,12 +89,16 @@ def classify_dump_sip(
     package_id: str,
     sort_letter: str = "X",
 ) -> DumpClassification:
-    """Detect Redump !submissionInfo.txt layout or classify as Other."""
+    """Detect Redump or No-Intro sidecar, else classify as Other."""
     layout = _dump_layout_cfg()
     redump_cfg = layout.get("redump") or {}
+    nointro_cfg = layout.get("no_intro") or {}
     other_cfg = layout.get("other") or {}
-    names = list(redump_cfg.get("submission_info_names") or [])
-    sub_path = find_submission_info_path(sip_dir, names) if names else None
+    wasabi_root = str(ingest_kind_spec("dump").get("wasabi_root") or "dumps").strip("/")
+    letter = (sort_letter or "X").strip("/") or "X"
+
+    redump_names = list(redump_cfg.get("submission_info_names") or [])
+    sub_path = find_submission_info_path(sip_dir, redump_names) if redump_names else None
     if sub_path is not None:
         text = sub_path.read_text(encoding="utf-8", errors="replace")
         submission = parse_submission_info(text)
@@ -105,7 +110,6 @@ def classify_dump_sip(
         ):
             system = storage_path_segment(submission.system or "Unknown")
             category = storage_path_segment(submission.category or "Unknown")
-            letter = (sort_letter or "X").strip("/") or "X"
             pattern = str(
                 redump_cfg.get("path_pattern") or "{system}/{category}/{sort_letter}/{package_id}"
             )
@@ -115,13 +119,39 @@ def classify_dump_sip(
                 sort_letter=letter,
                 package_id=package_id,
             ).strip("/")
-            wasabi_root = str(ingest_kind_spec("dump").get("wasabi_root") or "dumps").strip("/")
             return DumpClassification(
                 dump_class="redump",
                 dump_system=system,
                 dump_category=category,
                 package_storage_prefix=f"{wasabi_root}/{prefix}",
                 redump_submission=submission,
+            )
+
+    ni_names = list(nointro_cfg.get("submission_info_names") or [])
+    ni_path = find_submission_info_path(sip_dir, ni_names) if ni_names else None
+    if ni_path is not None:
+        ni_text = ni_path.read_text(encoding="utf-8", errors="replace")
+        ni_sub: NoIntroSubmission = parse_nointro_submission(ni_text)
+        if nointro_submission_valid(
+            ni_sub,
+            require_fields=list(nointro_cfg.get("require_fields") or []),
+            require_checksums=list(nointro_cfg.get("require_checksums") or []),
+        ):
+            system = storage_path_segment(ni_sub.dat_system or "Unknown")
+            pattern = str(
+                nointro_cfg.get("path_pattern") or "No-Intro/{system}/{sort_letter}/{package_id}"
+            )
+            prefix = pattern.format(
+                system=system,
+                sort_letter=letter,
+                package_id=package_id,
+            ).strip("/")
+            return DumpClassification(
+                dump_class="no-intro",
+                dump_system=system,
+                dump_category="ROM",
+                package_storage_prefix=f"{wasabi_root}/{prefix}",
+                redump_submission=None,
             )
 
     letter = (sort_letter or "X").strip("/") or "X"
