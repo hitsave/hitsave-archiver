@@ -63,6 +63,43 @@ def wasabi_move_prefix(
     return _parse_move_result(body)
 
 
+def wasabi_move_key(
+    s3_client,
+    *,
+    bucket: str,
+    source_key: str,
+    destination_key: str,
+    overwrite: bool = False,
+) -> None:
+    """Rename one object (Wasabi MOVE without X-Wasabi-Prefix)."""
+    src = source_key.lstrip("/")
+    dest = destination_key.lstrip("/")
+    if src == dest:
+        return
+    endpoint = str(s3_client.meta.endpoint_url).rstrip("/")
+    url = f"{endpoint}/{bucket}/{src}"
+    headers = {
+        "Destination": dest,
+        "X-Wasabi-Quiet": "true",
+        "Overwrite": "true" if overwrite else "false",
+        "X-Amz-Content-Sha256": "UNSIGNED-PAYLOAD",
+    }
+    request = AWSRequest(method="MOVE", url=url, headers=headers, data=b"")
+    credentials = s3_client._request_signer._credentials  # noqa: SLF001
+    region = s3_client.meta.region_name
+    SigV4Auth(credentials, "s3", region).add_auth(request)
+    prepared = request.prepare()
+    http = s3_client._endpoint.http_session  # noqa: SLF001
+    response = http.send(prepared)
+    status = getattr(response, "status_code", None) or response.raw.status
+    body = response.content
+    if status >= 400:
+        raise ClientError(
+            {"Error": {"Code": str(status), "Message": body.decode("utf-8", errors="replace")[:500]}},
+            "WasabiMoveKey",
+        )
+
+
 def _parse_move_result(body: bytes) -> dict[str, Any]:
     if not body.strip():
         return {"move_count": 0, "errors": [], "objects": []}

@@ -67,7 +67,7 @@ def collect_files(
         total += size
         if len(rows) >= max_files:
             raise SystemExit(f"Would exceed max_files ({max_files})")
-        if total > max_bytes:
+        if max_bytes > 0 and total > max_bytes:
             raise SystemExit(f"Would exceed max_total_bytes ({max_bytes})")
         rel = bagit_payload_relpath(
             source, path, preserve_source_folder=preserve_source_folder

@@ -98,9 +98,11 @@ def resolve_game_config(cfg: dict, *, agent_version: str | None = None) -> dict:
     if "max_files" not in out:
         out["max_files"] = int(require_key(defaults, "max_files", where="ingest.yaml defaults"))
     if "max_total_bytes" not in out:
-        out["max_total_bytes"] = int(
-            require_key(defaults, "max_total_bytes", where="ingest.yaml defaults")
-        )
+        raw = defaults.get("max_total_bytes")
+        if raw is None:
+            out["max_total_bytes"] = 0
+        else:
+            out["max_total_bytes"] = int(require_key(defaults, "max_total_bytes", where="ingest.yaml defaults"))
 
     pres = dict(require_dict(ingest, "preservation", where="ingest.yaml"))
     pres.update(out.get("preservation") or {})

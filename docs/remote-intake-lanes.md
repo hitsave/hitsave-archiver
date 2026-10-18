@@ -133,9 +133,13 @@ Fill in Drive folder IDs, Wasabi incoming bucket/prefixes, and host env variable
 1. **Configure** — gdrive-intake `config/gdrive.yaml`, `config/intake.yaml` (dump profile / sidecar names); archiver `submission-sources` for the ready-tree prefix; private `wasabi-redump-intake.yaml` (or renamed incoming config) for Wasabi drop zones ([gdrive-intake README](https://github.com/hitsave/hitsave-gdrive-intake)).
 2. **Stage** — `gdrive-intake poll --once` / `process --folder-id …`, or `poll-wasabi` / `process-wasabi …` (sidecar verify before promote to `ready/`).
 3. **Ingest** — `docker compose run --rm ingest-worker /data/gdrive-intake/ready/<slug>/game.ingest.yaml`
-4. **Catalog** — dump Omeka scripts / `register-dip-omeka-api.py` with game YAML path ([gdrive-intake-handoff.md](./gdrive-intake-handoff.md)).
+4. **Catalog** — `scripts/remote-intake/register-dump-omeka.sh` or `register-prod-dumps-omeka.sh` ([gdrive-intake-handoff.md](./gdrive-intake-handoff.md)).
+5. **Batch (operator)** — `scripts/remote-intake/run-gdrive-redump-per-folder.sh`, `run-wasabi-redump-per-folder.sh`, or full-batch wrappers; logs under `.generated/` ([README](../scripts/remote-intake/README.md)).
+6. **Incoming cleanup (optional)** — After acceptance passes: move Drive folders to sibling/child `processed/` (`move-gdrive-redump-to-processed.sh`); MOVE Wasabi incoming keys to `processed/…` (`move_wasabi_intake_to_processed.py`). Do **not** move or ingest Drive folders that lack a disc image when the full SIP exists on Wasabi only.
 
 Redump is the **reference sidecar** implemented today; No-Intro and other org sidecars should reuse this flow as parsers and verify rules are added ([#16](https://github.com/hitsave/hitsave-archiver/issues/16)).
+
+**Automated spot-check (one package):** `scripts/remote-intake/acceptance-redump-package.sh --slug '<ready-slug>'`.
 
 ### Analog (planned)
 
