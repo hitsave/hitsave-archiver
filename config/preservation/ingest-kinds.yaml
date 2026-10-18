@@ -32,6 +32,22 @@ ingest_kinds:
         require_checksums:
           - sha1
         path_pattern: "{system}/{category}/{sort_letter}/{package_id}"
+      no_intro:
+        # System value: DAT-o-MATIC label (https://datomatic.no-intro.org/), e.g. Nintendo - Nintendo 64
+        submission_info_names:
+          - dumpinfo.txt
+          - dumpInfo.txt
+          - "!dumpinfo.txt"
+          - no-intro.txt
+          - "!no-intro.txt"
+          - nointro.txt
+        require_fields:
+          - Game name
+          - System
+        require_checksums:
+          - sha1
+          - md5
+        path_pattern: "No-Intro/{system}/{sort_letter}/{package_id}"
       other:
         path_pattern: "Others/{sort_letter}/{package_id}"
 

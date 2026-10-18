@@ -55,9 +55,27 @@ Path segments use Redump **System** and **Category** strings with `/` and `\` re
 
 Staff URI (Omeka / ledger): `s3://hitsave-dumps/dumps/PlayStation/Games/{package_id}/`
 
+### No-Intro-class dumps
+
+Detected when the SIP contains a **dumping.guide** / No-Intro text sidecar (see [Gathering and Submitting Dump Info](https://dumping.guide/submission/general)) that parses with **`Game name`**, **`--ROM(s)/file(s)--`**, and per-ROM **Size / CRC32 / MD5 / SHA-1** (SHA-256 when present). Sidecar filenames (configurable): `dumpinfo.txt`, `!dumpinfo.txt`, `no-intro.txt`, …
+
+Required **`System:`** — use the **DAT-o-MATIC** dat label exactly (browse systems at [datomatic.no-intro.org](https://datomatic.no-intro.org/); each record page shows the heading, e.g. [Nintendo - Nintendo 3DS](https://datomatic.no-intro.org/index.php?page=show_record&s=64&n=0342)). dumping.guide **`Platform:`** is accepted as a fallback alias.
+
+Optional: **`No-Intro record:`** (DAT-o-MATIC index number), dumper/tool/date lines from the [common template](https://dumping.guide/submission/general).
+
+```text
+dumps/No-Intro/{System}/{sort_letter}/{package_id}/
+```
+
+Example: `dumps/No-Intro/Nintendo - Nintendo 64/F/{package_id}/`
+
+Ledger: `dump_class = no-intro`, `dump_system` = DAT-o-MATIC system label, `dump_category = ROM`.
+
+Intake verifies each ROM file against the sidecar hashes before `ready/` (same pipeline as Redump).
+
 ### Other dumps
 
-SIPs without a valid Redump sidecar are stored until dedicated automation exists:
+SIPs without a valid Redump or No-Intro sidecar are stored until dedicated automation exists:
 
 ```text
 dumps/Others/{sort_letter}/{package_id}/
