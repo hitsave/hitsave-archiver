@@ -19,7 +19,8 @@ clamav:
 
 defaults:
   max_files: 5000
-  max_total_bytes: 5368709120
+  # Cap total SIP payload hashed into one bag (bytes). 100 GiB covers DVD-9 + sidecars. Use 0 for no cap.
+  max_total_bytes: 107374182400
 
 # Source content policy (press folders and portable submissions via ingest-folder).
 # enforce: false = log matches only (permissive test ingest); true = quarantine + abort.
