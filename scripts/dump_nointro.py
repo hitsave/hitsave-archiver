@@ -154,9 +154,9 @@ def parse_nointro_submission(text: str) -> NoIntroSubmission:
                 in_rom = False
                 fields[key] = value
                 continue
-            if key in _SIZE_KEYS and rom_buf:
+            if key in _SIZE_KEYS and rom_buf and any(k in rom_buf for k in _SIZE_KEYS):
                 _flush_rom(rom_buf, roms)
-                rom_buf = {}
+                rom_buf = {k: v for k, v in rom_buf.items() if k not in _SIZE_KEYS}
             rom_buf[key] = value
         else:
             fields[key] = value
