@@ -10,7 +10,7 @@ BUNDLE="$(remote_intake_bundle_root)"
 GEN="${HITSAVE_REMOTE_INTAKE_LOG_DIR:-$ARCHIVER/.generated}"
 mkdir -p "$GEN"
 
-# For each Redump package on Wasabi (Tony drop): stage → ingest → prod Omeka when ledger complete.
+# For each Redump package on Wasabi incoming: stage → ingest → prod Omeka when ledger complete.
 BUNDLE="$(remote_intake_bundle_root)"
 
 

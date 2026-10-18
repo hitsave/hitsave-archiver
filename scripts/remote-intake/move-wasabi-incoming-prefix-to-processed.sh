@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# MOVE each package under hitsave-incoming/redump-from-tony/ → processed/redump-from-tony/{name}/
+# MOVE each package folder under one Wasabi incoming prefix → processed/{prefix}/{name}/.
+# Usage: move-wasabi-incoming-prefix-to-processed.sh --prefix <incoming-root> [--execute]
 set -euo pipefail
 RI="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=common.sh
@@ -10,21 +11,33 @@ GEN="${HITSAVE_REMOTE_INTAKE_LOG_DIR:-$ARCHIVER/.generated}"
 mkdir -p "$GEN"
 INTAKE_CFG="${HITSAVE_PRIVATE_CONFIG}/preservation/wasabi-redump-intake.yaml"
 INTAKE_MOUNT="/tmp/wasabi-redump-intake.yaml"
-LOG="$GEN/move-redump-from-tony-to-processed.log"
+LOG="$GEN/move-wasabi-incoming-prefix-to-processed.log"
 EXECUTE=false
-if [[ "${1:-}" == "--execute" ]]; then
-  EXECUTE=true
+INCOMING_PREFIX=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --execute) EXECUTE=true; shift ;;
+    --prefix)
+      INCOMING_PREFIX="${2%/}/"
+      shift 2
+      ;;
+    *) echo "usage: $0 --prefix <wasabi-incoming-root> [--execute]" >&2; exit 2 ;;
+  esac
+done
+if [[ -z "$INCOMING_PREFIX" ]]; then
+  echo "usage: $0 --prefix <wasabi-incoming-root> [--execute]" >&2
+  exit 2
 fi
 
 exec > >(tee -a "$LOG") 2>&1
-echo "=== redump-from-tony → processed/ started $(date -Is) execute=$EXECUTE ==="
+echo "=== Wasabi ${INCOMING_PREFIX} → processed/ started $(date -Is) execute=$EXECUTE ==="
 
 mapfile -t PKGS < <(
   cd "$ARCHIVER" && docker compose run --rm --no-deps \
     -v "$ARCHIVER/scripts:/app/scripts:ro" \
-    -v /home/jonas/hitsave-e2e/hitsave-archiver-config/secrets:/config/secrets:ro \
-    -v "$ARCHIVER/config/preservation/ingest.yaml:/config/preservation/ingest.yaml:ro" \
-    --entrypoint python ingest-worker - <<'PY'
+    -v "${HITSAVE_PRIVATE_CONFIG}/secrets:/config/secrets:ro" \
+    -v "${HITSAVE_PRIVATE_CONFIG}/preservation/ingest.yaml:/config/preservation/ingest.yaml:ro" \
+    --entrypoint python ingest-worker - "$INCOMING_PREFIX" <<'PY'
 import sys
 from pathlib import Path
 sys.path.insert(0, "/app/scripts")
@@ -34,21 +47,26 @@ from upload_bag_wasabi import load_wasabi_settings
 from yaml_config import load_yaml
 from preservation_common import wasabi_s3_region
 
+root = sys.argv[1]
+if not root.endswith("/"):
+    root += "/"
 wasabi, _ = load_wasabi_settings(Path("/config/preservation/ingest.yaml"))
 creds = load_yaml(Path("/config/secrets/wasabi-credentials.yaml"))
-client = boto3.client("s3", endpoint_url=str(wasabi["endpoint"]).rstrip("/"),
+client = boto3.client(
+    "s3",
+    endpoint_url=str(wasabi["endpoint"]).rstrip("/"),
     region_name=wasabi_s3_region(wasabi),
     aws_access_key_id=str(creds["access_key_id"]),
     aws_secret_access_key=str(creds["secret_access_key"]),
-    config=Config(signature_version="s3v4"))
-root = "redump-from-tony/"
+    config=Config(signature_version="s3v4"),
+)
 for page in client.get_paginator("list_objects_v2").paginate(
     Bucket="hitsave-incoming", Prefix=root, Delimiter="/"
 ):
     for cp in page.get("CommonPrefixes") or []:
-        name = cp["Prefix"][len(root):].strip("/")
+        name = cp["Prefix"][len(root) :].strip("/")
         if name:
-            print(f"redump-from-tony/{name}")
+            print(f"{root}{name}")
 PY
 )
 

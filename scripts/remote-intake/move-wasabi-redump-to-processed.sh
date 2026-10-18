@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MOVE ledger-complete Tony Wasabi intake trees to processed/{source}/{folder}/.
+# MOVE ledger-complete Wasabi incoming Redump SIP trees to processed/{source}/{folder}/.
 set -euo pipefail
 RI="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=common.sh
@@ -11,14 +11,14 @@ GEN="${HITSAVE_REMOTE_INTAKE_LOG_DIR:-$ARCHIVER/.generated}"
 mkdir -p "$GEN"
 POLL_JSON="$GEN/wasabi-move-to-processed-poll.json"
 INTAKE_CFG="${HITSAVE_PRIVATE_CONFIG}/preservation/wasabi-redump-intake.yaml"
-LOG="$GEN/move-tony-wasabi-to-processed.log"
+LOG="$GEN/move-wasabi-redump-to-processed.log"
 EXECUTE=false
 if [[ "${1:-}" == "--execute" ]]; then
   EXECUTE=true
 fi
 
 exec > >(tee -a "$LOG") 2>&1
-echo "=== move Tony Wasabi → processed/ started $(date -Is) execute=$EXECUTE ==="
+echo "=== Wasabi incoming → processed/ started $(date -Is) execute=$EXECUTE ==="
 
 cd "$GDRIVE"
 docker compose run --rm -T --user 1000:1000 gdrive-intake poll-wasabi --once --config-root /config \

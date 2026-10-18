@@ -83,7 +83,7 @@ def move_one_package(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("parent_prefix", help="e.g. redump-from-tony")
+    parser.add_argument("parent_prefix", help="Wasabi incoming prefix (e.g. GameWaveDVD/)")
     parser.add_argument("--intake-config", type=Path, default=Path("/tmp/wasabi-redump-intake.yaml"))
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
