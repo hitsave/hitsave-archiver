@@ -9,6 +9,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from package_identity import (  # noqa: E402
     canonical_sip_line,
+    catalog_title_slug_from_game_key,
     make_package_id,
     parse_package_id,
     sip_fingerprint_sha256,
@@ -58,3 +59,13 @@ def test_package_id_roundtrip() -> None:
     slug, again = parse_package_id(pid)
     assert slug == "tekken-7"
     assert again == uid
+
+
+def test_catalog_title_slug_from_game_key_drops_uuid() -> None:
+    key = (
+        "adventure-time-explore-the-dungeon-because-i-dont-know-"
+        "01a151e8-1295-712e-beea-f48da50a535f"
+    )
+    assert catalog_title_slug_from_game_key(key) == (
+        "adventure time explore the dungeon because i dont know"
+    )

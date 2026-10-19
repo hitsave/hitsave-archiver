@@ -42,6 +42,7 @@ from omeka_external_dip import (  # noqa: E402
     create_item_without_media,
     resolve_bagit_external_dip,
 )
+from package_identity import catalog_title_slug_from_game_key  # noqa: E402
 from preservation_common import resolve_game_config  # noqa: E402
 from dip_mount_preflight import (  # noqa: E402
     DipNotAvailableError,
@@ -191,6 +192,16 @@ def patch_item_rdf_values(
     return payload
 
 
+def omeka_item_catalog_title(item_body: dict) -> str | None:
+    """Public catalog title from an Omeka item JSON-LD body."""
+    for row in item_body.get("dcterms:title") or []:
+        value = (row.get("@value") or "").strip()
+        if value:
+            return catalog_item_title(value)
+    fallback = (item_body.get("o:title") or "").strip()
+    return catalog_item_title(fallback) if fallback else None
+
+
 def resolve_omeka_item_title(game_key: str, metadata_json: dict | None) -> str:
     matches = list((CONFIG_ROOT / "preservation/generated").rglob(f"{game_key}.yaml"))
     if matches:
@@ -202,7 +213,7 @@ def resolve_omeka_item_title(game_key: str, metadata_json: dict | None) -> str:
     search = (meta.get("search_title") or "").strip()
     if search:
         return catalog_item_title(search)
-    return catalog_item_title(game_key.replace("-", " "))
+    return catalog_item_title(catalog_title_slug_from_game_key(game_key))
 
 
 def item_has_dcterms_title(item_body: dict) -> bool:
