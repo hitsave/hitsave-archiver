@@ -389,7 +389,7 @@ def attach_official_ad_blurb(metadata: dict, client: "MobyClient", platform_ids:
     metadata["description_source"] = "ad_blurb"
 
 
-def finalize_moby_metadata(metadata: dict) -> dict:
+def finalize_moby_metadata(metadata: dict, moby_cfg: dict | None = None) -> dict:
     desc = (metadata.get("description") or "").strip()
     if desc:
         metadata["description_plain"] = html_to_plain_text(desc)
@@ -397,7 +397,10 @@ def finalize_moby_metadata(metadata: dict) -> dict:
     if ad and not metadata.get("official_ad_blurb_plain"):
         metadata["official_ad_blurb_plain"] = html_to_plain_text(ad)
     metadata["moby_catalog_fields"] = moby_catalog_fields(metadata)
-    metadata["attribution"] = moby_attribution_text(metadata)
+    if moby_cfg is None:
+        root = Path("/config") if Path("/config/mobygames.yaml").is_file() else Path(__file__).resolve().parents[1] / "config"
+        moby_cfg = load_mobygames_config(root)
+    metadata["attribution"] = moby_attribution_text(metadata, moby_cfg)
     return metadata
 
 
@@ -445,15 +448,110 @@ def moby_search_title_candidates(primary: str) -> list[str]:
     return candidates
 
 
+_MOBY_SEARCH_TOKEN_STOP = frozenset(
+    {"the", "and", "for", "from", "with", "game", "video", "de", "la", "le", "der", "die", "das"}
+)
+
+
+def _moby_search_tokens(search_title: str) -> list[str]:
+    tokens = re.findall(r"[a-z0-9]+", (search_title or "").casefold())
+    return [t for t in tokens if len(t) > 2 and t not in _MOBY_SEARCH_TOKEN_STOP]
+
+
+def moby_title_matches_search(moby_title: str, search_title: str) -> bool:
+    """Reject API/DDG hits that only share a vague word (e.g. Akuma) with the press folder title."""
+    search_tokens = _moby_search_tokens(search_title)
+    if not search_tokens:
+        return True
+    moby_fold = (moby_title or "").casefold()
+    for token in search_tokens:
+        if token not in moby_fold:
+            return False
+    return True
+
+
+def web_search_fallback_enabled(moby_cfg: dict) -> bool:
+    raw = moby_cfg.get("web_search_fallback")
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, dict):
+        return bool(raw.get("enabled"))
+    return False
+
+
+def web_search_fallback_max_results(moby_cfg: dict) -> int:
+    raw = moby_cfg.get("web_search_fallback")
+    if isinstance(raw, dict):
+        try:
+            return max(1, int(raw.get("max_results", 10)))
+        except (TypeError, ValueError):
+            return 10
+    return 10
+
+
+def resolve_web_search_fallback(
+    client: MobyClient,
+    search_title: str,
+    moby_cfg: dict,
+) -> MobyResult:
+    """Try each DDG Moby URL; accept the first API detail whose title passes token match."""
+    from moby_web_search import duckduckgo_moby_game_candidates
+
+    max_results = web_search_fallback_max_results(moby_cfg)
+    candidates = duckduckgo_moby_game_candidates(
+        search_title, moby_cfg, max_results=max_results
+    )
+    if not candidates:
+        return MobyResult("no_match", "moby_ddg_no_results", None, None, None, None)
+
+    tried: list[dict] = []
+    for game_id, moby_url in candidates:
+        ddg_result = client.resolve_by_id(int(game_id), search_title)
+        moby_title = ""
+        if ddg_result.metadata_json is not None:
+            moby_title = str(
+                ddg_result.metadata_json.get("moby_title")
+                or ddg_result.metadata_json.get("title")
+                or ""
+            )
+        tried.append({"game_id": game_id, "moby_title": moby_title, "status": ddg_result.status})
+        if ddg_result.status not in ("ok", "incomplete", "ambiguous"):
+            continue
+        if not moby_title_matches_search(moby_title, search_title):
+            continue
+        if ddg_result.metadata_json is not None:
+            ddg_result.metadata_json["moby_match_source"] = "duckduckgo"
+            ddg_result.metadata_json.setdefault("moby_url", moby_url)
+            ddg_result.metadata_json["moby_ddg_candidates_tried"] = len(tried)
+        return ddg_result
+
+    return MobyResult(
+        "no_match",
+        "moby_ddg_title_mismatch",
+        None,
+        None,
+        {"search_title": search_title, "candidates_tried": tried[:10]},
+        None,
+    )
+
+
 def pick_moby_search_game(search_title: str, games: list[dict]) -> dict | None:
     if not games:
         return None
-    if len(games) == 1:
-        return games[0]
     normalized_query = search_title.casefold()
     exact = [g for g in games if (g.get("title") or "").casefold() == normalized_query]
     if len(exact) == 1:
         return exact[0]
+    title_matches = [
+        g for g in games if moby_title_matches_search(g.get("title") or "", search_title)
+    ]
+    if len(title_matches) == 1:
+        return title_matches[0]
+    if len(games) == 1:
+        only = games[0]
+        if moby_title_matches_search(only.get("title") or "", search_title):
+            return only
+        return None
     if "championship edition dx" in normalized_query and "+" not in search_title:
         base = [
             g
@@ -583,7 +681,7 @@ class MobyClient:
             metadata["developers"] = all_developers
 
         attach_official_ad_blurb(metadata, self, platform_ids, self.cfg)
-        finalize_moby_metadata(metadata)
+        finalize_moby_metadata(metadata, self.cfg)
 
         has_body = bool((metadata.get("description_plain") or metadata.get("official_ad_blurb_plain") or "").strip())
         has_catalog = bool(
@@ -615,8 +713,6 @@ def resolve_for_game(
     moby_game_id: int | None = None,
     moby_search_title: str | None = None,
 ) -> MobyResult:
-    from config_require import require_bool
-
     moby_cfg = load_mobygames_config(config_root)
     if not require_bool(moby_cfg, "enabled", where="mobygames.yaml"):
         return MobyResult("skipped", None, None, None, None, None)
@@ -644,20 +740,14 @@ def resolve_for_game(
                 best = result
         if best is not None and best.status == "ambiguous":
             return best
-        if require_bool(moby_cfg, "web_search_fallback", where="mobygames.yaml") and (
+        if web_search_fallback_enabled(moby_cfg) and (
             best is None or best.status in ("no_match", "error")
         ):
-            from moby_web_search import duckduckgo_moby_game_id
-
-            game_id, moby_url = duckduckgo_moby_game_id(search, moby_cfg)
-            if game_id:
-                ddg_result = client.resolve_by_id(int(game_id), search)
-                if ddg_result.metadata_json is not None:
-                    ddg_result.metadata_json["moby_match_source"] = "duckduckgo"
-                    if moby_url:
-                        ddg_result.metadata_json.setdefault("moby_url", moby_url)
-                if ddg_result.status in ("ok", "incomplete", "ambiguous"):
-                    return ddg_result
+            ddg_result = resolve_web_search_fallback(client, search, moby_cfg)
+            if ddg_result.status in ("ok", "incomplete", "ambiguous"):
+                return ddg_result
+            if ddg_result.block_reason in ("moby_ddg_title_mismatch", "moby_ddg_no_results"):
+                return ddg_result
         return best if best is not None else MobyResult("no_match", "moby_no_match", None, None, None, None)
     except RuntimeError as e:
         if "moby_credentials_missing" in str(e):

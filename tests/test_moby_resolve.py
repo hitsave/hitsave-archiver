@@ -14,12 +14,18 @@ MOBY_CFG = {
 }
 
 from moby_resolve import (  # noqa: E402
+    MobyResult,
     apply_moby_omeka_profile_to_metadata,
     build_moby_attribution_sentence,
     moby_attribution_text,
     moby_attribution_for_omeka_rights,
     moby_description_for_omeka,
     moby_search_title_candidates,
+    moby_title_matches_search,
+    pick_moby_search_game,
+    resolve_web_search_fallback,
+    web_search_fallback_enabled,
+    web_search_fallback_max_results,
 )
 
 
@@ -46,6 +52,64 @@ def test_attribution_skips_redundant_data_suffix_when_mobygames_named() -> None:
     meta = {"moby_game_id": 1, "moby_catalog_fields": ["publisher"]}
     moby_cfg = {"attribution_suffix": "Data by MobyGames.com"}
     assert moby_attribution_text(meta, moby_cfg) == "Publisher information from MobyGames."
+
+
+def test_moby_title_matches_search_rejects_akuma_demon_spawn() -> None:
+    assert not moby_title_matches_search("Akuma: Demon Spawn", "Akuma de Oshioki")
+    assert moby_title_matches_search("Akuma de Oshioki! Marukido", "Akuma de Oshioki")
+
+
+def test_pick_moby_search_game_unique_title_token_match() -> None:
+    games = [
+        {"game_id": 1, "title": "Alien³"},
+        {"game_id": 2, "title": "Alien Breed: Impact"},
+    ]
+    chosen = pick_moby_search_game("Alien Breed Impact", games)
+    assert chosen is not None
+    assert chosen["game_id"] == 2
+
+
+def test_web_search_fallback_config_object() -> None:
+    cfg = {"web_search_fallback": {"enabled": True, "max_results": 20}}
+    assert web_search_fallback_enabled(cfg) is True
+    assert web_search_fallback_max_results(cfg) == 20
+    assert web_search_fallback_enabled({"web_search_fallback": False}) is False
+
+
+def test_resolve_web_search_fallback_skips_first_bad_ddg_hit(monkeypatch) -> None:
+    class FakeClient:
+        def resolve_by_id(self, game_id: int, search_title: str = "", **kwargs: object) -> MobyResult:
+            titles = {
+                2865: "Akuma: Demon Spawn",
+                9001: "Akuma de Oshioki! Marukido Sadoshiki",
+            }
+            title = titles.get(game_id, "Unknown")
+            return MobyResult(
+                "ok",
+                None,
+                game_id,
+                title,
+                {"moby_game_id": game_id, "moby_title": title},
+                "first_release",
+            )
+
+    monkeypatch.setattr(
+        "moby_web_search.duckduckgo_moby_game_candidates",
+        lambda *args, **kwargs: [
+            (2865, "https://www.mobygames.com/game/2865/"),
+            (9001, "https://www.mobygames.com/game/9001/"),
+        ],
+    )
+    moby_cfg = {
+        "public_game_url_template": "https://www.mobygames.com/game/{game_id}",
+        "web_search_fallback": {"enabled": True, "max_results": 10},
+    }
+    result = resolve_web_search_fallback(FakeClient(), "Akuma de Oshioki", moby_cfg)
+    assert result.status == "ok"
+    assert result.moby_game_id == 9001
+    assert result.metadata_json is not None
+    assert result.metadata_json.get("moby_match_source") == "duckduckgo"
+    assert result.metadata_json.get("moby_ddg_candidates_tried") == 2
 
 
 def test_search_title_candidates_champion_to_championship() -> None:

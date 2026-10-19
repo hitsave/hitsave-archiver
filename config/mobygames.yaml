@@ -21,5 +21,7 @@ mobygames:
   # Record moby_status / block_reason on the ledger; do not abort ingest.
   block_on_failure: false
   search_title_from: folder_name
-  # When API title search finds nothing: ddgs "{title} mobygames" → Moby URL → game id.
-  web_search_fallback: true
+  # When API title search finds nothing: ddgs "{title} mobygames", try each URL until title tokens match.
+  web_search_fallback:
+    enabled: true
+    max_results: 15

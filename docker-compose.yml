@@ -57,6 +57,7 @@ services:
       HITSAVE_CONFIG_ROOT: /config
     volumes:
       - ./config:/config:ro
+      - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/omeka-catalog.yaml:/config/omeka-catalog.yaml:ro
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/secrets:/config/secrets:ro
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/preservation/database.yaml:/config/preservation/database.yaml:ro
       - ${HOST_OUTPUT:-./data/output}:/output:ro
