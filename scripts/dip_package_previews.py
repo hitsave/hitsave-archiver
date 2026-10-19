@@ -40,6 +40,7 @@ def load_preview_config(path: Path | None = None) -> dict:
     if not cfg_path.is_file():
         return {
             "gallery_max_bytes": 52428800,
+            "max_image_pixels": 536_870_912,
             "browse_preview_max_bytes_per_image": 10485760,
             "collage_min_images": 4,
             "collage_max_images": 8,
@@ -122,6 +123,17 @@ def _scale_to_fit(img: Image.Image, max_w: int, max_h: int) -> Image.Image:
 
 def _preview_image_error(path: Path, err: BaseException) -> None:
     print(f"  skip preview (unreadable image): {path}: {err}", file=sys.stderr)
+
+
+def _apply_pillow_pixel_limit(cfg: dict) -> None:
+    """Trust archiver SIPs for preview generation; cap from dip-previews.yaml."""
+    raw = cfg.get("max_image_pixels")
+    if raw is None:
+        return
+    if int(raw) <= 0:
+        Image.MAX_IMAGE_PIXELS = None
+        return
+    Image.MAX_IMAGE_PIXELS = int(raw)
 
 
 def _load_image(path: Path, max_bytes: int) -> Image.Image | None:
@@ -216,6 +228,7 @@ def write_hitsave_previews(
 ) -> dict | None:
     """Create metadata/hitsave previews; return manifest dict or None if no gallery images."""
     cfg = config or load_preview_config()
+    _apply_pillow_pixel_limit(cfg)
     meta_hitsave = bag_dir / metadata_dir / "hitsave"
     meta_hitsave.mkdir(parents=True, exist_ok=True)
 
@@ -289,6 +302,7 @@ def write_dvd_menu_packaged_previews(
 ) -> dict:
     """Pack a single DVD menu JPEG as metadata/hitsave browse + grid previews."""
     cfg = config or load_preview_config()
+    _apply_pillow_pixel_limit(cfg)
     meta_hitsave = bag_dir / metadata_dir / "hitsave"
     meta_hitsave.mkdir(parents=True, exist_ok=True)
 
