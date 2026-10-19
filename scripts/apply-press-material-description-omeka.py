@@ -44,10 +44,10 @@ def main() -> None:
 
     register_api = load_register_dip_omeka_api()
     api_cfg = load_yaml(CONFIG_ROOT / "omeka-catalog.yaml")["api"]
-    cred_path = CONFIG_ROOT / "secrets" / "omeka-api-credentials-local.yaml"
-    if not cred_path.is_file():
-        cred_path = CONFIG_ROOT / api_cfg["credentials_file"]
-    creds = load_yaml(cred_path)
+    cred_rel = Path(api_cfg["credentials_file"])
+    if cred_rel.parts and cred_rel.parts[0] == "config":
+        cred_rel = Path(*cred_rel.parts[1:])
+    creds = load_yaml(CONFIG_ROOT / cred_rel)
     ingest_cfg = load_yaml(CONFIG_ROOT / "preservation/ingest.yaml")
     db_cfg = load_yaml(Path(ingest_cfg["database"]["config_file"]))["postgres"]
 
