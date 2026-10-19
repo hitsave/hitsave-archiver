@@ -9,6 +9,7 @@ from pathlib import Path
 try:
     import psycopg
     import requests
+    import yaml
 except ImportError as e:
     print(e, file=sys.stderr)
     sys.exit(1)
@@ -22,10 +23,24 @@ from press_material_description import press_material_description  # noqa: E402
 from yaml_config import load_yaml  # noqa: E402
 
 
+def _source_subpath_sql_like(batch_yaml: Path) -> str:
+    raw = yaml.safe_load(batch_yaml.read_text()) or {}
+    sub = str(raw.get("source_subpath") or "").strip().strip("/")
+    if not sub:
+        raise SystemExit(f"batch file must set source_subpath: {batch_yaml}")
+    return f"%{sub}/%"
+
+
 def main() -> None:
-    keys = [a for a in sys.argv[1:] if not a.startswith("-")]
-    if not keys:
-        raise SystemExit("Usage: apply-press-material-description-omeka.py <game_key> [...]")
+    argv = sys.argv[1:]
+    batch_path: Path | None = None
+    if "--batch" in argv:
+        idx = argv.index("--batch")
+        if idx + 1 >= len(argv):
+            raise SystemExit("--batch requires a YAML path")
+        batch_path = Path(argv[idx + 1])
+        argv = argv[:idx] + argv[idx + 2 :]
+    keys = [a for a in argv if not a.startswith("-")]
 
     register_api = load_register_dip_omeka_api()
     api_cfg = load_yaml(CONFIG_ROOT / "omeka-catalog.yaml")["api"]
@@ -42,18 +57,39 @@ def main() -> None:
     conn = register_api.pg_connect(db_cfg)
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT game_key, omeka_item_id, inventory_json, metadata_json
-                FROM game_ingest
-                WHERE game_key = ANY(%s) AND omeka_item_id IS NOT NULL
-                """,
-                (keys,),
-            )
+            if batch_path is not None:
+                sql_like = _source_subpath_sql_like(batch_path)
+                cur.execute(
+                    """
+                    SELECT game_key, omeka_item_id, inventory_json, metadata_json
+                    FROM game_ingest
+                    WHERE omeka_item_id IS NOT NULL
+                      AND inventory_json IS NOT NULL
+                      AND source_path LIKE %s
+                    ORDER BY game_key
+                    """,
+                    (sql_like,),
+                )
+            elif keys:
+                cur.execute(
+                    """
+                    SELECT game_key, omeka_item_id, inventory_json, metadata_json
+                    FROM game_ingest
+                    WHERE game_key = ANY(%s) AND omeka_item_id IS NOT NULL
+                    ORDER BY game_key
+                    """,
+                    (keys,),
+                )
+            else:
+                raise SystemExit(
+                    "Usage: apply-press-material-description-omeka.py <game_key> [...] "
+                    "| --batch config/preservation/batch-….yml"
+                )
             rows = cur.fetchall()
     finally:
         conn.close()
 
+    updated = 0
     for game_key, item_id, inventory_json, metadata_json in rows:
         if isinstance(inventory_json, str):
             inventory_json = json.loads(inventory_json)
@@ -69,7 +105,10 @@ def main() -> None:
             int(item_id),
             {"dcterms:description": [register_api.literal_value(pid, desc)]},
         )
+        updated += 1
         print(json.dumps({"game_key": game_key, "omeka_item_id": item_id, "description": desc}))
+
+    print(json.dumps({"updated_count": updated}, indent=2))
 
 
 if __name__ == "__main__":

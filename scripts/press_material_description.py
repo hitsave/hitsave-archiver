@@ -60,6 +60,14 @@ def press_material_description(game_title: str, inventory: dict | None) -> str:
             path = path[5:]
         categories.add(_file_category(mime=row.get("mime"), path=path))
 
-    labels = [_CATEGORY_LABELS[c] for c in _CATEGORY_ORDER if c in categories]
+    if categories == {"images"}:
+        return f"Press material for {title}."
+
+    label_categories = [
+        c for c in _CATEGORY_ORDER if c in categories and c != "images"
+    ]
+    if not label_categories and "images" in categories:
+        return f"Press material for {title}."
+    labels = [_CATEGORY_LABELS[c] for c in label_categories]
     including = _format_including_phrase(labels)
     return f"Press material for {title}, including {including}."

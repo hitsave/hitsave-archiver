@@ -9,7 +9,7 @@ def test_scrubs_inventory_images_only() -> None:
         ]
     }
     text = press_material_description("Scrubs", inventory)
-    assert text == "Press material for Scrubs, including images."
+    assert text == "Press material for Scrubs."
 
 
 def test_mixed_inventory() -> None:
@@ -21,7 +21,7 @@ def test_mixed_inventory() -> None:
         ]
     }
     text = press_material_description("Example Game", inventory)
-    assert "images" in text
+    assert "images" not in text
     assert "documents" in text
     assert "videos" in text
     assert "MobyGames" not in text
