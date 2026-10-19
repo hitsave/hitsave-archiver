@@ -2,7 +2,7 @@
 
 BagIt builds from `build-bagit-package.py` embed browse collages and grid JPEG thumbnails under `metadata/hitsave/` on Wasabi (unpacked bag), plus `preview-manifest.json`. OmekaDipViewer serves these for item browse and the Embla carousel (`fN.thumb` ARK/file URLs); lightbox and downloads use full-size `data/` members.
 
-Config: `config/preservation/dip-previews.yaml` (keep aligned with Omeka `DipConfig` defaults).
+Config: `config/preservation/dip-previews.yaml` (keep aligned with Omeka `DipConfig` defaults). `max_image_pixels` raises Pillow’s decompression-bomb limit for large press art during thumbnail generation.
 
 Packages without `preview-manifest.json` fall back to on-the-fly preview generation in Omeka.
 

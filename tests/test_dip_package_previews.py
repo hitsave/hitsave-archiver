@@ -11,12 +11,27 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from dip_package_previews import _write_grid_thumb, write_hitsave_previews  # noqa: E402
+from dip_package_previews import (  # noqa: E402
+    _apply_pillow_pixel_limit,
+    _write_grid_thumb,
+    write_hitsave_previews,
+)
 
 
 def _write_min_jpeg(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     Image.new("RGB", (32, 32), color=(128, 64, 32)).save(path, "JPEG")
+
+
+def test_apply_pillow_pixel_limit_from_config() -> None:
+    prior = Image.MAX_IMAGE_PIXELS
+    try:
+        _apply_pillow_pixel_limit({"max_image_pixels": 536_870_912})
+        assert Image.MAX_IMAGE_PIXELS == 536_870_912
+        _apply_pillow_pixel_limit({"max_image_pixels": 0})
+        assert Image.MAX_IMAGE_PIXELS is None
+    finally:
+        Image.MAX_IMAGE_PIXELS = prior
 
 
 def test_truncated_jpeg_skips_grid_thumb_without_raising(tmp_path: Path) -> None:
