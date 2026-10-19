@@ -86,6 +86,16 @@ def parse_package_id(package_id: str) -> tuple[str, str]:
     return slug, uid
 
 
+def catalog_title_slug_from_game_key(game_key: str) -> str:
+    """Human-readable phrase from a package id, without the UUID suffix."""
+    key = (game_key or "").strip()
+    try:
+        slug, _ = parse_package_id(key)
+        return slug.replace("-", " ")
+    except ValueError:
+        return key.replace("-", " ")
+
+
 @dataclass(frozen=True)
 class PackageIdentity:
     title_slug: str

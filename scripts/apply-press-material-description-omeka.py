@@ -95,7 +95,14 @@ def main() -> None:
             inventory_json = json.loads(inventory_json)
         if isinstance(metadata_json, str):
             metadata_json = json.loads(metadata_json)
-        title = register_api.resolve_omeka_item_title(game_key, metadata_json)
+        get_url = register_api.api_url(base, f"items/{item_id}", creds)
+        resp = session.get(get_url, headers={"Accept": "application/ld+json"}, timeout=120)
+        if not resp.ok:
+            raise RuntimeError(f"GET item {item_id} failed ({resp.status_code}): {resp.text[:800]}")
+        item_body = resp.json()
+        title = register_api.omeka_item_catalog_title(item_body)
+        if not title:
+            title = register_api.resolve_omeka_item_title(game_key, metadata_json)
         desc = press_material_description(title, inventory_json)
         pid = register_api.resolve_property_id(session, base, creds, "dcterms:description")
         register_api.patch_item_rdf_values(
@@ -104,6 +111,7 @@ def main() -> None:
             creds,
             int(item_id),
             {"dcterms:description": [register_api.literal_value(pid, desc)]},
+            item_body=item_body,
         )
         updated += 1
         print(json.dumps({"game_key": game_key, "omeka_item_id": item_id, "description": desc}))
