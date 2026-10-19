@@ -49,6 +49,8 @@ docker compose run --rm -T omeka-catalog /config/preservation/pilot-game.yaml </
 
 **Content policy:** With `content_policy.enforce: true` in [`ingest.yaml`](../config/preservation/ingest.yaml) (default), booru-style filenames **abort ingest** and write under `$HOST_OUTPUT/quarantine/<game_key>/`. Moby `no_match` is recorded on the ledger only (`mobygames.block_on_failure: false`). Set `enforce: false` only for permissive test runs (warn in logs, no quarantine).
 
+**Moby title search:** API hits must pass [`moby_title_matches_search`](../scripts/moby_resolve.py) (every significant search word appears in the Moby title). Optional DDG fallback ([`mobygames.yaml`](../config/mobygames.yaml) `web_search_fallback`) walks up to `max_results` Moby URLs from `"{title} mobygames"` and accepts the first that passes the same check—not the first URL blindly.
+
 ### Ingest only (ledger + Wasabi, no new Omeka items)
 
 ```bash

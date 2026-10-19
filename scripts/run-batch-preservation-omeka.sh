@@ -13,8 +13,12 @@ python3 scripts/sync-preservation-config.py
 bash scripts/batch-expand-preservation.sh "$BATCH"
 
 PRIVATE="${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}"
-if [[ ! -f "$PRIVATE/secrets/omeka-api-credentials-local.yaml" ]]; then
-  echo "Create $PRIVATE/secrets/omeka-api-credentials-local.yaml (see config/secrets/*.example)" >&2
+if [[ ! -f "$PRIVATE/omeka-catalog.yaml" ]]; then
+  echo "Missing $PRIVATE/omeka-catalog.yaml (production Omeka API target; see omeka-catalog.test.yaml for test)" >&2
+  exit 1
+fi
+if [[ ! -f "$PRIVATE/secrets/omeka-api-credentials-prod.yaml" ]]; then
+  echo "Create $PRIVATE/secrets/omeka-api-credentials-prod.yaml for archive.hitsave.org (see config/secrets/*.example)" >&2
   exit 1
 fi
 
