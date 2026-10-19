@@ -713,6 +713,8 @@ def resolve_for_game(
     moby_game_id: int | None = None,
     moby_search_title: str | None = None,
 ) -> MobyResult:
+    from config_require import require_bool
+
     moby_cfg = load_mobygames_config(config_root)
     if not require_bool(moby_cfg, "enabled", where="mobygames.yaml"):
         return MobyResult("skipped", None, None, None, None, None)
