@@ -31,6 +31,9 @@ content_policy:
       enabled: true
       # Match when filename starts with a post id and has at least this many "__" separators.
       min_double_underscore_segments: 3
+    hash_named_images:
+      enabled: true
+      # Quarantine when every image in the SIP is a 32-char hex name (e.g. 8fa9e6b3….jpg).
 
 preservation:
   repository_code: hitsave
