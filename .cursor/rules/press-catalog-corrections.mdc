@@ -1,0 +1,60 @@
+---
+description: Press catalog title/metadata corrections (Omeka + Wasabi bag)
+globs: scripts/patch-press-catalog-omeka-and-bag.py,scripts/apply-moby-metadata-omeka.py
+alwaysApply: false
+---
+
+# Press catalog corrections
+
+When fixing Omeka titles, descriptions, or bag metadata for a press-material item:
+
+## Ledger `game_key` is the full package id
+
+Do **not** guess a short slug (`avengers-initiative`). Ledger **`game_key`** is **`package_id`**: `{title-slug}-{uuid}` (see `docs/config-contract.md`).
+
+**Always resolve from Postgres first** (`hitsave_ledger`, table `game_ingest`):
+
+```sql
+SELECT game_key, omeka_item_id, moby_title, aip_wasabi_prefix
+FROM game_ingest
+WHERE omeka_item_id = <item_id>;
+-- or: WHERE game_key LIKE 'avengers-initiative-%'
+```
+
+## Patch script (Omeka + Wasabi bag)
+
+Run via **`docker compose run --rm --entrypoint python omeka-catalog`** with **`HITSAVE_PRIVATE_CONFIG`** pointing at **`hitsave-archiver-config`**.
+
+Prefer **`--omeka-item-id`** (from ARK name segment or public API) so the script loads the correct **`game_key`**:
+
+```bash
+docker compose run --rm --entrypoint python omeka-catalog \
+  /app/scripts/patch-press-catalog-omeka-and-bag.py \
+  --omeka-item-id 27710 \
+  --title 'Marvel: Avengers Initiative' \
+  --former-title 'Avengers Initiative' \
+  --reference-uri 'https://www.mobygames.com/game/76444' \
+  --description 'Press material for Marvel: Avengers Initiative.' \
+  --correction-summary '…' \
+  --execute
+```
+
+Dry-run: omit **`--execute`**. Use **`--game-key`** only when you already copied the full key from the ledger.
+
+## Post-ingest quarantine (wallpaper / policy)
+
+Hide a live catalog row and set ledger **`status=quarantine`**:
+
+```bash
+docker compose run --rm --entrypoint python omeka-catalog \
+  /app/scripts/curation-quarantine-omeka.py \
+  --omeka-item-id 27706 \
+  --reason hash_named_images \
+  Single md5-named JPEG; not press-kit material (Avatar TLA wallpaper).
+```
+
+Use **`block_reason`** codes aligned with ingest **`content_policy`** (`hash_named_images`, `booru_tagged_filenames`, …).
+
+## After Omeka-only API edits
+
+If you patched Omeka without the script, still run the script with **`--omeka-item-id`** and **`--execute`** so **`metadata/submission.json`**, **`bag-info.txt`**, and **`tagmanifest-sha256.txt`** on Wasabi stay aligned (re-register will not revert titles if generated batch YAML on the preservation host is updated separately).

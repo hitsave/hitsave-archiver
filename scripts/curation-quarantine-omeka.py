@@ -2,6 +2,7 @@
 """Staff curation: flag ledger quarantine + hide Omeka item/DIP media (post-ingest)."""
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -21,23 +22,65 @@ from omeka_catalog_common import load_register_dip_omeka_api, set_resource_publi
 from yaml_config import load_yaml  # noqa: E402
 
 
+def _ledger_connect(register_api, ingest_cfg):
+    db_cfg = load_yaml(Path(ingest_cfg["database"]["config_file"]))["postgres"]
+    return register_api.pg_connect(db_cfg)
+
+
+def _fetch_row(conn, *, game_key: str | None, omeka_item_id: int | None) -> tuple[str, int | None, int | None]:
+    with conn.cursor() as cur:
+        if omeka_item_id is not None:
+            cur.execute(
+                """
+                SELECT game_key, omeka_item_id, omeka_media_id
+                FROM game_ingest
+                WHERE omeka_item_id = %s
+                """,
+                (omeka_item_id,),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT game_key, omeka_item_id, omeka_media_id
+                FROM game_ingest
+                WHERE game_key = %s
+                """,
+                (game_key,),
+            )
+        row = cur.fetchone()
+    if not row:
+        if omeka_item_id is not None:
+            raise SystemExit(f"No ledger row for omeka_item_id={omeka_item_id}")
+        raise SystemExit(f"Unknown game_key: {game_key}")
+    return row[0], row[1], row[2]
+
+
 def main() -> None:
-    argv = sys.argv[1:]
-    if not argv or argv[0] in ("-h", "--help"):
-        raise SystemExit(
-            "Usage: curation-quarantine-omeka.py <game_key> [--reason CODE] <note...>"
-        )
-    game_key = argv[0]
-    reason = "curation_review"
-    rest = argv[1:]
-    if rest and rest[0] == "--reason":
-        if len(rest) < 2:
-            raise SystemExit("--reason requires a code (e.g. fan_book)")
-        reason = rest[1].strip()
-        rest = rest[2:]
-    note = " ".join(rest).strip()
+    parser = argparse.ArgumentParser(description=__doc__)
+    id_group = parser.add_mutually_exclusive_group(required=True)
+    id_group.add_argument(
+        "--game-key",
+        help="Ledger game_key (full package_id)",
+    )
+    id_group.add_argument(
+        "--omeka-item-id",
+        type=int,
+        help="Resolve game_key from game_ingest.omeka_item_id (e.g. ARK name segment)",
+    )
+    parser.add_argument(
+        "--reason",
+        default="curation_review",
+        help="Ledger block_reason code (e.g. hash_named_images, booru_tagged_filenames)",
+    )
+    parser.add_argument(
+        "note",
+        nargs="+",
+        help="Human-readable curation note (required)",
+    )
+    args = parser.parse_args()
+    note = " ".join(args.note).strip()
     if not note:
-        raise SystemExit("Curation note is required (describe why this row is quarantined).")
+        raise SystemExit("Curation note is required.")
 
     register_api = load_register_dip_omeka_api()
     api_cfg = load_yaml(CONFIG_ROOT / "omeka-catalog.yaml")["api"]
@@ -46,26 +89,18 @@ def main() -> None:
         cred_path = CONFIG_ROOT / Path(*cred_path.parts[1:])
     creds = load_yaml(cred_path)
     ingest_cfg = load_yaml(CONFIG_ROOT / "preservation/ingest.yaml")
-    db_cfg = load_yaml(Path(ingest_cfg["database"]["config_file"]))["postgres"]
 
     session = requests.Session()
     base = api_cfg["base_url"]
 
-    conn = register_api.pg_connect(db_cfg)
+    conn = _ledger_connect(register_api, ingest_cfg)
     try:
+        game_key, item_id, media_id = _fetch_row(
+            conn,
+            game_key=args.game_key,
+            omeka_item_id=args.omeka_item_id,
+        )
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT omeka_item_id, omeka_media_id
-                FROM game_ingest
-                WHERE game_key = %s
-                """,
-                (game_key,),
-            )
-            row = cur.fetchone()
-            if not row:
-                raise SystemExit(f"Unknown game_key: {game_key}")
-            item_id, media_id = row[0], row[1]
             cur.execute(
                 """
                 UPDATE game_ingest
@@ -75,7 +110,7 @@ def main() -> None:
                     updated_at = NOW()
                 WHERE game_key = %s
                 """,
-                (reason, note, game_key),
+                (args.reason, note, game_key),
             )
         conn.commit()
     finally:
@@ -110,7 +145,7 @@ def main() -> None:
             {
                 "game_key": game_key,
                 "ledger_status": "quarantine",
-                "block_reason": reason,
+                "block_reason": args.reason,
                 "error_message": note,
                 "omeka_item_id": item_id,
                 "omeka_media_id": media_id,

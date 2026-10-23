@@ -75,6 +75,7 @@ COPY scripts/batch-expand-preservation.py \
     scripts/strip-moby-ddg-mismatches-omeka.py \
     scripts/curation-quarantine-omeka.py \
     scripts/apply-press-material-description-omeka.py \
+    scripts/patch-press-catalog-omeka-and-bag.py \
     scripts/moby_resolve.py \
     scripts/moby_page_scrape.py \
     scripts/moby_web_search.py \

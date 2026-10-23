@@ -14,6 +14,7 @@ from source_content_policy import (  # noqa: E402
     ContentPolicyError,
     check_source_content_policy,
     is_booru_tagged_filename,
+    is_hash_named_image_filename,
 )
 
 RULES = BooruFilenameRules()
@@ -52,6 +53,45 @@ def test_enforce_blocks_folder(tmp_path: Path) -> None:
     except ContentPolicyError as e:
         assert e.code == "booru_tagged_filenames"
         assert len(e.matches) == 1
+
+
+def test_hash_named_avatar_style_wallpaper() -> None:
+    assert is_hash_named_image_filename("8fa9e6b3c06dcf6e3bca8a0f821d6324.jpg")
+
+
+def test_hash_named_blocks_single_image_sip(tmp_path: Path) -> None:
+    folder = tmp_path / "Avatar_The_Last_Airbender"
+    folder.mkdir()
+    (folder / "8fa9e6b3c06dcf6e3bca8a0f821d6324.jpg").write_bytes(b"x")
+    cfg = {
+        "content_policy": {
+            "enforce": True,
+            "blockers": {
+                "booru_tagged_filenames": {"enabled": False},
+                "hash_named_images": {"enabled": True},
+            },
+        }
+    }
+    try:
+        check_source_content_policy(folder, cfg)
+        raise AssertionError("expected ContentPolicyError")
+    except ContentPolicyError as e:
+        assert e.code == "hash_named_images"
+
+
+def test_hash_named_does_not_block_mixed_press_kit(tmp_path: Path) -> None:
+    folder = tmp_path / "game"
+    folder.mkdir()
+    (folder / "8fa9e6b3c06dcf6e3bca8a0f821d6324.jpg").write_bytes(b"x")
+    (folder / "fact_sheet.pdf").write_bytes(b"x")
+    (folder / "cover_art_final.jpg").write_bytes(b"x")
+    cfg = {
+        "content_policy": {
+            "enforce": True,
+            "blockers": {"hash_named_images": {"enabled": True}},
+        }
+    }
+    check_source_content_policy(folder, cfg)
 
 
 def test_enforce_false_warns_only(capsys) -> None:
