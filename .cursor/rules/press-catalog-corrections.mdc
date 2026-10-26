@@ -23,9 +23,13 @@ WHERE omeka_item_id = <item_id>;
 
 ## Patch script (Omeka + Wasabi bag)
 
-Run via **`docker compose run --rm --entrypoint python omeka-catalog`** with **`HITSAVE_PRIVATE_CONFIG`** pointing at **`hitsave-archiver-config`**.
+**Status-web (preferred):** `http://<host>:8090/correct?omeka_ref=<id>` — form runs `correct-catalog-item.py` (no Windmill login). **`execute`** defaults to **true** for Wasabi bag sync when title or Moby URL changes.
 
-Prefer **`--omeka-item-id`** (from ARK name segment or public API) so the script loads the correct **`game_key`**:
+**Windmill (optional):** `f/hitsave/correct_catalog_item` — same fields for scheduled/automation use.
+
+**CLI:** `scripts/correct-catalog-item.py` (same flags as `--omeka-ref`, `--title`, …).
+
+Press-specific one-shot (all fields required) remains **`patch-press-catalog-omeka-and-bag.py`**. Prefer **`--omeka-item-id`** (from ARK name segment or public API) so the script loads the correct **`game_key`**:
 
 ```bash
 docker compose run --rm --entrypoint python omeka-catalog \

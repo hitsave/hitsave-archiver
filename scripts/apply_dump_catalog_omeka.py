@@ -19,7 +19,7 @@ SCRIPTS = REPO_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from dump_catalog_omeka import (  # noqa: E402
-    build_redump_values,
+    build_dump_catalog_values,
     dump_catalog_config,
     manifest_from_sip_and_handoff,
 )
@@ -149,7 +149,7 @@ def apply_handoff_dump_catalog(
         if not resp.ok:
             raise RuntimeError(f"GET item {patch_item_id} failed ({resp.status_code}): {resp.text[:800]}")
         item_body = resp.json()
-        updates, catalog_title = build_redump_values(
+        updates, catalog_title = build_dump_catalog_values(
             session,
             base,
             creds,
@@ -174,7 +174,7 @@ def apply_handoff_dump_catalog(
         set_resource_public(session, base, creds, "items", patch_item_id, is_public=is_public, api=api)
         item_id = patch_item_id
     else:
-        rdf_values, catalog_title = build_redump_values(
+        rdf_values, catalog_title = build_dump_catalog_values(
             session,
             base,
             creds,
@@ -307,7 +307,7 @@ def apply_dump_catalog(
         if resp.ok:
             existing_body = resp.json()
 
-    rdf_values, catalog_title = build_redump_values(
+    rdf_values, catalog_title = build_dump_catalog_values(
         session,
         base,
         creds,

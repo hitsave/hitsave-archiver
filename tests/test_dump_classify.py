@@ -81,6 +81,43 @@ def test_playstation_rom_track_classifies_as_redump() -> None:
         )
 
 
+SWITCH_FIXTURE = ROOT / "fixtures" / "switch-submission-blud.xml"
+
+
+def test_switch_submission_xml_classifies() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        sip = Path(tmp)
+        assert SWITCH_FIXTURE.is_file()
+        shutil.copy(
+            SWITCH_FIXTURE,
+            sip / "#BLUD - hitsaveorg - 2026-05-01 Submission.xml",
+        )
+        clf = classify_dump_sip(sip, package_id="blud-switch-test", sort_letter="B")
+        assert clf.dump_class == "switch"
+        assert clf.dump_system == "Nintendo Switch"
+        assert clf.dump_category == "Games"
+        assert clf.package_storage_prefix == "dumps/Nintendo Switch/B/blud-switch-test"
+
+
+def test_switch_game_folder_layout_classifies() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        game = Path(tmp) / "Aka"
+        version = game / "1.0.6"
+        scans = game / "Scans"
+        version.mkdir(parents=True)
+        scans.mkdir()
+        (scans / "cart.png").write_bytes(b"png")
+        assert SWITCH_FIXTURE.is_file()
+        shutil.copy(
+            SWITCH_FIXTURE,
+            version / "Aka - hitsaveorg - 2026-05-01 Submission.xml",
+        )
+        clf = classify_dump_sip(game, package_id="switch-aka-test", sort_letter="A")
+        assert clf.dump_class == "switch"
+        assert clf.switch_submission is not None
+        assert clf.switch_submission.game_name == "#BLUD"
+
+
 def test_missing_sidecar_is_other() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         sip = Path(tmp)

@@ -20,6 +20,7 @@ services:
   status-web:
     volumes:
       - ./config:/config:ro
+      - ./scripts:/app/scripts:ro
       - ${HITSAVE_PRIVATE_CONFIG:-./.ci/private-config}/preservation/database.yaml:/config/preservation/database.yaml:ro
 
   fixity-cron:

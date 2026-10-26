@@ -4,11 +4,15 @@ Community dump pipelines (Google Drive and Wasabi incoming → **hitsave-gdrive-
 
 ## Prerequisites
 
-- Sibling checkouts: `hitsave-archiver`, `hitsave-archiver-config`, `hitsave-gdrive-intake` (or set `HITSAVE_GDRIVE_INTAKE_ROOT`, `HITSAVE_PRIVATE_CONFIG`, `HITSAVE_BUNDLE_ROOT`).
+- `hitsave-archiver-config` on `HITSAVE_PRIVATE_CONFIG` / `host.env`.
+- **Poll** uses the **Google Drive / Wasabi APIs** via the `gdrive-intake` container (`docker-compose.gdrive-intake.yml` from the archiver root). It does **not** scan `HOST_GDRIVE_INTAKE` for new packages.
+- Set **`HITSAVE_GDRIVE_INTAKE_ROOT`** (or **`HITSAVE_GDRIVE_INTAKE_CONFIG_DIR`** + **`HITSAVE_GDRIVE_INTAKE_SECRETS_DIR`**) to the gdrive-intake checkout or config tree — no need for a sibling directory layout if paths are explicit.
 - `source hitsave-archiver-config/host.env` — **`HOST_GDRIVE_INTAKE`**, **`HOST_OUTPUT`**, **`HITSAVE_PRIVATE_CONFIG`**.
 - Prod Omeka catalog overlay at **`$HITSAVE_PRIVATE_CONFIG/omeka-catalog.yaml`** (for `register-dump-omeka.sh`).
 
 Logs and poll JSON default to **`hitsave-archiver/.generated/`** (override with **`HITSAVE_REMOTE_INTAKE_LOG_DIR`**).
+
+Poll JSON under `.generated/` is for sweeps and move-to-processed scripts only. **Ops visibility:** `game_ingest` ledger + status-web **Health** (not a separate inbox poll UI).
 
 ## Main commands
 
@@ -26,8 +30,9 @@ Logs and poll JSON default to **`hitsave-archiver/.generated/`** (override with 
 | `move-wasabi-redump-to-processed.sh` | Poll Wasabi incoming + MOVE complete packages to `processed/` |
 | `move-wasabi-incoming-prefix-to-processed.sh` | MOVE one incoming prefix tree to `processed/` (`--prefix`, `--execute`) |
 | `flatten-gamewavedvd-wasabi.py` | Flatten nested GameWaveDVD folder layout on incoming Wasabi (dry-run default) |
+| `check-wasabi-inbox-processed.py` | One-off: compare poll JSON vs Wasabi incoming/`processed/` vs ledger-complete rows |
 
-Poll helpers: `gdrive-redump-poll-packages.sh`, `wasabi-redump-poll-packages.sh`.
+Poll helpers (sweep internals): `gdrive-redump-poll-packages.sh`, `wasabi-redump-poll-packages.sh`.
 
 Drive poll skips folders named `processed` and packages with **no disc image** (sidecar-only stubs — ingest from Wasabi instead). See [remote-intake-lanes.md](../../docs/remote-intake-lanes.md) acceptance checklist.
 

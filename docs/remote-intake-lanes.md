@@ -130,7 +130,7 @@ Fill in Drive folder IDs, Wasabi incoming bucket/prefixes, and host env variable
 
 ### Community dumps — Redump, No-Intro, … (live)
 
-1. **Configure** — gdrive-intake `config/gdrive.yaml`, `config/intake.yaml` (dump profile / sidecar names); archiver `submission-sources` for the ready-tree prefix; private `wasabi-redump-intake.yaml` (or renamed incoming config) for Wasabi drop zones ([gdrive-intake README](https://github.com/hitsave/hitsave-gdrive-intake)).
+1. **Configure** — gdrive-intake `config/gdrive.yaml`, `config/intake.yaml` (dump profile / sidecar names); archiver `submission-sources` for the ready-tree prefix; private `preservation/wasabi-redump-intake.yaml` for Wasabi drop zones ([example](../config/preservation/wasabi-redump-intake.yaml.example), [gdrive-intake README](https://github.com/hitsave/hitsave-gdrive-intake)).
 2. **Stage** — `gdrive-intake poll --once` / `process --folder-id …`, or `poll-wasabi` / `process-wasabi …` (sidecar verify before promote to `ready/`).
 3. **Ingest** — `docker compose run --rm ingest-worker /data/gdrive-intake/ready/<slug>/game.ingest.yaml`
 4. **Catalog** — `scripts/remote-intake/register-dump-omeka.sh` or `register-prod-dumps-omeka.sh` ([gdrive-intake-handoff.md](./gdrive-intake-handoff.md)).
@@ -140,6 +140,10 @@ Fill in Drive folder IDs, Wasabi incoming bucket/prefixes, and host env variable
 Redump is the **reference sidecar** implemented today; No-Intro and other org sidecars should reuse this flow as parsers and verify rules are added ([#16](https://github.com/hitsave/hitsave-archiver/issues/16)).
 
 **Automated spot-check (one package):** `scripts/remote-intake/acceptance-redump-package.sh --slug '<ready-slug>'`.
+
+### Nintendo Switch dumps (in progress, [#18](https://github.com/hitsave/hitsave-archiver/issues/18))
+
+Contributor layout: **`{game title}/Scans/`** (photos) and **`{game title}/{version}/`** (No-Intro-style **`Submission.xml`**, cart **`.xci`**, `.bin` sidecars). **Ingest SIP = the game title folder** (BagIt includes `Scans/`, each `{version}/`, and sidecars; `_ocr_crop_debug/` is omitted). Sidecar XML is resolved under a version subfolder when absent at the game root. Archiver **`dump_class: switch`** → Wasabi `dumps/Nintendo Switch/{sort_letter}/{package_id}/`. Omeka catalog uses folder title + version label (no box/cart serials); title ID (`gameid1`) may be stored as `dcterms:identifier`.
 
 ### Analog (planned)
 

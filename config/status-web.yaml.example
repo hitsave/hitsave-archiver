@@ -1,0 +1,31 @@
+# Copy to config/status-web.yaml (gitignored) — see docs/operator-config.md
+server:
+  # Listen on all interfaces (pair with compose 0.0.0.0:8090:8090 for LAN access).
+  host: 0.0.0.0
+  port: 8090
+database:
+  config_file: /config/preservation/database.yaml
+omeka:
+  # Production archive (public items at /item/{id}, not /s/{slug}/item/…).
+  public_admin_base: https://archive.hitsave.org/admin
+  public_site_base: https://archive.hitsave.org
+logs:
+  generated_dir: /archiver/.generated
+ledger:
+  default_per_page: 50
+  per_page_options: [25, 50, 100, 200]
+  max_per_page: 200
+# Catalog corrections: GET/POST /correct on this service (no Windmill login required).
+ops:
+  # Set to your Windmill UI base URL, or leave unset to hide /ops API features.
+  windmill_ui_url: http://127.0.0.1:8089
+  windmill:
+    workspace: hitsave-archiver
+    # api_url defaults to {windmill_ui_url}/api
+    token_file: /config/secrets/windmill-status-web.token
+    scripts:
+      Remote intake sweep: f/hitsave/remote_intake_sweep
+      Wasabi inbox sweep: f/hitsave/wasabi_redump_inbox_sweep
+      GDrive inbox sweep: f/hitsave/gdrive_redump_inbox_sweep
+      Batch resume Omeka: f/hitsave/batch_resume_omeka
+      Ledger health report: f/hitsave/ledger_health_report

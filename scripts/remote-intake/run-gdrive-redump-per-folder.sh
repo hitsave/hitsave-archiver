@@ -24,8 +24,7 @@ READY="${HOST_GDRIVE_INTAKE}/ready"
 exec > >(tee -a "$LOG") 2>&1
 echo "=== GDrive Redump per-folder pipeline started $(date -Is) ==="
 
-cd "$ARCHIVER"
-docker compose up -d postgres clamav >/dev/null
+remote_intake_archiver_compose up -d postgres clamav >/dev/null
 
 mapfile -t pairs < <("$RI/gdrive-redump-poll-packages.sh")
 echo "packages on Drive: ${#pairs[@]}"
@@ -33,7 +32,7 @@ echo "packages on Drive: ${#pairs[@]}"
 ledger_status_for_slug() {
   local slug="$1"
   local slug_sql="${slug//\'/\'\'}"
-  docker compose exec -T postgres psql -U hitsave -d hitsave_ledger -tAc \
+  remote_intake_archiver_compose exec -T postgres psql -U hitsave -d hitsave_ledger -tAc \
     "SELECT COALESCE(status,'')
      FROM game_ingest
      WHERE ingest_kind = 'dump'
@@ -74,18 +73,15 @@ for pair in "${pairs[@]}"; do
 
   if [[ ! -f "$cfg" ]]; then
     echo "--- stage from Drive (Redump MD5/SHA1 fixity before ready/) $fid ---"
-    cd "$GDRIVE"
-    if docker compose run --rm -T --user 1000:1000 gdrive-intake process \
+    if remote_intake_gdrive_compose run --rm -T --user 1000:1000 gdrive-intake process \
       --folder-id "$fid" \
       --config-root /config \
       --skip-stable-check; then
       echo "--- staged $slug ---"
     else
       echo "--- FAILED stage $slug (skip ingest) ---"
-      cd "$ARCHIVER"
       continue
     fi
-    cd "$ARCHIVER"
     cfg="$READY/$slug/game.ingest.yaml"
     if [[ ! -f "$cfg" ]]; then
       echo "--- no game.ingest.yaml after process; skip ingest ---"
@@ -102,7 +98,7 @@ for pair in "${pairs[@]}"; do
   fi
 
   echo "--- ingest (BagIt manifest + Wasabi; separate from Drive fixity) $slug ---"
-  if docker compose run --rm -T ingest-worker "/data/gdrive-intake/ready/$slug/game.ingest.yaml"; then
+  if remote_intake_archiver_compose run --rm -T ingest-worker "/data/gdrive-intake/ready/$slug/game.ingest.yaml"; then
     echo "=== done ingest $slug $(date -Is) ==="
     register_omeka "$slug"
   else

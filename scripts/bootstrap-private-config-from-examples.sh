@@ -59,7 +59,16 @@ copy_example "$ROOT/config/secrets/omeka-api-credentials-local.yaml.example" \
   "$TARGET/secrets/omeka-api-credentials-local.yaml"
 copy_example "$ROOT/config/secrets/omeka-api-credentials-prod.yaml.example" \
   "$TARGET/secrets/omeka-api-credentials-prod.yaml"
+copy_example "$ROOT/config/secrets/windmill-status-web.token.example" \
+  "$TARGET/secrets/windmill-status-web.token"
 copy_example "$ROOT/config/preservation/database.yaml.example" \
   "$TARGET/preservation/database.yaml"
+copy_example "$ROOT/config/preservation/wasabi-redump-intake.yaml.example" \
+  "$TARGET/preservation/wasabi-redump-intake.yaml"
+
+if [[ ! -f "$ROOT/config/status-web.yaml" ]]; then
+  cp "$ROOT/config/status-web.yaml.example" "$ROOT/config/status-web.yaml"
+  echo "Created $ROOT/config/status-web.yaml from status-web.yaml.example"
+fi
 
 echo "Private config root: $TARGET"

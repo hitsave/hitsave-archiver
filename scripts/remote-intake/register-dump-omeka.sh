@@ -73,14 +73,13 @@ declare -A TITLE_OVERRIDES=(
   ["famitsu-wave-dvd-2008-6-gatsugou-tokubetsu-furoku-01a13744-ea7c-7a91-86d7-59ed03ed62d8"]="Famitsu Wave DVD 2008 6-gatsugou Tokubetsu Furoku (Disc 1)"
 )
 
-cd "$ROOT"
-docker compose up -d postgres >/dev/null
+remote_intake_archiver_compose up -d postgres >/dev/null
 mkdir -p "$CFG_DIR"
 OMEKA_CATALOG_MOUNT=(-v "${PROD_CATALOG}:/config/omeka-catalog.yaml:ro")
 
 game_key_sql="${GAME_KEY//\'/\'\'}"
 slug_sql="${SLUG//\'/\'\'}"
-ledger_row="$(docker compose exec -T postgres psql -U hitsave -d hitsave_ledger -tAc \
+ledger_row="$(remote_intake_archiver_compose exec -T postgres psql -U hitsave -d hitsave_ledger -tAc \
   "SELECT game_key || '|' || COALESCE(status,'') || '|' || COALESCE(source_path,'') || '|' || COALESCE(omeka_item_id::text,'')
    FROM game_ingest
    WHERE ingest_kind = 'dump'
@@ -146,7 +145,7 @@ Path(os.environ["GAME_CFG"]).write_text(yaml.safe_dump(payload, sort_keys=False)
 PY
 
 echo "=== prod omeka $GAME_KEY ($title) $(date -Is) ==="
-docker compose run --rm -T --entrypoint python "${OMEKA_CATALOG_MOUNT[@]}" omeka-catalog \
+remote_intake_archiver_compose run --rm -T --entrypoint python "${OMEKA_CATALOG_MOUNT[@]}" omeka-catalog \
   /app/scripts/apply_dump_catalog_omeka.py \
   "/output/omeka-register/${GAME_KEY}.yaml" \
   "$handoff_container"

@@ -39,7 +39,11 @@ Batch expand writes **minimal** per-game YAML under `config/preservation/generat
 | Copy | SSOT | Notes |
 |------|------|--------|
 | `clamd.conf` byte limits | `submissions.yaml` `limits.max_member_bytes` | ClamAV has no YAML import; tune both when changing submission caps |
-| `status-web.yaml` `omeka.public_url` / `site_slug` | hitsave-omeka-test `settings.yaml` `public_url` | Status UI Omeka links (LAN, not localhost) |
+| `status-web.yaml` `omeka.public_admin_base` / `public_site_base` | Production `https://archive.hitsave.org` | Status UI Omeka links (use `public_url` + `site_slug` for local test stack only) |
+| `status-web.yaml` `ops.windmill_ui_url` / `ops.windmill.workspace` | Operator copy from [`status-web.yaml.example`](../config/status-web.yaml.example) | `/ops` script links + completed job list when Windmill is configured |
+| Private `secrets/windmill-status-web.token` | Windmill personal/workspace token | Bearer token for `ops.windmill.token_file`; file must be world-readable in container (644) |
+| `status-web.yaml` `ledger.default_per_page` / `per_page_options` | e.g. 50, [25, 50, 100, 200] | Ledger table pagination on `/` |
+| Status-web compose mounts | Same private `omeka-catalog.yaml` + `secrets` as `omeka-catalog` | Powers **`/correct`** (runs `correct-catalog-item.py` in-container) |
 | `omeka-catalog.yaml` `site_slug` | test Omeka settings | Same as above |
 
 ## Anti-patterns
