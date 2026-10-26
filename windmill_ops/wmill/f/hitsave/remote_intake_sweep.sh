@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Full remote intake automation: Wasabi lane then Drive lane (poll + ingest + Omeka each).
 # shellcheck disable=SC1091
-source /archiver/windmill_ops/lib/hitsave-env.sh
+source /run/hitsave/hitsave-bootstrap.sh
 RI="$ARCHIVER_ROOT/scripts/remote-intake"
 
 echo "=== remote intake sweep $(date -Is) ==="

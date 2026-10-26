@@ -49,8 +49,10 @@ services:
       HITSAVE_WINDMILL_POLL_STAGING: "1"
       HITSAVE_WINDMILL_GDRIVE_INTAKE_STAGING_HOST: /tmp/hitsave-windmill-gdrive-intake
       HOST_GDRIVE_INTAKE: /tmp/hitsave-windmill-gdrive-intake
-      HITSAVE_PRIVATE_CONFIG: /config/private
+      HITSAVE_PRIVATE_CONFIG_HOST: ${HITSAVE_PRIVATE_CONFIG_HOST:?set HITSAVE_PRIVATE_CONFIG_HOST in .env}
       ARCHIVER_HOST_PATH: ${ARCHIVER_HOST_PATH:?set ARCHIVER_HOST_PATH in .env}
+      # Bash jobs must see worker bind mounts (/archiver, /config/private); not nsjail-only paths.
+      DISABLE_NSJAIL: "true"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${ARCHIVER_HOST_PATH:?set ARCHIVER_HOST_PATH in .env}:/archiver
@@ -59,6 +61,8 @@ services:
       - ${HITSAVE_GDRIVE_INTAKE_HOST:?set HITSAVE_GDRIVE_INTAKE_HOST in .env}:/gdrive-intake:ro
       - ${HITSAVE_PRIVATE_CONFIG_HOST:?set HITSAVE_PRIVATE_CONFIG_HOST in .env}/host.env:/run/hitsave/host.env:ro
       - ./worker-paths.env:/run/hitsave/worker-paths.env:ro
+      - ${ARCHIVER_HOST_PATH:?set ARCHIVER_HOST_PATH in .env}/windmill_ops/lib/hitsave-bootstrap.sh:/run/hitsave/hitsave-bootstrap.sh:ro
+      - ${ARCHIVER_HOST_PATH:?set ARCHIVER_HOST_PATH in .env}/.generated/windmill:/run/hitsave/generated
       - ${HITSAVE_PRIVATE_CONFIG_HOST}/secrets:/config/private/secrets:ro
       - ${HITSAVE_PRIVATE_CONFIG_HOST}/preservation/database.yaml:/config/private/preservation/database.yaml:ro
       - windmill_worker_logs:/tmp/windmill/logs

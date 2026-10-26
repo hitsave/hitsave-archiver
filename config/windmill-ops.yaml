@@ -11,3 +11,6 @@ scheduling:
     cron: "0 */30 * * * *"
 defaults:
   batch_yaml: config/preservation/batch.yml
+remote_intake:
+  # Bind-mounted on windmill_worker; same path on host: <archiver>/.generated/windmill
+  generated_dir: /run/hitsave/generated

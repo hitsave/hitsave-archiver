@@ -106,7 +106,10 @@ remote_intake_compose_gdrive_intake() {
   export HITSAVE_GDRIVE_INTAKE_CONFIG_DIR="$cfg"
   export HITSAVE_GDRIVE_INTAKE_SECRETS_DIR="$sec"
   export HITSAVE_GDRIVE_INTAKE_BUILD_CONTEXT="$ctx"
-  remote_intake_archiver_compose -f "$(remote_intake_archiver_compose_dir)/docker-compose.gdrive-intake.yml" "$@"
+  local priv
+  priv="$(remote_intake_private_config_host)"
+  HITSAVE_PRIVATE_CONFIG="$priv" remote_intake_archiver_compose \
+    -f "$(remote_intake_archiver_compose_dir)/docker-compose.gdrive-intake.yml" "$@"
 }
 
 # Host checkout for `docker compose` bind mounts (Windmill worker: not /archiver on the daemon host).
@@ -118,11 +121,26 @@ remote_intake_archiver_compose_dir() {
   remote_intake_archiver_root
 }
 
+# Host checkout for docker compose volume sources (never /config/private inside windmill_worker).
+remote_intake_private_config_host() {
+  if [[ -n "${HITSAVE_PRIVATE_CONFIG_HOST:-}" ]]; then
+    echo "$HITSAVE_PRIVATE_CONFIG_HOST"
+    return
+  fi
+  local priv="${HITSAVE_PRIVATE_CONFIG:-}"
+  if [[ -n "$priv" ]] && [[ "$priv" != /config/private ]]; then
+    echo "$priv"
+    return
+  fi
+  echo "$(remote_intake_archiver_root)/../hitsave-archiver-config"
+}
+
 remote_intake_archiver_compose() {
-  local dir compose_file
+  local dir compose_file priv
   dir="$(remote_intake_archiver_compose_dir)"
   compose_file="$dir/docker-compose.yml"
-  docker compose --project-directory "$dir" -f "$compose_file" "$@"
+  priv="$(remote_intake_private_config_host)"
+  HITSAVE_PRIVATE_CONFIG="$priv" docker compose --project-directory "$dir" -f "$compose_file" "$@"
 }
 
 remote_intake_gdrive_compose() {
@@ -151,7 +169,14 @@ remote_intake_load_host_env() {
   if [[ ! -d "$config_default" ]]; then
     config_default="${HITSAVE_PRIVATE_CONFIG:-}"
   fi
-  export HITSAVE_PRIVATE_CONFIG="${HITSAVE_PRIVATE_CONFIG:-$config_default}"
+  if [[ -n "${HITSAVE_PRIVATE_CONFIG_HOST:-}" ]]; then
+    export HITSAVE_PRIVATE_CONFIG="$HITSAVE_PRIVATE_CONFIG_HOST"
+  else
+    export HITSAVE_PRIVATE_CONFIG="${HITSAVE_PRIVATE_CONFIG:-$config_default}"
+  fi
+  if [[ "$HITSAVE_PRIVATE_CONFIG" == /config/private ]] && [[ -n "${HITSAVE_PRIVATE_CONFIG_HOST:-}" ]]; then
+    export HITSAVE_PRIVATE_CONFIG="$HITSAVE_PRIVATE_CONFIG_HOST"
+  fi
   if [[ -f "$HITSAVE_PRIVATE_CONFIG/host.env" ]]; then
     # shellcheck disable=SC1090
     source "$HITSAVE_PRIVATE_CONFIG/host.env"
