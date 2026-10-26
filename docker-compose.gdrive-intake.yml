@@ -1,0 +1,18 @@
+# gdrive-intake one-offs (poll / process) without cd into hitsave-gdrive-intake.
+# Invoked from hitsave-archiver root via scripts/remote-intake/common.sh.
+name: hitsave-gdrive-intake-ops
+
+services:
+  gdrive-intake:
+    build:
+      context: ${HITSAVE_GDRIVE_INTAKE_BUILD_CONTEXT}
+      dockerfile: Dockerfile
+    image: ${GDRIVE_INTAKE_IMAGE:-hitsave/gdrive-intake:local}
+    volumes:
+      # :rw so Docker can overlay private preservation YAML under /config/preservation.
+      - ${HITSAVE_GDRIVE_INTAKE_CONFIG_DIR}:/config
+      - ${HITSAVE_GDRIVE_INTAKE_SECRETS_DIR}:/secrets:ro
+      - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/preservation/wasabi-redump-intake.yaml:/config/preservation/wasabi-redump-intake.yaml:ro
+      - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/preservation/ingest.yaml:/config/preservation/ingest.yaml:ro
+      - ${HOST_GDRIVE_INTAKE:-./data/gdrive-intake}:/data/intake
+      - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/secrets/wasabi-credentials.yaml:/data/intake/.secrets/wasabi-credentials.yaml:ro

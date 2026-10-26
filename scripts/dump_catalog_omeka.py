@@ -17,6 +17,12 @@ from dump_redump import (
     pick_omeka_title_from_submission,
     redump_catalog_sha1,
 )
+from dump_switch import (
+    parse_switch_submission_xml,
+    resolve_switch_submission_path,
+    switch_game_title,
+    switch_version_label,
+)
 from ingest_kind import ingest_kind_spec
 
 
@@ -108,11 +114,42 @@ def manifest_from_sip_and_handoff(
     handoff = handoff or {}
     letter = (sort_letter or catalog_sort_letter(omeka_title) or "X").strip() or "X"
     clf = classify_dump_sip(source_dir, package_id=game_key, sort_letter=letter)
+    switch_block = dict(handoff.get("switch") or {})
     redump_block = dict(handoff.get("redump") or {})
     parsed = (redump_block.get("parsed") or {}).copy()
     dump_layout = (ingest_kind_spec("dump").get("dump_layout") or {}).get("redump") or {}
     sub_names = list(dump_layout.get("submission_info_names") or [])
     sub_path = find_submission_info_path(source_dir, sub_names) if sub_names else None
+    if clf.dump_class == "switch" and not switch_block.get("parsed"):
+        sw_path = resolve_switch_submission_path(source_dir)
+        if sw_path is not None:
+            sw = parse_switch_submission_xml(sw_path.read_text(encoding="utf-8", errors="replace"))
+            primary = sw.primary_cart_image()
+            version_label = str(
+                switch_block.get("version") or switch_version_label(source_dir, sw_path)
+            )
+            game_title = str(
+                switch_block.get("game_title") or switch_game_title(source_dir, sw)
+            )
+            switch_block["parsed"] = {
+                "game_name": sw.game_name,
+                "game_title": game_title,
+                "version": version_label,
+                "region": sw.region,
+                "gameid1": sw.gameid1,
+                "gameid2": sw.gameid2,
+                "categories": sw.categories,
+                "dumper": sw.dumper,
+                "project": sw.project,
+                "tool": sw.tool,
+                "primary_image": {
+                    "size": primary.size if primary else None,
+                    "sha256": primary.sha256 if primary else None,
+                    "sha1": primary.sha1 if primary else None,
+                    "md5": primary.md5 if primary else None,
+                },
+            }
+
     if sub_path is not None:
         submission = parse_submission_info(sub_path.read_text(encoding="utf-8", errors="replace"))
         lookup_sha1 = redump_catalog_sha1(submission)
@@ -166,12 +203,122 @@ def manifest_from_sip_and_handoff(
             "package_storage_prefix": clf.package_storage_prefix,
         },
         "redump": {"parsed": parsed},
+        "switch": switch_block,
     }
     if handoff.get("wasabi"):
         manifest["wasabi"].update(
             {k: v for k, v in handoff["wasabi"].items() if k not in manifest["wasabi"]}
         )
     return manifest
+
+
+def build_switch_values(
+    session: requests.Session,
+    base: str,
+    creds: dict,
+    manifest: dict[str, Any],
+    *,
+    storage_uri_base: str,
+    api,
+    existing_item: dict | None = None,
+    ledger_aip_wasabi_prefix: str | None = None,
+    ledger_package_storage_prefix: str | None = None,
+    wasabi_ingest_cfg: dict | None = None,
+) -> tuple[dict[str, list], str]:
+    parsed = (manifest.get("switch") or {}).get("parsed") or {}
+    game_title = str(parsed.get("game_title") or parsed.get("game_name") or "").strip()
+    version = str(parsed.get("version") or "").strip()
+    if not game_title:
+        game_title = str(manifest.get("omeka_item_title") or "").strip()
+    catalog_title = f"{game_title} ({version})" if version else game_title
+
+    values: dict[str, list] = {}
+
+    def append_literal(term: str, value: str | None) -> None:
+        if not value or not str(value).strip():
+            return
+        pid = api.resolve_property_id(session, base, creds, term)
+        row = api.literal_value(pid, str(value).strip())
+        row["is_public"] = True
+        values.setdefault(term, []).append(row)
+
+    append_literal("dcterms:title", game_title)
+    if version:
+        append_literal("dcterms:description", f"Version {version}")
+    append_literal("dcterms:format", "Nintendo Switch")
+    append_literal("dcterms:type", parsed.get("categories") or "Games")
+    append_literal("dcterms:coverage", parsed.get("region"))
+    gameid1 = parsed.get("gameid1")
+    if gameid1:
+        id_rows: list[dict] = []
+        if existing_item is not None:
+            for row in existing_item.get("dcterms:identifier") or []:
+                val = str(row.get("@value") or "")
+                if val.startswith("ark:"):
+                    id_rows.append(row)
+        pid = api.resolve_property_id(session, base, creds, "dcterms:identifier")
+        id_rows.append(api.literal_value(pid, str(gameid1)))
+        values["dcterms:identifier"] = id_rows
+
+    staff_uri = staff_storage_uri(
+        manifest=manifest,
+        ledger_aip_wasabi_prefix=ledger_aip_wasabi_prefix,
+        ledger_package_storage_prefix=ledger_package_storage_prefix
+        or manifest.get("package_storage_prefix"),
+        wasabi_ingest_cfg=wasabi_ingest_cfg,
+        storage_uri_base=storage_uri_base,
+        game_key=str(manifest.get("game_key") or ""),
+    )
+    if staff_uri:
+        bibo_pid = api.resolve_property_id(session, base, creds, "bibo:uri")
+        values["bibo:uri"] = [api.uri_value(bibo_pid, staff_uri, is_public=False)]
+
+    values.setdefault("dcterms:description", [])
+    values.setdefault("dcterms:source", [])
+    values.setdefault("dcterms:relation", [])
+    return values, catalog_title
+
+
+def build_dump_catalog_values(
+    session: requests.Session,
+    base: str,
+    creds: dict,
+    manifest: dict[str, Any],
+    *,
+    storage_uri_base: str,
+    api,
+    redump_cfg: dict[str, Any] | None = None,
+    existing_item: dict | None = None,
+    ledger_aip_wasabi_prefix: str | None = None,
+    ledger_package_storage_prefix: str | None = None,
+    wasabi_ingest_cfg: dict | None = None,
+) -> tuple[dict[str, list], str]:
+    if manifest.get("dump_class") == "switch":
+        return build_switch_values(
+            session,
+            base,
+            creds,
+            manifest,
+            storage_uri_base=storage_uri_base,
+            api=api,
+            existing_item=existing_item,
+            ledger_aip_wasabi_prefix=ledger_aip_wasabi_prefix,
+            ledger_package_storage_prefix=ledger_package_storage_prefix,
+            wasabi_ingest_cfg=wasabi_ingest_cfg,
+        )
+    return build_redump_values(
+        session,
+        base,
+        creds,
+        manifest,
+        storage_uri_base=storage_uri_base,
+        api=api,
+        redump_cfg=redump_cfg,
+        existing_item=existing_item,
+        ledger_aip_wasabi_prefix=ledger_aip_wasabi_prefix,
+        ledger_package_storage_prefix=ledger_package_storage_prefix,
+        wasabi_ingest_cfg=wasabi_ingest_cfg,
+    )
 
 
 def build_redump_values(

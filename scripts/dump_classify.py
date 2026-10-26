@@ -9,6 +9,12 @@ from typing import Any
 
 from dump_nointro import NoIntroSubmission, nointro_submission_valid, parse_nointro_submission
 from dump_redump import RedumpSubmission, parse_submission_info, rom_track_submission_valid
+from dump_switch import (
+    SwitchSubmission,
+    parse_switch_submission_xml,
+    resolve_switch_submission_path,
+    switch_submission_valid,
+)
 from ingest_kind import ingest_kind_spec, load_ingest_kinds_config
 
 _UNSAFE_KEY = re.compile(r"[/\\]+")
@@ -16,11 +22,12 @@ _UNSAFE_KEY = re.compile(r"[/\\]+")
 
 @dataclass(frozen=True)
 class DumpClassification:
-    dump_class: str  # redump | no-intro | other
+    dump_class: str  # redump | no-intro | switch | other
     dump_system: str | None
     dump_category: str | None
     package_storage_prefix: str  # no bucket, no trailing slash
     redump_submission: RedumpSubmission | None = None
+    switch_submission: SwitchSubmission | None = None
 
 
 def storage_path_segment(value: str) -> str:
@@ -152,6 +159,35 @@ def classify_dump_sip(
                 dump_category="ROM",
                 package_storage_prefix=f"{wasabi_root}/{prefix}",
                 redump_submission=None,
+            )
+
+    switch_cfg = layout.get("switch") or {}
+    sw_path = resolve_switch_submission_path(sip_dir)
+    if sw_path is not None:
+        sw = parse_switch_submission_xml(
+            sw_path.read_text(encoding="utf-8", errors="replace")
+        )
+        if switch_submission_valid(sw):
+            system = storage_path_segment(
+                str(switch_cfg.get("system") or "Nintendo Switch")
+            )
+            category = storage_path_segment(str(sw.categories or "Games"))
+            pattern = str(
+                switch_cfg.get("path_pattern")
+                or "{system}/{sort_letter}/{package_id}"
+            )
+            prefix = pattern.format(
+                system=system,
+                category=category,
+                sort_letter=letter,
+                package_id=package_id,
+            ).strip("/")
+            return DumpClassification(
+                dump_class="switch",
+                dump_system=system,
+                dump_category=category,
+                package_storage_prefix=f"{wasabi_root}/{prefix}",
+                switch_submission=sw,
             )
 
     letter = (sort_letter or "X").strip("/") or "X"

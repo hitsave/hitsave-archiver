@@ -1,0 +1,10 @@
+<?xml version="1.0" ?>
+<datafile>
+    <game name="#BLUD">
+        <archive clone="P" name="#BLUD" region="Europe" languages="En" langchecked="unk" gameid1="010060201E0A4000" gameid2="LA-H-BGQRA" categories="Games"/>
+        <source>
+            <details section="Trusted Dump" d_date="2026-05-01" region="Europe" dumper="hitsaveorg" project="No-Intro" tool="nxdt_rw_poc v2.0.0 (rewrite-dirty)" originalformat="Default"/>
+            <file size="7985954816" crc32="9067951e" md5="94e950ec927da5734bf31b24aae0848b" sha1="b00cd700f79bb5378f52affbb3e1810b14c775df" sha256="ae29a7548af81f0df4035013af1ab2ec9912ca1cf0d4ce34e03d7fbeb5a823cd" extension="xci" format="Default"/>
+        </source>
+    </game>
+</datafile>

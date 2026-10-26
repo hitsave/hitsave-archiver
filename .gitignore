@@ -11,6 +11,8 @@ config/preservation/batch-*.yaml
 # Local batch manifests (real paths); see batch.yml.example and AGENTS.md
 config/preservation/batch-*.yml
 !config/preservation/batch.yml.example
+config/status-web.yaml
+!config/status-web.yaml.example
 data/
 fixtures/submissions-security/bombs/*.zip
 .ci/submissions/

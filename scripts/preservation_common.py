@@ -274,7 +274,9 @@ def bagit_payload_relpath(source: Path, file_path: Path, *, preserve_source_fold
 
 def should_skip(path: Path) -> bool:
     name = path.name
-    return name.startswith(".") or name == "desktop.ini"
+    if name.startswith(".") or name == "desktop.ini":
+        return True
+    return "_ocr_crop_debug" in path.parts
 
 
 def sha256_file(path: Path) -> str:

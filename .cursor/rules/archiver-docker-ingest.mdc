@@ -11,6 +11,8 @@ Full guide: **`AGENTS.md`**. Preservation model: **`docs/oais-bagit-preservation
 ## Runtime
 
 - Use **`docker compose`** (ingest worker, omeka-catalog, uploader). **No bare host Python** for preservation paths the stack owns.
+- Compose via Docker socket (any container): **`agent-docker-socket-compose.mdc`**, **`agent-docker-socket-compose-hitsave.mdc`**.
+- Restart **only the service you changed**: `docker compose up -d --no-deps <service>` — see **`compose-targeted-restart.mdc`** (do not recreate Postgres for status-web / worker tweaks).
 - Private credentials: sibling **`hitsave-archiver-config`** via **`HITSAVE_PRIVATE_CONFIG`** — run **`./scripts/ensure-local-config.sh`** after clone. **Never commit** secrets or operator **`config/preservation/batch*.yml`** with real tank paths.
 
 ## After security / ingest code changes

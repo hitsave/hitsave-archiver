@@ -1,9 +1,0 @@
-server:
-  host: 0.0.0.0
-  port: 8090
-database:
-  config_file: /config/preservation/database.yaml
-omeka:
-  # LAN browse URL for operators (align with hitsave-omeka-test settings public_url).
-  public_url: http://10.1.1.60:8088
-  site_slug: hitsave-test

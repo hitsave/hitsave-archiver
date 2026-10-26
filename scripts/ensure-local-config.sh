@@ -12,6 +12,11 @@ if [[ ! -f "$ROOT/config/preservation/database.yaml" ]]; then
   echo "Created $ROOT/config/preservation/database.yaml from database.yaml.example"
 fi
 
+if [[ ! -f "$ROOT/config/status-web.yaml" ]]; then
+  cp "$ROOT/config/status-web.yaml.example" "$ROOT/config/status-web.yaml"
+  echo "Created $ROOT/config/status-web.yaml from status-web.yaml.example"
+fi
+
 HITSAVE_PRIVATE_CONFIG="$PRIVATE" python3 "$ROOT/scripts/sync-preservation-config.py"
 
 echo "Example file map: docs/operator-config.md"

@@ -1,0 +1,15 @@
+# Copy to hitsave-archiver-config/preservation/wasabi-redump-intake.yaml
+# Used by hitsave-gdrive-intake poll-wasabi / process-wasabi (mounted at /config/preservation/…).
+# Do not list processed/ under source_roots — inbox poll roots only.
+wasabi_redump_intake:
+  source:
+    bucket: hitsave-incoming
+  source_roots:
+    - prefix: ""
+      top_level_name_prefixes:
+        - "Famitsu Wave DVD "
+    - prefix: FamitsuWaveDVD
+    - prefix: incoming/redump
+  credentials_file: /secrets/wasabi-credentials.yaml
+  ingest_config_file: /config/preservation/ingest.yaml
+  intake_config_file: /config/intake.yaml

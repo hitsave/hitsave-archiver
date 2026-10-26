@@ -1,0 +1,26 @@
+---
+description: HitSave archiver — host paths for compose invoked via Docker socket (agent commands)
+globs: windmill_ops/**,scripts/remote-intake/**,scripts/windmill*.sh,docker-compose*.yml
+alwaysApply: true
+---
+
+# HitSave — socket compose paths (agents)
+
+Global policy: **`agent-docker-socket-compose.mdc`** (user rules). **Orchestrators are not the failure mode; agent shell commands are.**
+
+## Path contract
+
+- **`ARCHIVER_HOST_PATH`**: host checkout used for **`--project-directory`** and bind mounts when compose runs **through a container’s Docker socket**
+- Align **`windmill_ops/docker/.env`**, **`worker-paths.env`**, and actual bind mounts — one tree, not worktree vs e2e mix
+- Recreate the socket client container after path env changes
+
+## Wrappers (required)
+
+- **`remote_intake_archiver_compose`** — **`scripts/remote-intake/common.sh`**
+- **`archiver_compose`** — **`windmill_ops/lib/hitsave-env.sh`** when present
+
+No **`cd /archiver && docker compose`** via **`docker exec`**. Operator **`cd hitsave-archiver && docker compose`** on the host stays the default for manual ops.
+
+## Restarts
+
+**`docker compose up -d --no-deps <service>`** — **`compose-targeted-restart.mdc`**.

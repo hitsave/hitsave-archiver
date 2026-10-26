@@ -1,0 +1,34 @@
+---
+description: hitsave-archiver — restart only the compose service you changed (--no-deps)
+globs: docker-compose*.yml,status-web/**,ingest-worker/**,omeka-catalog/**
+alwaysApply: false
+---
+
+# Compose — targeted restart (do not bounce Postgres)
+
+Preservation **Postgres** is stateful. UI and worker image changes **do not** require restarting or recreating **`postgres`**.
+
+## Do
+
+After changing **one** service’s code or Dockerfile:
+
+```bash
+cd hitsave-archiver   # repo root with compose file
+docker compose build <service>
+docker compose up -d --no-deps <service>
+```
+
+Examples: `status-web`, `ingest-worker`, `omeka-catalog`, profile services.
+
+- If only **bind-mounted** paths changed (e.g. `./scripts`, `./config/status-web.yaml`), **`docker compose restart --no-deps <service>`** may be enough — no rebuild.
+- Use **`docker compose exec`** for read-only checks; no restart.
+
+## Do not
+
+- Run **`docker compose up -d <service>`** without **`--no-deps`** when the goal is only to refresh that service — Compose may **recreate** dependencies (`postgres`, etc.).
+- **`docker compose down`** / recreate the whole **`hitsave-preservation`** project for a single-service fix unless the user asked or shared compose/network volumes changed.
+- Restart **Postgres** for status-web, Windmill ops, or script-only ledger changes.
+
+## When Postgres legitimately moves
+
+Recreate or migrate **`postgres`** only when **`docker-compose.yml`**, env, volumes, or schema/init for that service changed — or the user explicitly asked. Apply SQL migrations with **`./scripts/apply-ledger-migrations.sh`** or targeted **`psql`**, not a full stack tear-down.

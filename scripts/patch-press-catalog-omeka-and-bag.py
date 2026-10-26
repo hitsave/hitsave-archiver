@@ -182,13 +182,14 @@ def patch_wasabi_bag(
     former_title: str,
     correction_summary: str,
     execute: bool,
+    ingest_kind: str = "press_material",
 ) -> dict:
     prefix = str(ledger["package_storage_prefix"]).strip("/")
     ingest_path = CONFIG_ROOT / "preservation/ingest.yaml"
     wasabi_cfg, cred_path = load_wasabi_settings(ingest_path)
     creds = load_yaml(resolve_config_path(str(wasabi_cfg["credentials_file"]), ingest_path.parent.parent))
     client = make_s3_client(wasabi_cfg, creds)
-    bucket = wasabi_bucket_for_storage_prefix(wasabi_cfg, prefix, ingest_kind="press_material")
+    bucket = wasabi_bucket_for_storage_prefix(wasabi_cfg, prefix, ingest_kind=ingest_kind)
 
     sub_key = f"{prefix}/metadata/submission.json"
     bag_info_key = f"{prefix}/bag-info.txt"
