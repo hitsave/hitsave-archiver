@@ -1,0 +1,13 @@
+defaultTs: bun
+includes:
+  - f/**
+  - u/hitsave/**
+  - schedules/**
+skipSecrets: true
+skipVariables: true
+skipResources: false
+includeSchedules: true
+workspaces:
+  local:
+    baseUrl: http://127.0.0.1:8089
+    workspaceId: hitsave-archiver

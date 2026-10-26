@@ -1,0 +1,15 @@
+summary: Remote intake sweep (Wasabi + Drive)
+description: |
+  Runs `run-wasabi-redump-per-folder.sh` then `run-gdrive-redump-per-folder.sh`.
+  Each lane polls incoming, stages new packages, runs ingest-worker BagIt/Wasabi ingest,
+  and registers prod Omeka when the ledger reaches complete.
+
+  Set script concurrency limit to **1** in Windmill (overlapping sweeps contend on Docker/ledger).
+  Runtime scales with package count; may run long when many new dumps appear.
+lock: '!inline f/hitsave/remote_intake_sweep.script.lock'
+kind: script
+language: bash
+schema:
+  $schema: 'https://json-schema.org/draft/2020-12/schema'
+  type: object
+  properties: {}

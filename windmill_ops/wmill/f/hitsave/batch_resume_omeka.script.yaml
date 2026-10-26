@@ -1,0 +1,15 @@
+summary: Batch resume ingest and Omeka register
+description: |
+  Wraps `scripts/run-batch-resume-omeka.sh`. May run for hours on large batches.
+  Set flow/script concurrency to 1. Manual trigger unless you add a schedule deliberately.
+lock: '!inline f/hitsave/batch_resume_omeka.script.lock'
+kind: script
+language: bash
+schema:
+  $schema: 'https://json-schema.org/draft/2020-12/schema'
+  type: object
+  properties:
+    batch_yaml:
+      type: string
+      description: Path relative to archiver repo root
+      default: config/preservation/batch.yml

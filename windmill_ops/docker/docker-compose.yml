@@ -1,0 +1,105 @@
+# Windmill ops spike — separate Postgres from preservation ledger.
+name: hitsave-windmill-ops
+
+services:
+  windmill_db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-windmill-spike-change-me}
+      POSTGRES_DB: windmill
+    volumes:
+      - windmill_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d windmill"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  windmill_server:
+    image: ${WM_IMAGE:-ghcr.io/windmill-labs/windmill:main}
+    restart: unless-stopped
+    depends_on:
+      windmill_db:
+        condition: service_healthy
+    ports:
+      - "8089:8000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:windmill-spike-change-me@windmill_db:5432/windmill}
+      MODE: server
+    volumes:
+      - windmill_worker_logs:/tmp/windmill/logs
+
+  windmill_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.hitsave-worker
+    restart: unless-stopped
+    privileged: true
+    depends_on:
+      windmill_db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:windmill-spike-change-me@windmill_db:5432/windmill}
+      MODE: worker
+      WORKER_GROUP: default
+      FAVOR_UNSHARE_PID: "true"
+      HITSAVE_GDRIVE_INTAKE_ROOT: /gdrive-intake
+      HITSAVE_GDRIVE_INTAKE_HOST: ${HITSAVE_GDRIVE_INTAKE_HOST}
+      HITSAVE_WINDMILL_POLL_STAGING: "1"
+      HITSAVE_WINDMILL_GDRIVE_INTAKE_STAGING_HOST: /tmp/hitsave-windmill-gdrive-intake
+      HOST_GDRIVE_INTAKE: /tmp/hitsave-windmill-gdrive-intake
+      HITSAVE_PRIVATE_CONFIG: /config/private
+      ARCHIVER_HOST_PATH: ${ARCHIVER_HOST_PATH:?set ARCHIVER_HOST_PATH in .env}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${ARCHIVER_HOST_PATH:?set ARCHIVER_HOST_PATH in .env}:/archiver
+      # Same path on host inside worker so `docker compose --project-directory $ARCHIVER_HOST_PATH` resolves.
+      - ${ARCHIVER_HOST_PATH:?set ARCHIVER_HOST_PATH in .env}:${ARCHIVER_HOST_PATH}:ro
+      - ${HITSAVE_GDRIVE_INTAKE_HOST:?set HITSAVE_GDRIVE_INTAKE_HOST in .env}:/gdrive-intake:ro
+      - ${HITSAVE_PRIVATE_CONFIG_HOST:?set HITSAVE_PRIVATE_CONFIG_HOST in .env}/host.env:/run/hitsave/host.env:ro
+      - ./worker-paths.env:/run/hitsave/worker-paths.env:ro
+      - ${HITSAVE_PRIVATE_CONFIG_HOST}/secrets:/config/private/secrets:ro
+      - ${HITSAVE_PRIVATE_CONFIG_HOST}/preservation/database.yaml:/config/private/preservation/database.yaml:ro
+      - windmill_worker_logs:/tmp/windmill/logs
+      - windmill_worker_cache:/tmp/windmill/cache
+    networks:
+      - default
+      - preservation
+
+  windmill_cli:
+    build:
+      context: .
+      dockerfile: Dockerfile.windmill-cli
+    profiles: ["cli"]
+    depends_on:
+      windmill_server:
+        condition: service_started
+    environment:
+      WMILL_TOKEN: ${WMILL_TOKEN:-}
+    volumes:
+      - ../wmill:/workspace
+      - wmill_cli_home:/root/.config/wmill
+    working_dir: /workspace
+
+  windmill_lsp:
+    image: ghcr.io/windmill-labs/windmill-extra:latest
+    restart: unless-stopped
+    environment:
+      ENABLE_LSP: "true"
+      ENABLE_MULTIPLAYER: "false"
+      ENABLE_DEBUGGER: "false"
+      WINDMILL_BASE_URL: http://windmill_server:8000
+    expose:
+      - "3001"
+
+networks:
+  preservation:
+    external: true
+    name: ${HITSAVE_PRESERVATION_NETWORK:-hitsave-preservation_default}
+
+volumes:
+  windmill_db_data:
+  windmill_worker_logs:
+  windmill_worker_cache:
+  wmill_cli_home:

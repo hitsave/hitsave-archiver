@@ -15,7 +15,7 @@ Compose expects `HITSAVE_PRIVATE_CONFIG` (default sibling `../hitsave-archiver-c
 
 **Remote intake lanes:** **`docs/remote-intake-lanes.md`** (gdrive-intake handoff → archiver; private lane inventory template in `config/preservation/lane-inventory.template.yaml`).
 
-**Ops UI:** preservation **status-web** on `:8090` (ledger, health, catalog **`/correct`**) — config from **`config/status-web.yaml.example`**. Optional Windmill scripts/schedules ship in **`windmill_ops/`** when that branch merges.
+**Ops UI:** preservation **status-web** on `:8090` (ledger, health, catalog **`/correct`**) — config from **`config/status-web.yaml.example`**. **Windmill** (schedules, job logs): **`windmill_ops/`**, **`docs/design-notes/windmill-ops-spike.md`**, **`./scripts/windmill-sync-push.sh`**.
 
 ## Docker
 

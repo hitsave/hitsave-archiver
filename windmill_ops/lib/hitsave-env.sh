@@ -1,0 +1,46 @@
+# shellcheck shell=bash
+# Shared by Windmill bash scripts (source at top of each script).
+set -euo pipefail
+
+ARCHIVER_ROOT="${ARCHIVER_ROOT:-/archiver}"
+HOST_ENV_FILE="${HOST_ENV_FILE:-/run/hitsave/host.env}"
+for _paths_file in \
+  "${WORKER_PATHS_FILE:-}" \
+  /archiver/windmill_ops/config/worker-paths.env \
+  /run/hitsave/worker-paths.env; do
+  if [[ -n "$_paths_file" ]] && [[ -f "$_paths_file" ]]; then
+    # shellcheck disable=SC1090
+    source "$_paths_file"
+    break
+  fi
+done
+unset _paths_file
+
+if [[ -f "$HOST_ENV_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$HOST_ENV_FILE"
+fi
+
+export HITSAVE_PRIVATE_CONFIG="${HITSAVE_PRIVATE_CONFIG:-/config/private}"
+export HITSAVE_GDRIVE_INTAKE_ROOT="${HITSAVE_GDRIVE_INTAKE_ROOT:-/gdrive-intake}"
+if [[ -n "${HITSAVE_GDRIVE_INTAKE_HOST:-}" ]]; then
+  export HITSAVE_GDRIVE_INTAKE_CONFIG_DIR="${HITSAVE_GDRIVE_INTAKE_CONFIG_DIR:-${HITSAVE_GDRIVE_INTAKE_HOST}/config}"
+  export HITSAVE_GDRIVE_INTAKE_SECRETS_DIR="${HITSAVE_GDRIVE_INTAKE_SECRETS_DIR:-${HITSAVE_GDRIVE_INTAKE_HOST}/secrets}"
+  export HITSAVE_GDRIVE_INTAKE_BUILD_CONTEXT="${HITSAVE_GDRIVE_INTAKE_BUILD_CONTEXT:-${HITSAVE_GDRIVE_INTAKE_HOST}}"
+fi
+export HITSAVE_REMOTE_INTAKE_LOG_DIR="${HITSAVE_REMOTE_INTAKE_LOG_DIR:-${ARCHIVER_ROOT}/.generated}"
+
+# Poll uses cloud APIs; HOST_GDRIVE_INTAKE is staging for process — use a host path Docker can bind.
+if [[ "${HITSAVE_WINDMILL_POLL_STAGING:-}" == "1" ]]; then
+  export HOST_GDRIVE_INTAKE="${HITSAVE_WINDMILL_GDRIVE_INTAKE_STAGING_HOST:-/tmp/hitsave-windmill-gdrive-intake}"
+fi
+
+cd "$ARCHIVER_ROOT"
+
+archiver_compose() {
+  if [[ -z "${ARCHIVER_HOST_PATH:-}" ]] || [[ ! -d "${ARCHIVER_HOST_PATH}/config" ]]; then
+    echo "ARCHIVER_HOST_PATH must be set to the host hitsave-archiver checkout (see worker-paths.env.example)" >&2
+    exit 1
+  fi
+  docker compose --project-directory "$ARCHIVER_HOST_PATH" "$@"
+}

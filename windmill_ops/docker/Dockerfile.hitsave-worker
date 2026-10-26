@@ -1,0 +1,13 @@
+# Windmill worker with Docker CLI for bash scripts that call `docker compose` on the archiver stack.
+FROM ghcr.io/windmill-labs/windmill:main
+
+USER root
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    docker.io docker-compose ca-certificates curl python3-pip \
+  && rm -rf /var/lib/apt/lists/*
+# Bash ops scripts use system python3; Windmill-isolated Python uses global-site-packages.
+RUN python3 -m pip install --no-cache-dir --break-system-packages 'psycopg[binary]' pyyaml \
+  && mkdir -p /tmp/windmill/cache/python_3_13/global-site-packages \
+  && uv pip install --system 'psycopg[binary]' pyyaml \
+    --target /tmp/windmill/cache/python_3_13/global-site-packages
