@@ -21,14 +21,28 @@ if [[ -f "$HOST_ENV_FILE" ]]; then
   source "$HOST_ENV_FILE"
 fi
 
-export HITSAVE_PRIVATE_CONFIG="${HITSAVE_PRIVATE_CONFIG:-/config/private}"
+# Worker bind mount for in-job reads (ledger_health_report). Compose bind mounts need a host path.
+if [[ -f /config/private/preservation/database.yaml ]]; then
+  export HITSAVE_PRIVATE_CONFIG_MOUNT=/config/private
+fi
+if [[ -n "${HITSAVE_PRIVATE_CONFIG_HOST:-}" ]]; then
+  export HITSAVE_PRIVATE_CONFIG="$HITSAVE_PRIVATE_CONFIG_HOST"
+elif [[ "${HITSAVE_PRIVATE_CONFIG:-}" == /config/private ]] || [[ -z "${HITSAVE_PRIVATE_CONFIG:-}" ]]; then
+  export HITSAVE_PRIVATE_CONFIG="${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}"
+fi
 export HITSAVE_GDRIVE_INTAKE_ROOT="${HITSAVE_GDRIVE_INTAKE_ROOT:-/gdrive-intake}"
 if [[ -n "${HITSAVE_GDRIVE_INTAKE_HOST:-}" ]]; then
   export HITSAVE_GDRIVE_INTAKE_CONFIG_DIR="${HITSAVE_GDRIVE_INTAKE_CONFIG_DIR:-${HITSAVE_GDRIVE_INTAKE_HOST}/config}"
   export HITSAVE_GDRIVE_INTAKE_SECRETS_DIR="${HITSAVE_GDRIVE_INTAKE_SECRETS_DIR:-${HITSAVE_GDRIVE_INTAKE_HOST}/secrets}"
   export HITSAVE_GDRIVE_INTAKE_BUILD_CONTEXT="${HITSAVE_GDRIVE_INTAKE_BUILD_CONTEXT:-${HITSAVE_GDRIVE_INTAKE_HOST}}"
 fi
-export HITSAVE_REMOTE_INTAKE_LOG_DIR="${HITSAVE_REMOTE_INTAKE_LOG_DIR:-${ARCHIVER_ROOT}/.generated}"
+# Windmill jobs use an unprivileged UID; repo .generated is often not writable. Compose mounts
+# host …/.generated/windmill at /run/hitsave/generated (mode 1777 on the host).
+if [[ -z "${HITSAVE_REMOTE_INTAKE_LOG_DIR:-}" ]] && [[ -d /run/hitsave/generated ]]; then
+  export HITSAVE_REMOTE_INTAKE_LOG_DIR=/run/hitsave/generated
+else
+  export HITSAVE_REMOTE_INTAKE_LOG_DIR="${HITSAVE_REMOTE_INTAKE_LOG_DIR:-${ARCHIVER_ROOT}/.generated}"
+fi
 
 # Poll uses cloud APIs; HOST_GDRIVE_INTAKE is staging for process — use a host path Docker can bind.
 if [[ "${HITSAVE_WINDMILL_POLL_STAGING:-}" == "1" ]]; then

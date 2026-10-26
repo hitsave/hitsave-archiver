@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Patch Omeka catalog fields for one item (optional title, Moby URL, description, developer, publisher).
 # shellcheck disable=SC1091
-source /archiver/windmill_ops/lib/hitsave-env.sh
+source /run/hitsave/hitsave-bootstrap.sh
 
 : "${omeka_ref:?omeka_ref required (Omeka item id or /item/<id> URL)}"
 
