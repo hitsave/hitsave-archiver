@@ -1,0 +1,14 @@
+# Overlay for CLI runs inside Docker (see scripts/windmill-wmill.sh).
+# Browser UI stays on http://127.0.0.1:8089; CLI uses the internal service name.
+defaultTs: bun
+includes:
+  - f/**
+  - schedules/**
+skipSecrets: true
+skipVariables: true
+skipResources: true
+includeSchedules: true
+workspaces:
+  hitsave-archiver:
+    baseUrl: http://windmill_server:8000
+    workspaceId: hitsave-archiver

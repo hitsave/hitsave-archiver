@@ -1,0 +1,13 @@
+# Windmill ops spike — paths and URLs only (no secrets).
+archiver:
+  repo_root: /archiver
+host_env_file: /run/hitsave/host.env
+windmill:
+  ui_public_url: http://127.0.0.1:8089
+  workspace_folder: f/hitsave
+scheduling:
+  # Only the combined sweep is scheduled. Poll and single-lane sweeps are manual in Windmill.
+  remote_intake_sweep:
+    cron: "0 */30 * * * *"
+defaults:
+  batch_yaml: config/preservation/batch.yml

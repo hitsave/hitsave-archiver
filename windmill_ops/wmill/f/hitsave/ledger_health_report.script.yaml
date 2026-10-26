@@ -1,0 +1,22 @@
+summary: Ledger health report (read-only)
+description: |
+  Runs `scripts/ledger_health_report.py` on the Windmill worker (TCP to preservation Postgres).
+  SQL and logic live in that file in git.
+lock: '!inline f/hitsave/ledger_health_report.script.lock'
+kind: script
+language: bash
+schema:
+  $schema: 'https://json-schema.org/draft/2020-12/schema'
+  type: object
+  properties:
+    search:
+      type: string
+      description: Optional ILIKE search (game_key, moby_title, source_path)
+      default: ''
+    limit:
+      type: integer
+      description: Max rows in search / attention sections
+      default: 50
+      minimum: 1
+      maximum: 500
+  required: []

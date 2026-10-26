@@ -1,0 +1,11 @@
+# Copy to preservation_ledger.resource.yaml and set password (or use a Windmill secret variable).
+# Worker must reach host (preservation compose network: service name `postgres`).
+value:
+  host: postgres
+  port: 5432
+  user: hitsave
+  dbname: hitsave_ledger
+  password: REPLACE_ME
+  sslmode: disable
+description: Preservation game_ingest ledger (hitsave-archiver Postgres)
+resource_type: postgresql

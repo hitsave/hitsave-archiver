@@ -1,0 +1,11 @@
+summary: GDrive Redump inbox sweep
+description: |
+  Wraps `scripts/remote-intake/run-gdrive-redump-per-folder.sh` (poll + stage + ingest + Omeka).
+  Prefer scheduled `remote_intake_sweep` for both lanes; use this for Drive-only manual runs.
+lock: '!inline f/hitsave/gdrive_redump_inbox_sweep.script.lock'
+kind: script
+language: bash
+schema:
+  $schema: 'https://json-schema.org/draft/2020-12/schema'
+  type: object
+  properties: {}

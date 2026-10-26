@@ -1,0 +1,7 @@
+path: f/hitsave/remote_intake_sweep
+schedule: "0 */30 * * * *"
+timezone: UTC
+enabled: true
+is_flow: false
+script_path: f/hitsave/remote_intake_sweep
+args: {}
