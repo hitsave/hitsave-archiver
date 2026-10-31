@@ -24,6 +24,7 @@ class VirusScanReport:
     virus_definitions: str | None = None
     sip_root: str = ""
     not_scanned_paths: list[str] = field(default_factory=list)
+    scan_limit_bytes: int | None = None
 
 
 def iso_now() -> str:
@@ -59,12 +60,58 @@ def _interpret_clamd_result(path: Path, result: dict | None) -> None:
             raise RuntimeError(f"ClamAV scan error for {path}: {status}")
 
 
-def scan_sip_tree(clamd, root: Path) -> VirusScanReport:
-    """Scan every file under root via clamd SCAN (shared mount paths); raise on malware."""
+CLAMD_CONF_CANDIDATES = (
+    Path("/config/clamav/clamd.conf"),
+    Path(__file__).resolve().parents[1] / "config" / "clamav" / "clamd.conf",
+)
+_SIZE_UNITS = {"": 1, "K": 1024, "M": 1024**2, "G": 1024**3}
+
+
+def _parse_clamd_size(value: str) -> int:
+    value = value.strip().upper()
+    unit = value[-1] if value and value[-1] in "KMG" else ""
+    return int(value[: len(value) - len(unit)] or 0) * _SIZE_UNITS[unit]
+
+
+def clamd_size_limit(conf_path: Path | None = None) -> int | None:
+    """
+    Largest file clamd fully scans: min of non-zero MaxFileSize / MaxScanSize in clamd.conf.
+
+    clamd answers OK for files above MaxFileSize *without scanning them* (no
+    AlertExceedsMax), so callers must not count those as scanned. None = no limit known.
+    """
+    paths = [conf_path] if conf_path else list(CLAMD_CONF_CANDIDATES)
+    for path in paths:
+        if path and path.is_file():
+            limits = []
+            for line in path.read_text(encoding="utf-8").splitlines():
+                parts = line.split(None, 1)
+                if len(parts) == 2 and parts[0] in ("MaxFileSize", "MaxScanSize"):
+                    size = _parse_clamd_size(parts[1])
+                    if size > 0:
+                        limits.append(size)
+            return min(limits) if limits else None
+    return None
+
+
+def scan_sip_tree(clamd, root: Path, *, max_scan_bytes: int | None = -1) -> VirusScanReport:
+    """
+    Scan every file under root via clamd SCAN (shared mount paths); raise on malware.
+
+    Files larger than the clamd size limit (default: read from clamd.conf) are not sent
+    to clamd and are reported as not scanned, so the PREMIS event does not claim a scan
+    that never happened (DVD ISOs exceed the 512 MiB limit).
+    """
+    if max_scan_bytes == -1:
+        max_scan_bytes = clamd_size_limit()
     program, version, virus_defs = clamav_version_info(clamd)
     scanned = 0
+    not_scanned: list[str] = []
     for path in sorted(root.rglob("*")):
         if not path.is_file() or path.name.startswith("."):
+            continue
+        if max_scan_bytes and path.stat().st_size > max_scan_bytes:
+            not_scanned.append(path.relative_to(root).as_posix())
             continue
         result = clamd.scan_file(str(path))
         _interpret_clamd_result(path, result)
@@ -73,11 +120,13 @@ def scan_sip_tree(clamd, root: Path) -> VirusScanReport:
     return VirusScanReport(
         scanned_at=iso_now(),
         files_scanned=scanned,
-        files_not_scanned=0,
+        files_not_scanned=len(not_scanned),
         scanner_program=program,
         scanner_version=version,
         virus_definitions=virus_defs,
         sip_root=str(root),
+        not_scanned_paths=not_scanned,
+        scan_limit_bytes=max_scan_bytes or None,
     )
 
 
@@ -112,7 +161,10 @@ def build_virus_check_premis_xml(
         f'program="{report.scanner_program}"',
         f'version="{report.scanner_version}"',
         f"filesScanned={report.files_scanned}",
+        f"filesNotScanned={report.files_not_scanned}",
     ]
+    if report.scan_limit_bytes:
+        detail_parts.append(f"scanLimitBytes={report.scan_limit_bytes}")
     if report.virus_definitions:
         detail_parts.append(f'virusDefinitions="{report.virus_definitions}"')
     if report.sip_root:
@@ -122,10 +174,23 @@ def build_virus_check_premis_xml(
     ET.SubElement(detail_info, f"{{{PREMIS_NS}}}eventDetail").text = "; ".join(detail_parts)
 
     outcome_info = ET.SubElement(root, f"{{{PREMIS_NS}}}eventOutcomeInformation")
-    ET.SubElement(outcome_info, f"{{{PREMIS_NS}}}eventOutcome").text = "success"
-    ET.SubElement(
-        outcome_info, f"{{{PREMIS_NS}}}eventOutcomeDetailNote"
-    ).text = "No malware detected (full ClamAV scan before BagIt build)."
+    if report.files_not_scanned:
+        shown = ", ".join(report.not_scanned_paths[:20])
+        more = len(report.not_scanned_paths) - 20
+        note = (
+            f"No malware detected in {report.files_scanned} scanned file(s). "
+            f"{report.files_not_scanned} file(s) larger than the ClamAV scan limit"
+            + (f" ({report.scan_limit_bytes} bytes)" if report.scan_limit_bytes else "")
+            + f" were NOT scanned: {shown}"
+            + (f" … and {more} more" if more > 0 else "")
+            + "."
+        )
+        outcome = "partial"
+    else:
+        note = "No malware detected (full ClamAV scan before BagIt build)."
+        outcome = "success"
+    ET.SubElement(outcome_info, f"{{{PREMIS_NS}}}eventOutcome").text = outcome
+    ET.SubElement(outcome_info, f"{{{PREMIS_NS}}}eventOutcomeDetailNote").text = note
 
     agent = ET.SubElement(root, f"{{{PREMIS_NS}}}linkingAgentIdentifier")
     ET.SubElement(agent, f"{{{PREMIS_NS}}}linkingAgentIdentifierType").text = "software"

@@ -63,3 +63,58 @@ def test_attach_virus_check_premis_updates_bag_manifests(tmp_path: Path) -> None
     assert out.is_file()
     tag_manifest = (bag / "tagmanifest-sha256.txt").read_text(encoding="utf-8")
     assert "metadata/premis/virus-check-event.xml" in tag_manifest
+
+
+# --- files over the clamd size limit are recorded as NOT scanned ----------------------
+
+from premis_virus_check import clamd_size_limit, scan_sip_tree  # noqa: E402
+
+
+class _FakeClamd:
+    def __init__(self):
+        self.scanned: list[str] = []
+
+    def version(self):
+        return "ClamAV 1.4.1/27800/Mon Oct 13 2026"
+
+    def scan_file(self, path):
+        self.scanned.append(path)
+        return None
+
+
+def test_clamd_size_limit_parses_conf(tmp_path: Path) -> None:
+    conf = tmp_path / "clamd.conf"
+    conf.write_text("# c\nMaxFileSize 512M\nMaxScanSize 1G\nPCREMaxFileSize 2G\n")
+    assert clamd_size_limit(conf) == 512 * 1024**2
+    conf.write_text("MaxFileSize 0\nMaxScanSize 0\n")
+    assert clamd_size_limit(conf) is None
+
+
+def test_large_files_not_scanned_and_premis_says_partial(tmp_path: Path) -> None:
+    sip = tmp_path / "sip"
+    sip.mkdir()
+    (sip / "small.txt").write_bytes(b"x" * 10)
+    (sip / "disc.iso").write_bytes(b"x" * 100)
+    clamd = _FakeClamd()
+    report = scan_sip_tree(clamd, sip, max_scan_bytes=50)
+    assert report.files_scanned == 1 and report.files_not_scanned == 1
+    assert report.not_scanned_paths == ["disc.iso"]
+    assert clamd.scanned == [str(sip / "small.txt")]
+    xml = build_virus_check_premis_xml(
+        report, package_id="p", package_uuid="", repository_code="hitsave", linking_agent="t"
+    )
+    assert "<premis:eventOutcome>partial</premis:eventOutcome>" in xml
+    assert "were NOT scanned: disc.iso" in xml
+    assert "filesNotScanned=1" in xml
+    assert "full ClamAV scan" not in xml
+
+
+def test_all_files_scanned_is_success(tmp_path: Path) -> None:
+    sip = tmp_path / "sip"
+    sip.mkdir()
+    (sip / "a.txt").write_bytes(b"x")
+    report = scan_sip_tree(_FakeClamd(), sip, max_scan_bytes=None)
+    xml = build_virus_check_premis_xml(
+        report, package_id="p", package_uuid="", repository_code="hitsave", linking_agent="t"
+    )
+    assert "<premis:eventOutcome>success</premis:eventOutcome>" in xml

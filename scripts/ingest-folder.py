@@ -464,6 +464,12 @@ def main() -> None:
             ingest_kind=ingest_kind,
         )
         virus_scan = scan_sip_tree(clamd, source)
+        if virus_scan.files_not_scanned:
+            print(
+                f"  ClamAV: {virus_scan.files_not_scanned} file(s) over the scan limit "
+                f"({virus_scan.scan_limit_bytes} bytes) not scanned; recorded in PREMIS",
+                flush=True,
+            )
 
         bag_dir, _sub, inventory, checksum_manifest_path, submission_source_id, package_uuid = run_bagit_ingest(
             conn,
