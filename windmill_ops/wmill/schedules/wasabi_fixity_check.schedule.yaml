@@ -1,9 +1,9 @@
 path: f/hitsave/wasabi_fixity_check
-# Weekly, Sunday 03:00 UTC. Disabled until an operator accepts the Wasabi read volume
-# (default 50 GB/run, ~45 min); a full pass over ~1 TB takes ~20 weeks at that rate.
+# Weekly, Sunday 03:00 UTC. Enabled 2026-10-31 (owner accepted the Wasabi read volume:
+# default 50 GB/run, ~45 min; a full pass over ~1 TB takes ~20 weeks at that rate).
 schedule: "0 0 3 * * 0"
 timezone: UTC
-enabled: false
+enabled: true
 is_flow: false
 script_path: f/hitsave/wasabi_fixity_check
 args:
