@@ -1,16 +1,25 @@
 #!/usr/bin/env python3
-"""Backfill DVD menu JPEGs into BagIt metadata/hitsave on disk + Wasabi."""
+"""Backfill DVD menu JPEGs into BagIt metadata/hitsave on Wasabi (and the local bag if present).
+
+Tag-only update: writes the preview files and updates ONLY their lines in
+tagmanifest-sha256.txt. The payload manifest (manifest-sha256.txt, the ingest-time fixity
+baseline) and bag-info.txt are never regenerated. The previous version ran
+bag.save(manifests=True) on the local copy, re-hashing the payload from local disk and
+uploading that manifest over Wasabi's, which would bless any local corruption and broke
+Wasabi bags whose tag files had been updated there (renames).
+"""
 from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
 try:
-    import bagit
     import psycopg
 except ImportError as e:
     print(f"Missing dependency: {e}", file=sys.stderr)
@@ -21,13 +30,13 @@ SCRIPTS = REPO_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from dip_package_previews import load_preview_config, write_dvd_menu_packaged_previews  # noqa: E402
-from preservation_common import resolve_wasabi_bucket, sha256_file, wasabi_unpacked_prefix  # noqa: E402
+from preservation_common import resolve_wasabi_bucket, wasabi_unpacked_prefix  # noqa: E402
+from s3_etag import hash_file  # noqa: E402
 from config_require import require_bool  # noqa: E402
 from upload_bag_wasabi import (  # noqa: E402
     DEFAULT_INGEST_CONFIG,
     load_wasabi_settings,
     make_s3_client,
-    object_key,
     pg_connect,
     resolve_config_path,
     upload_file_to_s3,
@@ -91,61 +100,99 @@ def ledger_lookup(conn, ready_folder: str) -> LedgerRow | None:
     )
 
 
-def collect_upload_relpaths(bag_dir: Path) -> list[str]:
-    rels: set[str] = set()
-    for name in ("manifest-sha256.txt", "tagmanifest-sha256.txt", "bagit.txt"):
-        if (bag_dir / name).is_file():
-            rels.add(name)
-    hitsave = bag_dir / "metadata" / "hitsave"
-    if hitsave.is_dir():
-        for path in hitsave.rglob("*"):
-            if path.is_file():
-                rels.add(path.relative_to(bag_dir).as_posix())
-    return sorted(rels)
+def upsert_manifest_lines(manifest_text: str, digests: dict[str, str]) -> str:
+    """Replace or append `<sha256>  <path>` lines for the given paths; keep every other line."""
+    remaining = dict(digests)
+    lines: list[str] = []
+    for line in manifest_text.splitlines():
+        if not line.strip():
+            continue
+        parts = line.split(None, 1)
+        if len(parts) != 2:
+            raise ValueError(f"Unexpected manifest line: {line!r}")
+        path = parts[1].strip()
+        if path in remaining:
+            lines.append(f"{remaining.pop(path)}  {path}")
+        else:
+            lines.append(line)
+    lines.extend(f"{digest}  {path}" for path, digest in sorted(remaining.items()))
+    return "\n".join(lines) + "\n"
 
 
-def upload_bag_relpaths(
-    bag_dir: Path,
+def build_preview_files(menu_jpg: Path, package_id: str, work: Path) -> dict[str, Path]:
+    """Render the DVD-menu previews into a scratch dir; {bag-relative path: file}."""
+    preview_cfg = load_preview_config()
+    write_dvd_menu_packaged_previews(work, menu_jpg=menu_jpg, package_id=package_id, config=preview_cfg)
+    hitsave = work / "metadata" / "hitsave"
+    return {
+        p.relative_to(work).as_posix(): p for p in sorted(hitsave.rglob("*")) if p.is_file()
+    }
+
+
+def apply_to_wasabi(
+    files: dict[str, Path],
     package_storage_prefix: str,
-    rel_paths: list[str],
     *,
     ingest_config_path: Path,
+    s3=None,
 ) -> None:
+    """Upload preview files (verified), then a tagmanifest with only their lines changed."""
     wasabi, _ = load_wasabi_settings(ingest_config_path)
     config_root = ingest_config_path.parent.parent
-    creds = load_yaml(resolve_config_path(str(wasabi["credentials_file"]), config_root))
-    client = make_s3_client(wasabi, creds)
+    if s3 is None:
+        creds = load_yaml(resolve_config_path(str(wasabi["credentials_file"]), config_root))
+        s3 = make_s3_client(wasabi, creds)
     bucket = resolve_wasabi_bucket(wasabi, "dump")
-    storage_root = wasabi_unpacked_prefix(package_storage_prefix)
+    root = wasabi_unpacked_prefix(package_storage_prefix)
     verify = require_bool(wasabi, "verify_upload", where="ingest.yaml wasabi")
 
-    for rel in rel_paths:
-        path = bag_dir / rel
-        if not path.is_file():
-            continue
-        key = object_key(storage_root, bag_dir, path)
-        size = path.stat().st_size
-        digest = sha256_file(path) if verify else None
-        upload_file_to_s3(client, bucket=bucket, key=key, path=path)
+    tag_key = f"{root}tagmanifest-sha256.txt"
+    tagmanifest = s3.get_object(Bucket=bucket, Key=tag_key)["Body"].read().decode("utf-8")
+    if not tagmanifest.strip():
+        raise RuntimeError(f"empty tagmanifest at s3://{bucket}/{tag_key}")
+
+    digests: dict[str, str] = {}
+    for rel, path in files.items():
+        hashes = hash_file(path)
+        digests[rel] = hashes.sha256
+        key = f"{root}{rel}"
+        upload_file_to_s3(s3, bucket=bucket, key=key, path=path)
         verify_uploaded_object(
-            client, bucket=bucket, key=key, size=size, local_digest=digest
+            s3, bucket=bucket, key=key, size=hashes.size,
+            local_digest=hashes.sha256 if verify else None,
+            local_hashes=hashes if verify else None,
         )
         print(f"  uploaded s3://{bucket}/{key}", flush=True)
 
+    new_tag = upsert_manifest_lines(tagmanifest, digests)
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as tmp:
+        tmp.write(new_tag)
+    tmp_path = Path(tmp.name)
+    try:
+        hashes = hash_file(tmp_path)
+        upload_file_to_s3(s3, bucket=bucket, key=tag_key, path=tmp_path)
+        verify_uploaded_object(
+            s3, bucket=bucket, key=tag_key, size=hashes.size,
+            local_digest=hashes.sha256, local_hashes=hashes,
+        )
+    finally:
+        tmp_path.unlink(missing_ok=True)
+    print(f"  updated {len(digests)} line(s) in s3://{bucket}/{tag_key}", flush=True)
 
-def patch_bag(bag_dir: Path, menu_jpg: Path, package_id: str) -> list[str]:
-    if not (bag_dir / "bagit.txt").is_file():
-        raise FileNotFoundError(f"not a bag: {bag_dir}")
-    preview_cfg = load_preview_config()
-    write_dvd_menu_packaged_previews(
-        bag_dir,
-        menu_jpg=menu_jpg,
-        package_id=package_id,
-        config=preview_cfg,
-    )
-    bag = bagit.Bag(str(bag_dir))
-    bag.save(manifests=True)
-    return collect_upload_relpaths(bag_dir)
+
+def apply_to_local_bag(files: dict[str, Path], bag_dir: Path) -> bool:
+    """Same tag-only update on the local bag so it doesn't drift from Wasabi."""
+    tag_path = bag_dir / "tagmanifest-sha256.txt"
+    if not tag_path.is_file():
+        return False
+    digests = {}
+    for rel, path in files.items():
+        dest = bag_dir / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, dest)
+        digests[rel] = hash_file(dest).sha256
+    tag_path.write_text(upsert_manifest_lines(tag_path.read_text(encoding="utf-8"), digests), encoding="utf-8")
+    return True
 
 
 def main() -> None:
@@ -192,25 +239,21 @@ def main() -> None:
             if not menu_jpg.is_file():
                 skipped.append((iso, f"missing preview {menu_jpg}"))
                 continue
-            bag_dir = bag_root / row.game_key
-            if not bag_dir.is_dir():
-                skipped.append((iso, f"no local bag {bag_dir}"))
-                continue
             print(f"=== {row.game_key} ===", flush=True)
-            try:
-                rels = patch_bag(bag_dir, menu_jpg, row.package_id)
-                print(f"  patched bag ({len(rels)} files to upload)", flush=True)
-            except OSError as exc:
-                skipped.append((iso, str(exc)))
-                print(f"  FAIL patch: {exc}", flush=True)
-                continue
-            if cfg.get("upload_wasabi", True):
-                upload_bag_relpaths(
-                    bag_dir,
-                    row.package_storage_prefix,
-                    rels,
-                    ingest_config_path=ingest_config,
-                )
+            with tempfile.TemporaryDirectory() as work:
+                try:
+                    files = build_preview_files(menu_jpg, row.package_id, Path(work))
+                except (OSError, RuntimeError) as exc:
+                    skipped.append((iso, str(exc)))
+                    print(f"  FAIL previews: {exc}", flush=True)
+                    continue
+                if cfg.get("upload_wasabi", True):
+                    apply_to_wasabi(files, row.package_storage_prefix, ingest_config_path=ingest_config)
+                bag_dir = bag_root / row.game_key
+                if apply_to_local_bag(files, bag_dir):
+                    print(f"  local bag tagmanifest updated: {bag_dir}", flush=True)
+                else:
+                    print(f"  (no local bag at {bag_dir}; Wasabi only)", flush=True)
             updated.append(row.game_key)
             print(f"  done ({len(updated)} updated)", flush=True)
 
