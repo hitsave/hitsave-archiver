@@ -112,12 +112,16 @@ def upsert_ledger(
             ON CONFLICT (game_key) DO UPDATE SET
                 source_path = EXCLUDED.source_path,
                 status = EXCLUDED.status,
-                dip_path = EXCLUDED.dip_path,
-                aip_bag_path = EXCLUDED.aip_bag_path,
+                -- Intermediate/failed status writes pass NULL here; keep the last known values
+                -- so a failed re-run never erases where the preserved package lives.
+                dip_path = COALESCE(EXCLUDED.dip_path, game_ingest.dip_path),
+                aip_bag_path = COALESCE(EXCLUDED.aip_bag_path, game_ingest.aip_bag_path),
                 package_uuid = COALESCE(EXCLUDED.package_uuid, game_ingest.package_uuid),
-                file_count = EXCLUDED.file_count,
-                total_bytes = EXCLUDED.total_bytes,
-                checksum_manifest_path = EXCLUDED.checksum_manifest_path,
+                file_count = COALESCE(EXCLUDED.file_count, game_ingest.file_count),
+                total_bytes = COALESCE(EXCLUDED.total_bytes, game_ingest.total_bytes),
+                checksum_manifest_path = COALESCE(
+                    EXCLUDED.checksum_manifest_path, game_ingest.checksum_manifest_path
+                ),
                 error_message = EXCLUDED.error_message,
                 package_format = COALESCE(EXCLUDED.package_format, game_ingest.package_format),
                 submission_source_id = COALESCE(EXCLUDED.submission_source_id, game_ingest.submission_source_id),
@@ -265,6 +269,26 @@ def read_bagit_metadata(bag_dir: Path) -> tuple[dict | None, dict | None, str | 
     manifest = bag_dir / "manifest-sha256.txt"
     checksum_path = str(manifest) if manifest.is_file() else None
     return submission, inventory, checksum_path
+
+
+def run_moby_enrichment(game_cfg: dict, game_cfg_path: Path) -> None:
+    """Best-effort MobyGames enrichment. Never stops ingest.
+
+    A missing Moby entry, a lookup error or a crash is logged (and recorded on the ledger by
+    moby_enrich_game.py when it gets that far); archiving always continues.
+    """
+    if not moby_enrich_enabled(game_cfg):
+        return
+    try:
+        moby = subprocess.run(
+            [sys.executable, str(SCRIPTS / "moby_enrich_game.py"), str(game_cfg_path)],
+            check=False,
+        )
+    except Exception as exc:  # noqa: BLE001 - enrichment must never block preservation
+        print(f"  Moby enrichment could not run ({exc}); continuing ingest", flush=True)
+        return
+    if moby.returncode != 0:
+        print(f"  Moby enrichment exited {moby.returncode}; continuing ingest", flush=True)
 
 
 def run_bagit_ingest(
@@ -455,6 +479,8 @@ def main() -> None:
     quarantine_base = output_root / paths["quarantine_subdir"] / game_key
     try:
         check_source_content_policy(source, ingest_cfg)
+        # Metadata only; never blocks archiving.
+        run_moby_enrichment(game_cfg, game_cfg_path)
 
         upsert_ledger(
             conn,
@@ -487,14 +513,6 @@ def main() -> None:
         if inventory and inventory.get("summary"):
             file_count = int(inventory["summary"].get("file_count") or 0)
             total_bytes = int(inventory["summary"].get("total_bytes") or 0)
-
-        if moby_enrich_enabled(game_cfg):
-            moby = subprocess.run(
-                [sys.executable, str(SCRIPTS / "moby_enrich_game.py"), str(game_cfg_path)],
-                check=False,
-            )
-            if moby.returncode == 2:
-                raise RuntimeError("MobyGames metadata blocked this game (see ledger block_reason)")
 
         complete_kwargs: dict = {
             "game_key": game_key,

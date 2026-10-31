@@ -104,11 +104,6 @@ def main() -> None:
     ingest_cfg = yaml.safe_load((config_root / "preservation/ingest.yaml").read_text())
     db = yaml.safe_load(Path(ingest_cfg["database"]["config_file"]).read_text())["postgres"]
 
-    if result.block_reason and moby_cfg.get("block_on_failure", False):
-        status = "blocked"
-    else:
-        status = None
-
     conn = psycopg.connect(
         host=db["host"],
         port=int(db.get("port", 5432)),
@@ -126,7 +121,6 @@ def main() -> None:
                 metadata_source = %s,
                 moby_status = %s,
                 block_reason = %s,
-                status = COALESCE(%s, status),
                 updated_at = NOW()
             WHERE game_key = %s
             """,
@@ -137,7 +131,6 @@ def main() -> None:
                 result.metadata_source,
                 result.status,
                 result.block_reason,
-                status,
                 game_key,
             ),
         )
@@ -160,8 +153,6 @@ def main() -> None:
             indent=2,
         )
     )
-    if status == "blocked":
-        sys.exit(2)
 
 
 if __name__ == "__main__":
