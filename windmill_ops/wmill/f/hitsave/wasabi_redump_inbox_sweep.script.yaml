@@ -3,6 +3,10 @@ description: |
   Wraps `scripts/remote-intake/run-wasabi-redump-per-folder.sh` (poll + stage + ingest + Omeka).
   Prefer scheduled `remote_intake_sweep` for both lanes; use this for Wasabi-only manual runs.
 lock: '!inline f/hitsave/wasabi_redump_inbox_sweep.script.lock'
+concurrent_limit: 1
+concurrency_time_window_s: 0
+# Shared key: the three intake scripts exclude each other (they share ready/ and staging/).
+concurrency_key: hitsave-remote-intake
 kind: script
 language: bash
 schema:

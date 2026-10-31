@@ -165,6 +165,93 @@ def upsert_ledger(
     conn.commit()
 
 
+REINGEST_REFUSED_EXIT = 3
+
+
+def reingest_allowed(game_cfg: dict) -> bool:
+    """Explicit opt-in to rebuild/re-upload a package that is already complete."""
+    import os
+
+    env = os.environ.get("HITSAVE_ALLOW_REINGEST", "").strip().lower()
+    return env in ("1", "true", "yes") or game_cfg.get("allow_reingest") is True
+
+
+def existing_complete_row(conn, game_key: str) -> dict | None:
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT status, source_path, inventory_json FROM game_ingest WHERE game_key = %s",
+            (game_key,),
+        )
+        row = cur.fetchone()
+    if not row or row[0] != "complete":
+        return None
+    inv = row[2]
+    if isinstance(inv, str):
+        inv = json.loads(inv)
+    return {"source_path": row[1], "inventory_json": inv}
+
+
+def sip_inventory_diff(source: Path, inventory: dict | None) -> list[str]:
+    """Compare SIP (payload path, size) pairs with the preserved inventory; [] when identical."""
+    from preservation_common import bagit_payload_relpath, load_packaging_config, should_skip
+
+    bag_cfg = load_packaging_config().get("bagit") or {}
+    payload_dir = str(bag_cfg.get("payload_dir") or "data")
+    preserve = bool(bag_cfg.get("preserve_source_folder_in_payload", False))
+    current = {}
+    for path in sorted(source.rglob("*")):
+        if path.is_file() and not should_skip(path):
+            rel = bagit_payload_relpath(source, path, preserve_source_folder=preserve)
+            current[f"{payload_dir}/{rel}"] = path.stat().st_size
+    preserved = {
+        str(f.get("path")): int(f.get("size_bytes") or 0)
+        for f in (inventory or {}).get("files") or []
+    }
+    if not preserved:
+        return ["preserved package has no inventory_json to compare against"]
+    diffs = [f"new file {p}" for p in sorted(current.keys() - preserved.keys())]
+    diffs += [f"missing file {p}" for p in sorted(preserved.keys() - current.keys())]
+    diffs += [
+        f"size changed {p} ({preserved[p]} -> {current[p]})"
+        for p in sorted(current.keys() & preserved.keys())
+        if current[p] != preserved[p]
+    ]
+    return diffs
+
+
+def guard_complete_package(conn, *, game_key: str, source: Path, game_cfg: dict) -> None:
+    """
+    Never silently overwrite a preserved package.
+
+    package_id comes from sip_fingerprint = sha256(submission | relative SIP path), so a
+    different package staged at the same path (slug collision) resolves to an existing,
+    complete package_id and would be uploaded over its Wasabi prefix. Exits before touching
+    the ledger row: 0 when the SIP is identical (nothing to do), REINGEST_REFUSED_EXIT when
+    it differs. HITSAVE_ALLOW_REINGEST=1 / allow_reingest: true skips this guard.
+    """
+    existing = existing_complete_row(conn, game_key)
+    if existing is None or reingest_allowed(game_cfg):
+        return
+    diffs = sip_inventory_diff(source, existing["inventory_json"])
+    conn.close()
+    if not diffs:
+        print(
+            f"Already preserved: {game_key} is complete and the SIP matches its inventory; "
+            "nothing to do (set HITSAVE_ALLOW_REINGEST=1 to rebuild anyway)."
+        )
+        raise SystemExit(0)
+    shown = "\n  ".join(diffs[:10]) + (f"\n  … and {len(diffs) - 10} more" if len(diffs) > 10 else "")
+    print(
+        f"REFUSING to re-ingest {game_key}: it is already complete (preserved from "
+        f"{existing['source_path']}) and this SIP ({source}) differs:\n  {shown}\n"
+        "This is likely a slug/path collision with a different package. The preserved package "
+        "and its ledger row were not touched. Set HITSAVE_ALLOW_REINGEST=1 only if this really "
+        "is an intended replacement of the same package.",
+        file=sys.stderr,
+    )
+    raise SystemExit(REINGEST_REFUSED_EXIT)
+
+
 def read_bagit_metadata(bag_dir: Path) -> tuple[dict | None, dict | None, str | None]:
     meta = bag_dir / "metadata"
     submission = None
@@ -314,6 +401,8 @@ def main() -> None:
         game_key = identity.package_id
         package_uuid = identity.package_uuid
         raw_game_cfg["game_key"] = game_key
+        # Before ANY ledger write: don't overwrite (or mark failed) an already-preserved package.
+        guard_complete_package(conn, game_key=game_key, source=source, game_cfg=raw_game_cfg)
         dump_kwargs: dict = {}
         if kind == "dump":
             dump_clf = classify_dump_sip(

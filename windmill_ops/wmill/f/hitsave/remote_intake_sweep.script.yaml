@@ -4,9 +4,14 @@ description: |
   Each lane polls incoming, stages new packages, runs ingest-worker BagIt/Wasabi ingest,
   and registers prod Omeka when the ledger reaches complete.
 
-  Set script concurrency limit to **1** in Windmill (overlapping sweeps contend on Docker/ledger).
+  Concurrency: limit 1 via the shared key below, plus a flock in scripts/remote-intake/common.sh
+  (remote_intake_acquire_lock). The flock is the real guard: Windmill CE may not enforce limits.
   Runtime scales with package count; may run long when many new dumps appear.
 lock: '!inline f/hitsave/remote_intake_sweep.script.lock'
+concurrent_limit: 1
+concurrency_time_window_s: 0
+# Shared key: the three intake scripts exclude each other (they share ready/ and staging/).
+concurrency_key: hitsave-remote-intake
 kind: script
 language: bash
 schema:
