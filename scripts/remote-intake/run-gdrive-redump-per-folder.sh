@@ -4,6 +4,7 @@ RI="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=common.sh
 source "$RI/common.sh"
 remote_intake_load_host_env
+remote_intake_acquire_lock
 ARCHIVER="$(remote_intake_archiver_root)"
 GDRIVE="$(remote_intake_gdrive_root)"
 BUNDLE="$(remote_intake_bundle_root)"
@@ -53,6 +54,13 @@ register_omeka() {
 
 for pair in "${pairs[@]}"; do
   IFS=$'\t' read -r fid slug <<< "$pair"
+  if [[ -z "$fid" || -z "$slug" ]]; then
+    echo "WARN: skip malformed poll line: $pair"
+    continue
+  fi
+  if ! remote_intake_ready_source_guard "$READY" "$slug" --drive-folder-id "$fid"; then
+    continue
+  fi
   cfg="$READY/$slug/game.ingest.yaml"
 
   if [[ -f "$cfg" ]]; then

@@ -189,6 +189,82 @@ remote_intake_load_host_env() {
   fi
 }
 
+# One shared lock for every remote-intake run that stages into ready/ or runs ingest-worker.
+# Overlapping runs rmtree each other's staging/<key> and ready/<key> (process_package.py).
+# Same host file whether run from the host or the Windmill worker (/run/hitsave/generated is
+# a bind mount of <archiver>/.generated/windmill), so flock excludes across both.
+remote_intake_lock_path() {
+  if [[ -n "${HITSAVE_REMOTE_INTAKE_LOCK:-}" ]]; then
+    echo "$HITSAVE_REMOTE_INTAKE_LOCK"
+    return
+  fi
+  if [[ -d /run/hitsave/generated ]]; then
+    echo "/run/hitsave/generated/remote-intake.lock"
+    return
+  fi
+  local dir
+  dir="$(remote_intake_archiver_root)/.generated/windmill"
+  mkdir -p "$dir"
+  echo "$dir/remote-intake.lock"
+}
+
+# Take the lock (non-blocking) or exit 0 with a SKIP message if another run holds it.
+# Reentrant: nested calls (sweep → per-folder, full-batch → per-folder) are no-ops.
+remote_intake_acquire_lock() {
+  if [[ "${HITSAVE_REMOTE_INTAKE_LOCK_HELD:-}" == "1" ]]; then
+    return 0
+  fi
+  if ! command -v flock >/dev/null 2>&1; then
+    echo "remote intake: flock not found; refusing to run without the intake lock" >&2
+    exit 1
+  fi
+  local lock
+  lock="$(remote_intake_lock_path)"
+  # World-readable so host (uid 1000) and Windmill worker (root) can both open it; flock only
+  # needs a read fd.
+  [[ -e "$lock" ]] || (umask 000 && : >"$lock")
+  exec 9<"$lock"
+  if ! flock -n 9; then
+    echo "SKIP: another remote intake run holds $lock ($(date -Is)); exiting without changes"
+    exit 0
+  fi
+  export HITSAVE_REMOTE_INTAKE_LOCK_HELD=1
+}
+
+# Slug-collision guard. ready/<slug> names drop the source root, so two different packages
+# can share a slug. Before treating ready/<slug> (or a ledger row matched by slug) as THIS
+# package, confirm its handoff manifest came from this source.
+#   remote_intake_ready_source_guard <ready_root> <slug> --drive-folder-id ID | --wasabi-prefix P
+# Returns 0 to proceed, 1 to skip this package (collision or check error; logged).
+remote_intake_ready_source_guard() {
+  local ready_root="$1" slug="$2"
+  shift 2
+  local out rc
+  out="$(python3 "$(remote_intake_scripts_dir)/ready_source.py" check \
+    --slug "$slug" --ready-root "$ready_root" "$@" 2>&1)" && rc=0 || rc=$?
+  case "$rc" in
+    0) return 0 ;;
+    4)
+      echo "WARN: ready/$slug records no source; cannot rule out a slug collision ($*)"
+      return 0
+      ;;
+    3)
+      local recorded="${out#mismatch }"
+      echo "COLLISION: ready/$slug belongs to $recorded, not this package ($*)."
+      echo "  Not staging, ingesting, registering or archiving it. If it is the same disc from"
+      echo "  another lane, remove the duplicate; otherwise rename the source folder."
+      local gen="${HITSAVE_REMOTE_INTAKE_LOG_DIR:-$(remote_intake_archiver_root)/.generated}"
+      printf '%s\t%s\t%s\t%s\n' "$(date -Is)" "$slug" "$*" "$recorded" \
+        >>"$gen/remote-intake-collisions.tsv" 2>/dev/null || true
+      return 1
+      ;;
+    *)
+      echo "ERROR: ready_source check failed for $slug (rc=$rc): $out"
+      return 1
+      ;;
+  esac
+}
+
 remote_intake_scripts_dir() {
   cd "$(dirname "${BASH_SOURCE[0]}")" && pwd
 }

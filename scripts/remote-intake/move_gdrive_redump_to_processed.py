@@ -10,6 +10,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GDRIVE_ROOT = REPO_ROOT.parent / "hitsave-gdrive-intake"
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 _gdrive_src = GDRIVE_ROOT / "src"
 if _gdrive_src.is_dir():
     sys.path.insert(0, str(_gdrive_src))
@@ -32,6 +33,7 @@ from intake.gdrive_poll import run_poll  # noqa: E402
 from upload_bag_wasabi import load_wasabi_settings, pg_connect  # noqa: E402
 from yaml_config import load_yaml  # noqa: E402
 from preservation_common import wasabi_s3_region  # noqa: E402
+from ready_source import MISMATCH, check_source, describe, require_ready_root  # noqa: E402
 
 
 def slug_from_folder_name(name: str, *, prefix: str = "redump") -> str:
@@ -77,6 +79,7 @@ def has_bag_on_dumps(s3, prefix: str) -> bool:
 
 
 def main() -> None:
+    ready_root = require_ready_root()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config-root", type=Path, default=Path("/config"))
     parser.add_argument("--ingest-config", type=Path, default=Path("/config/preservation/ingest.yaml"))
@@ -134,6 +137,14 @@ def main() -> None:
         if name == processed_name:
             continue
         slug = slug_from_folder_name(name)
+        # Slug collision guard: ready/<slug> (and the ledger row found by slug) must be THIS folder.
+        state, rec = check_source(ready_root / slug, drive_folder_id=fid)
+        if state == MISMATCH:
+            pending.append(
+                f"{name} (COLLISION: ready/{slug} came from {describe(rec)}; this Drive folder "
+                "was NOT preserved under that slug)"
+            )
+            continue
         row = ledger_row(db_cfg, slug)
         if not row:
             pending.append(f"{name} (no ledger row; slug={slug})")

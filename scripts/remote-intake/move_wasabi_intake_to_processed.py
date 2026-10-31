@@ -16,6 +16,7 @@ except ImportError:
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from move_incoming_redump_packages import (  # noqa: E402
     dest_prefix_has_objects,
@@ -25,6 +26,7 @@ from move_incoming_redump_packages import (  # noqa: E402
 from upload_bag_wasabi import load_wasabi_settings  # noqa: E402
 from wasabi_rename import wasabi_move_prefix  # noqa: E402
 from yaml_config import load_yaml  # noqa: E402
+from ready_source import MISMATCH, check_source, describe, require_ready_root  # noqa: E402
 
 DEST_ROOT = "processed"
 
@@ -78,6 +80,7 @@ def load_packages_from_poll_json(path: Path) -> list[dict]:
 
 
 def main() -> None:
+    ready_root = require_ready_root()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--intake-config",
@@ -125,6 +128,14 @@ def main() -> None:
             continue
         if not ledger_complete_for_slug(slug, ingest_config_path=ingest_path):
             skipped.append(f"not ledger-complete: {src_root}/{folder} ({slug})")
+            continue
+        # Slug collision guard: the ledger row matched by slug must come from THIS source.
+        state, rec = check_source(ready_root / slug, wasabi_prefix=f"{src_root}/{folder}")
+        if state == MISMATCH:
+            skipped.append(
+                f"COLLISION: {src_root}/{folder} ({slug}) — ready/{slug} came from {describe(rec)}; "
+                "this source was NOT preserved under that slug"
+            )
             continue
         src = f"{src_root}/{folder}"
         dest = f"{DEST_ROOT}/{src}"

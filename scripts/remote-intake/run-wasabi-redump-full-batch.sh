@@ -4,6 +4,7 @@ RI="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=common.sh
 source "$RI/common.sh"
 remote_intake_load_host_env
+remote_intake_acquire_lock
 ARCHIVER="$(remote_intake_archiver_root)"
 GDRIVE="$(remote_intake_gdrive_root)"
 BUNDLE="$(remote_intake_bundle_root)"
