@@ -145,3 +145,67 @@ def _parse_move_result(body: bytes) -> dict[str, Any]:
         "objects": objects,
         "errors": errors,
     }
+
+
+class WasabiMoveIncomplete(RuntimeError):
+    """A prefix MOVE did not land every object at the destination."""
+
+
+def list_keys_with_sizes(s3_client, *, bucket: str, prefix: str) -> dict[str, int]:
+    """{relative key: size} for real objects under prefix/ (folder placeholders skipped)."""
+    root = prefix.strip("/") + "/"
+    out: dict[str, int] = {}
+    for page in s3_client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=root):
+        for obj in page.get("Contents") or []:
+            key = str(obj["Key"])
+            if key.endswith("/"):
+                continue
+            out[key[len(root):]] = int(obj.get("Size") or 0)
+    return out
+
+
+def wasabi_move_prefix_verified(
+    s3_client,
+    *,
+    bucket: str,
+    source_prefix: str,
+    destination_prefix: str,
+    overwrite: bool = False,
+) -> dict[str, Any]:
+    """
+    MOVE source_prefix/ -> destination_prefix/ and prove it worked.
+
+    wasabi_move_prefix reports per-object failures only in its result's ``errors`` list,
+    which callers used to ignore (then updated the ledger / deleted the source prefix).
+    This refuses to merge into a non-empty destination unless overwrite=True, then checks
+    that every source object exists at the destination with the same size and that the
+    source prefix is empty. Raises WasabiMoveIncomplete otherwise (nothing is deleted).
+    """
+    before = list_keys_with_sizes(s3_client, bucket=bucket, prefix=source_prefix)
+    if not before:
+        raise WasabiMoveIncomplete(f"nothing to move under s3://{bucket}/{source_prefix.strip('/')}/")
+    if not overwrite and list_keys_with_sizes(s3_client, bucket=bucket, prefix=destination_prefix):
+        raise WasabiMoveIncomplete(
+            f"destination s3://{bucket}/{destination_prefix.strip('/')}/ already has objects"
+        )
+    result = wasabi_move_prefix(
+        s3_client,
+        bucket=bucket,
+        source_prefix=source_prefix,
+        destination_prefix=destination_prefix,
+        overwrite=overwrite,
+    )
+    dest = list_keys_with_sizes(s3_client, bucket=bucket, prefix=destination_prefix)
+    left = list_keys_with_sizes(s3_client, bucket=bucket, prefix=source_prefix)
+    missing = sorted(rel for rel, size in before.items() if dest.get(rel) != size)
+    problems = list(result.get("errors") or [])
+    if missing:
+        problems.append(f"{len(missing)} object(s) missing/wrong size at destination: {missing[:5]}")
+    if left:
+        problems.append(f"{len(left)} object(s) still at source: {sorted(left)[:5]}")
+    if problems:
+        raise WasabiMoveIncomplete(
+            f"MOVE s3://{bucket}/{source_prefix.strip('/')}/ -> {destination_prefix.strip('/')}/ "
+            "incomplete: " + "; ".join(problems)
+        )
+    return {**result, "verified_objects": len(before)}
