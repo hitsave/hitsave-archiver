@@ -39,6 +39,7 @@ Uses the **CLI container** (no host `npm`): `docker compose --profile cli run --
 | `wasabi_redump_inbox_sweep` / `gdrive_redump_inbox_sweep` | Single lane (manual) |
 | `batch_resume_omeka` | `run-batch-resume-omeka.sh` (long; manual) |
 | `correct_catalog_item` | `scripts/correct-catalog-item.py` (optional; status-web **`/correct`** is the default UI) |
+| `quarantine_catalog_item` | `scripts/curation-quarantine-omeka.py` (status-web **`/quarantine`**) |
 
 **Schedule:** only **`remote_intake_sweep`** every **30 minutes**. Ops SSOT for intake state: **`game_ingest`** ledger + status-web **Health** (`:8090`).
 

@@ -15,13 +15,16 @@ ledger:
   default_per_page: 50
   per_page_options: [25, 50, 100, 200]
   max_per_page: 200
-# Catalog corrections: GET/POST /correct on this service (no Windmill login required).
+# Catalog corrections: GET/POST /correct runs Windmill f/hitsave/correct_catalog_item (no Windmill UI login).
 ops:
-  # Set to your Windmill UI base URL, or leave unset to hide /ops API features.
   windmill_ui_url: http://127.0.0.1:8089
   windmill:
     workspace: hitsave-archiver
-    # api_url defaults to {windmill_ui_url}/api
+    # From status-web container use a reachable API base (not 127.0.0.1). Examples:
+    # api_url: http://host.docker.internal:8089/api
+    # api_url: http://windmill_server:8000/api   # when windmill_server joins preservation network
+    correct_catalog_script: f/hitsave/correct_catalog_item
+    job_wait_timeout_seconds: 900
     token_file: /config/secrets/windmill-status-web.token
     scripts:
       Remote intake sweep: f/hitsave/remote_intake_sweep
@@ -29,3 +32,6 @@ ops:
       GDrive inbox sweep: f/hitsave/gdrive_redump_inbox_sweep
       Batch resume Omeka: f/hitsave/batch_resume_omeka
       Ledger health report: f/hitsave/ledger_health_report
+      Catalog correction: f/hitsave/correct_catalog_item
+      Quarantine catalog item: f/hitsave/quarantine_catalog_item
+      Quarantine catalog item: f/hitsave/quarantine_catalog_item
