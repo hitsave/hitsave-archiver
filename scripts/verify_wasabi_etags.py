@@ -25,9 +25,10 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 sys.path.insert(0, "/app/scripts")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-PART = 64 * 1024 * 1024        # upload_bag_wasabi.S3_TRANSFER chunksize/threshold
-READ = 8 * 1024 * 1024
+from s3_etag import DEFAULT_PART_SIZE as PART, etag_matches, hash_file  # noqa: E402
+
 if len(sys.argv) < 2:
     raise SystemExit("usage: verify_wasabi_etags.py <out_dir> [workers]")
 OUT = Path(sys.argv[1])
@@ -45,75 +46,29 @@ def parse_manifest(path: Path) -> dict[str, str]:
     return out
 
 
-def hash_local(path: str) -> dict:
-    sha = hashlib.sha256()
-    whole_md5 = hashlib.md5()
-    part_digests: list[bytes] = []
-    part = hashlib.md5()
-    in_part = 0
-    size = 0
-    with open(path, "rb") as fh:
-        while True:
-            chunk = fh.read(READ)
-            if not chunk:
-                break
-            size += len(chunk)
-            sha.update(chunk)
-            whole_md5.update(chunk)
-            view = memoryview(chunk)
-            while view:
-                take = min(len(view), PART - in_part)
-                part.update(view[:take])
-                in_part += take
-                view = view[take:]
-                if in_part == PART:
-                    part_digests.append(part.digest())
-                    part = hashlib.md5()
-                    in_part = 0
-    if in_part:
-        part_digests.append(part.digest())
-    multipart_etag = None
-    if part_digests:
-        multipart_etag = f"{hashlib.md5(b''.join(part_digests)).hexdigest()}-{len(part_digests)}"
-    return {
-        "size": size,
-        "sha256": sha.hexdigest(),
-        "md5": whole_md5.hexdigest(),
-        "multipart_etag": multipart_etag,
-        "parts": len(part_digests),
-    }
-
-
 def job(task: dict) -> dict:
     t0 = time.time()
     res = dict(task)
     try:
-        loc = hash_local(task["local_path"])
+        loc = hash_file(task["local_path"])
     except Exception as e:  # noqa: BLE001
         res.update(status="LOCAL_ERROR", detail=str(e))
         return res
-    res["local_size"] = loc["size"]
-    res["local_sha256"] = loc["sha256"]
+    res["local_size"] = loc.size
+    res["local_sha256"] = loc.sha256
     problems = []
-    if task.get("expected_sha256") and loc["sha256"] != task["expected_sha256"]:
+    if task.get("expected_sha256") and loc.sha256 != task["expected_sha256"]:
         problems.append("local sha256 != bag manifest (local copy changed since ingest)")
-    remote_etag = task["remote_etag"]
-    if task["remote_size"] != loc["size"]:
-        problems.append(f"size mismatch remote={task['remote_size']} local={loc['size']}")
-    if "-" in remote_etag:
-        n = int(remote_etag.rsplit("-", 1)[1])
-        if n != loc["parts"]:
-            res["etag_check"] = "unverifiable"
-            problems.append(f"multipart part count {n} != expected {loc['parts']} at 64 MiB")
-        elif remote_etag != loc["multipart_etag"]:
-            problems.append("ETag mismatch (multipart)")
-        else:
-            res["etag_check"] = "multipart_ok"
+    if task["remote_size"] != loc.size:
+        problems.append(f"size mismatch remote={task['remote_size']} local={loc.size}")
+    ok, detail = etag_matches(loc, task["remote_etag"])
+    if ok:
+        res["etag_check"] = "multipart_ok" if "-" in task["remote_etag"] else "md5_ok"
+    elif "parts, expected" in detail:
+        res["etag_check"] = "unverifiable"
+        problems.append(detail)
     else:
-        if remote_etag != loc["md5"]:
-            problems.append("ETag mismatch (single-part md5)")
-        else:
-            res["etag_check"] = "md5_ok"
+        problems.append(detail)
     res["status"] = "OK" if not problems else "MISMATCH"
     if problems:
         res["detail"] = "; ".join(problems)

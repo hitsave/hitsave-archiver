@@ -32,3 +32,7 @@ docker compose -f "$COMPOSE_DIR/docker-compose.yml" --env-file "$ENV_FILE" --pro
 
 docker compose -f "$COMPOSE_DIR/docker-compose.yml" --env-file "$ENV_FILE" --profile cli run --rm windmill_cli \
   schedule push schedules/remote_intake_sweep.schedule.yaml f/hitsave/remote_intake_sweep "${WMILL_ARGS[@]}"
+
+# Ships disabled (see the YAML); enable in Windmill once the Wasabi read budget is accepted.
+docker compose -f "$COMPOSE_DIR/docker-compose.yml" --env-file "$ENV_FILE" --profile cli run --rm windmill_cli \
+  schedule push schedules/wasabi_fixity_check.schedule.yaml f/hitsave/wasabi_fixity_check "${WMILL_ARGS[@]}"

@@ -32,13 +32,15 @@ from preservation_common import (  # noqa: E402
     wasabi_unpacked_prefix,
 )
 from yaml_config import load_yaml  # noqa: E402
+from s3_etag import DEFAULT_PART_SIZE, FileHashes, etag_matches, hash_file  # noqa: E402
 
-# Full re-download SHA-256 verify is skipped above this size (after upload).
+# Small files are also re-downloaded and SHA-256 checked; every file gets a HEAD size + ETag check.
 VERIFY_DOWNLOAD_MAX_BYTES = 256 * 1024 * 1024
 
+# threshold == chunksize == s3_etag.DEFAULT_PART_SIZE so the expected ETag is predictable.
 S3_TRANSFER = TransferConfig(
-    multipart_threshold=64 * 1024 * 1024,
-    multipart_chunksize=64 * 1024 * 1024,
+    multipart_threshold=DEFAULT_PART_SIZE,
+    multipart_chunksize=DEFAULT_PART_SIZE,
     max_concurrency=4,
 )
 
@@ -73,17 +75,28 @@ def verify_uploaded_object(
     key: str,
     size: int,
     local_digest: str | None,
+    local_hashes: FileHashes | None = None,
 ) -> None:
-    if local_digest is None:
+    """
+    Prove the stored object equals the local file.
+
+    HEAD: size, plus the S3 ETag against local_hashes (MD5 / multipart MD5). That covers
+    multi-GB disc images without re-downloading them (previously size-only above 256 MiB).
+    Files up to VERIFY_DOWNLOAD_MAX_BYTES are additionally downloaded and SHA-256 checked.
+    """
+    if local_digest is None and local_hashes is None:
         return
-    if size > VERIFY_DOWNLOAD_MAX_BYTES:
-        head = client.head_object(Bucket=bucket, Key=key)
-        remote_size = int(head["ContentLength"])
-        if remote_size != size:
-            raise RuntimeError(
-                f"Size mismatch after upload: s3://{bucket}/{key} ({remote_size} != {size})"
-            )
-        print(f"  verified size s3://{bucket}/{key} ({size} bytes; sha256 re-fetch skipped)")
+    head = client.head_object(Bucket=bucket, Key=key)
+    remote_size = int(head["ContentLength"])
+    if remote_size != size:
+        raise RuntimeError(
+            f"Size mismatch after upload: s3://{bucket}/{key} ({remote_size} != {size})"
+        )
+    if local_hashes is not None:
+        ok, detail = etag_matches(local_hashes, str(head.get("ETag") or ""))
+        if not ok:
+            raise RuntimeError(f"ETag check failed after upload: s3://{bucket}/{key} ({detail})")
+    if local_digest is None or size > VERIFY_DOWNLOAD_MAX_BYTES:
         return
     resp = client.get_object(Bucket=bucket, Key=key)
     remote = resp["Body"].read()
@@ -91,6 +104,14 @@ def verify_uploaded_object(
         raise RuntimeError(f"Size mismatch after upload: s3://{bucket}/{key}")
     if sha256_bytes(remote) != local_digest:
         raise RuntimeError(f"SHA-256 mismatch after upload: s3://{bucket}/{key}")
+
+
+def list_prefix_keys(client, *, bucket: str, root: str) -> set[str]:
+    keys: set[str] = set()
+    for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=root):
+        for obj in page.get("Contents") or []:
+            keys.add(str(obj["Key"]))
+    return keys
 
 
 def upload_file_to_s3(client, *, bucket: str, key: str, path: Path) -> None:
@@ -210,20 +231,33 @@ def upload_bag_to_prefix(
 
     files = iter_package_files(bag_dir)
     uploaded = 0
+    uploaded_keys: set[str] = set()
     for path in files:
         key = object_key(root, bag_dir, path)
         size = path.stat().st_size
-        local_digest = sha256_file(path) if verify else None
+        hashes = hash_file(path) if verify else None
         upload_file_to_s3(client, bucket=bucket, key=key, path=path)
         verify_uploaded_object(
             client,
             bucket=bucket,
             key=key,
             size=size,
-            local_digest=local_digest,
+            local_digest=hashes.sha256 if hashes else None,
+            local_hashes=hashes,
         )
         uploaded += 1
-        print(f"  uploaded s3://{bucket}/{key} ({size} bytes)")
+        uploaded_keys.add(key)
+        print(f"  uploaded s3://{bucket}/{key} ({size} bytes{', verified' if verify else ''})")
+
+    # A re-upload over an existing prefix used to leave objects from an older bag in place,
+    # making the Wasabi bag BagIt-invalid. Report them (never delete preservation objects here).
+    stale = sorted(list_prefix_keys(client, bucket=bucket, root=root) - uploaded_keys)
+    if stale:
+        raise RuntimeError(
+            f"{len(stale)} object(s) under s3://{bucket}/{root} are not part of this bag "
+            f"(left from an earlier upload?): {stale[:10]}. Inspect and remove them "
+            "deliberately (e.g. purge-wasabi-prefix.py on this package prefix) before retrying."
+        )
 
     s3_uri = package_storage_s3_uri(bucket, package_storage_prefix)
     print(f"Wasabi bag upload complete: {uploaded} objects under {s3_uri}")
