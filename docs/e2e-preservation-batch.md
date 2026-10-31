@@ -47,7 +47,7 @@ docker compose run --rm -T omeka-catalog /config/preservation/pilot-game.yaml </
 
 `run-batch-resume-omeka.sh` skips **ingest** when ledger `status=complete`, then runs **omeka-catalog** only when ingest finished `complete` (quarantine/failed rows are skipped). Ingest or Omeka errors **log and continue** to the next game in the manifest.
 
-**Content policy:** With `content_policy.enforce: true` in [`ingest.yaml`](../config/preservation/ingest.yaml) (default), booru-style filenames **abort ingest** and write under `$HOST_OUTPUT/quarantine/<game_key>/`. Moby `no_match` is recorded on the ledger only (`mobygames.block_on_failure: false`). Set `enforce: false` only for permissive test runs (warn in logs, no quarantine).
+**Content policy:** With `content_policy.enforce: true` in [`ingest.yaml`](../config/preservation/ingest.yaml) (default), booru-style filenames **abort ingest** and write under `$HOST_OUTPUT/quarantine/<game_key>/`. Moby `no_match` (or any Moby error) is recorded on the ledger only and never stops ingest. Set `enforce: false` only for permissive test runs (warn in logs, no quarantine).
 
 **Moby title search:** API hits must pass [`moby_title_matches_search`](../scripts/moby_resolve.py) (every significant search word appears in the Moby title). Optional DDG fallback ([`mobygames.yaml`](../config/mobygames.yaml) `web_search_fallback`) walks up to `max_results` Moby URLs from `"{title} mobygames"` and accepts the first that passes the same check—not the first URL blindly.
 

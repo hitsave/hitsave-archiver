@@ -271,23 +271,24 @@ def read_bagit_metadata(bag_dir: Path) -> tuple[dict | None, dict | None, str | 
     return submission, inventory, checksum_path
 
 
-class MobyBlockedError(RuntimeError):
-    """MobyGames enrichment blocked this game (moby_enrich_game.py exit 2)."""
+def run_moby_enrichment(game_cfg: dict, game_cfg_path: Path) -> None:
+    """Best-effort MobyGames enrichment. Never stops ingest.
 
-
-def run_moby_gate(game_cfg: dict, game_cfg_path: Path) -> None:
-    """Run Moby enrichment; raise MobyBlockedError if it blocks the game.
-
-    Must run BEFORE the bag is built and uploaded: a blocked game must not leave a bag on Wasabi.
+    A missing Moby entry, a lookup error or a crash is logged (and recorded on the ledger by
+    moby_enrich_game.py when it gets that far); archiving always continues.
     """
     if not moby_enrich_enabled(game_cfg):
         return
-    moby = subprocess.run(
-        [sys.executable, str(SCRIPTS / "moby_enrich_game.py"), str(game_cfg_path)],
-        check=False,
-    )
-    if moby.returncode == 2:
-        raise MobyBlockedError("MobyGames metadata blocked this game (see ledger block_reason)")
+    try:
+        moby = subprocess.run(
+            [sys.executable, str(SCRIPTS / "moby_enrich_game.py"), str(game_cfg_path)],
+            check=False,
+        )
+    except Exception as exc:  # noqa: BLE001 - enrichment must never block preservation
+        print(f"  Moby enrichment could not run ({exc}); continuing ingest", flush=True)
+        return
+    if moby.returncode != 0:
+        print(f"  Moby enrichment exited {moby.returncode}; continuing ingest", flush=True)
 
 
 def run_bagit_ingest(
@@ -478,8 +479,8 @@ def main() -> None:
     quarantine_base = output_root / paths["quarantine_subdir"] / game_key
     try:
         check_source_content_policy(source, ingest_cfg)
-        # Before scanning, bagging or uploading anything (see run_moby_gate).
-        run_moby_gate(game_cfg, game_cfg_path)
+        # Metadata only; never blocks archiving.
+        run_moby_enrichment(game_cfg, game_cfg_path)
 
         upsert_ledger(
             conn,

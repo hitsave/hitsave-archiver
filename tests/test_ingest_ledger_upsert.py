@@ -1,5 +1,5 @@
 """ingest-folder.py ledger writes: status transitions must not erase package location/size fields,
-and a MobyGames block must stop ingest before anything is bagged or uploaded."""
+and MobyGames enrichment can never stop a game from being archived."""
 from __future__ import annotations
 
 import importlib.util
@@ -113,28 +113,35 @@ def test_success_after_failure_updates_fields_and_clears_error():
     assert int(row["file_count"]) == 13 and int(row["total_bytes"]) == 5000
 
 
-def test_moby_gate_raises_on_block(monkeypatch):
+@pytest.mark.parametrize("returncode", [0, 1, 2, 137])
+def test_moby_enrichment_never_raises_on_exit_code(monkeypatch, returncode):
     monkeypatch.setattr(ingest_folder, "moby_enrich_enabled", lambda cfg: True)
-    monkeypatch.setattr(ingest_folder.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=2))
-    with pytest.raises(ingest_folder.MobyBlockedError):
-        ingest_folder.run_moby_gate({}, Path("/tmp/game.yml"))
-
-
-def test_moby_gate_passes_and_skips(monkeypatch):
-    calls = []
     monkeypatch.setattr(
-        ingest_folder.subprocess, "run", lambda *a, **k: calls.append(a) or SimpleNamespace(returncode=0)
+        ingest_folder.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=returncode)
     )
+    ingest_folder.run_moby_enrichment({}, Path("/tmp/game.yml"))  # must not raise
+
+
+def test_moby_enrichment_never_raises_if_it_cannot_start(monkeypatch):
+    def boom(*a, **k):
+        raise OSError("no python")
+
     monkeypatch.setattr(ingest_folder, "moby_enrich_enabled", lambda cfg: True)
-    ingest_folder.run_moby_gate({}, Path("/tmp/game.yml"))
+    monkeypatch.setattr(ingest_folder.subprocess, "run", boom)
+    ingest_folder.run_moby_enrichment({}, Path("/tmp/game.yml"))  # must not raise
+
+
+def test_moby_enrichment_skipped_when_disabled(monkeypatch):
+    calls = []
+    monkeypatch.setattr(ingest_folder.subprocess, "run", lambda *a, **k: calls.append(a))
     monkeypatch.setattr(ingest_folder, "moby_enrich_enabled", lambda cfg: False)
-    ingest_folder.run_moby_gate({}, Path("/tmp/game.yml"))
-    assert len(calls) == 1
+    ingest_folder.run_moby_enrichment({}, Path("/tmp/game.yml"))
+    assert calls == []
 
 
-def test_moby_gate_runs_before_scan_bag_and_upload():
-    src = inspect.getsource(ingest_folder.main)
-    gate = src.index("run_moby_gate(")
-    assert gate < src.index("scan_sip_tree(")
-    assert gate < src.index("run_bagit_ingest(")
+def test_moby_cannot_block_or_change_ingest_status():
+    moby_src = (ROOT / "scripts" / "moby_enrich_game.py").read_text()
+    assert "block_on_failure" not in moby_src
+    assert "sys.exit(2)" not in moby_src
+    assert "status = COALESCE" not in moby_src  # Moby never writes game_ingest.status
     assert "moby_enrich_game.py" not in inspect.getsource(ingest_folder.run_bagit_ingest)
