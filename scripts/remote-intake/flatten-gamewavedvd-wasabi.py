@@ -4,7 +4,8 @@
 For each outer folder under GameWaveDVD/ that contains exactly one G_WAVE* child:
   1. Move loose objects at the outer level into that inner folder.
   2. MOVE the inner prefix to GameWaveDVD/{inner_name}/ (package root).
-  3. Delete any leftover keys under the old outer prefix.
+  3. Remove leftover zero-byte folder placeholders under the old outer prefix.
+     Real objects are never deleted: any error or leftover object stops that package.
 
 Already-flat G_WAVE* folders at GameWaveDVD/ top level are left unchanged.
 """
@@ -27,7 +28,7 @@ from move_incoming_redump_packages import (  # noqa: E402
     resolve_config_path,
 )
 from upload_bag_wasabi import load_wasabi_settings  # noqa: E402
-from wasabi_rename import wasabi_move_prefix  # noqa: E402
+from wasabi_rename import WasabiMoveIncomplete, wasabi_move_prefix_verified  # noqa: E402
 from yaml_config import load_yaml  # noqa: E402
 
 G_WAVE_NAME = re.compile(r"^G_WAVE", re.I)
@@ -57,34 +58,55 @@ def prefix_has_objects(client, bucket: str, prefix: str) -> bool:
     return bool(resp.get("Contents"))
 
 
-def delete_prefix(client, bucket: str, prefix: str, *, dry_run: bool) -> int:
+def delete_folder_placeholders(client, bucket: str, prefix: str, *, dry_run: bool) -> int:
+    """
+    Delete only zero-byte "folder/" placeholder keys under prefix/.
+
+    Refuses (raises) if any real object is still there: the old version deleted every
+    leftover key, including objects whose copy or MOVE had failed (contributor originals).
+    """
     root = prefix.strip("/") + "/"
-    deleted = 0
+    placeholders: list[str] = []
+    leftovers: list[str] = []
     for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=root):
-        batch = [str(o["Key"]) for o in page.get("Contents") or []]
-        if not batch:
-            continue
-        if dry_run:
-            deleted += len(batch)
-            continue
-        for i in range(0, len(batch), 1000):
-            chunk = batch[i : i + 1000]
-            client.delete_objects(Bucket=bucket, Delete={"Objects": [{"Key": k} for k in chunk]})
-            deleted += len(chunk)
-    return deleted
+        for o in page.get("Contents") or []:
+            key = str(o["Key"])
+            if key.endswith("/") and int(o.get("Size") or 0) == 0:
+                placeholders.append(key)
+            else:
+                leftovers.append(key)
+    if leftovers:
+        raise RuntimeError(
+            f"{len(leftovers)} real object(s) still under {root} (not deleting): {leftovers[:5]}"
+        )
+    if dry_run or not placeholders:
+        return len(placeholders)
+    for i in range(0, len(placeholders), 1000):
+        chunk = placeholders[i : i + 1000]
+        client.delete_objects(Bucket=bucket, Delete={"Objects": [{"Key": k} for k in chunk]})
+    return len(placeholders)
 
 
 def move_object(client, bucket: str, source_key: str, dest_key: str, *, dry_run: bool) -> None:
+    """Copy, confirm the copy (size + ETag), then delete the source."""
     if source_key == dest_key:
         return
     if dry_run:
         print(f"    loose: {source_key} -> {dest_key}")
         return
+    src = client.head_object(Bucket=bucket, Key=source_key)
     client.copy_object(
         Bucket=bucket,
         Key=dest_key,
         CopySource={"Bucket": bucket, "Key": source_key},
     )
+    dst = client.head_object(Bucket=bucket, Key=dest_key)
+    if int(dst["ContentLength"]) != int(src["ContentLength"]) or dst.get("ETag") != src.get("ETag"):
+        raise RuntimeError(
+            f"copy of {source_key} -> {dest_key} not verified "
+            f"(size {dst['ContentLength']} vs {src['ContentLength']}, etag {dst.get('ETag')} vs {src.get('ETag')});"
+            " source kept"
+        )
     client.delete_object(Bucket=bucket, Key=source_key)
 
 
@@ -149,6 +171,7 @@ def run(
         dest_root = f"{ROOT_PREFIX}/{inner}"
         print(f"\n{'DRY-RUN' if dry_run else 'FLATTEN'} {outer_path}/ -> {dest_root}/")
 
+        package_ok = True
         for key in loose_keys:
             filename = key.split("/")[-1]
             dest_key = f"{inner_under_outer}/{filename}"
@@ -157,46 +180,47 @@ def run(
                 stats["loose_moved"] += 1
             except Exception as e:
                 stats["errors"] += 1
+                package_ok = False
                 print(f"  ERROR moving loose {key}: {e}", file=sys.stderr)
+        if not package_ok:
+            print(f"  STOP {outer_path}/: loose-file errors; nothing else moved or deleted", file=sys.stderr)
+            continue
 
         print(f"  {'would MOVE' if dry_run else 'MOVE'} prefix {inner_under_outer}/ -> {dest_root}/")
-        if not dry_run:
-            if not overwrite and prefix_has_objects(client, bucket, dest_root):
-                stats["errors"] += 1
-                print(f"  ERROR: destination {dest_root}/ already has objects", file=sys.stderr)
-                continue
+        if dry_run:
+            resp = client.list_objects_v2(
+                Bucket=bucket, Prefix=inner_under_outer.strip("/") + "/", MaxKeys=1000
+            )
+            stats["prefix_objects_moved"] += len(resp.get("Contents") or [])
+        else:
             try:
-                result = wasabi_move_prefix(
+                result = wasabi_move_prefix_verified(
                     client,
                     bucket=bucket,
                     source_prefix=inner_under_outer,
                     destination_prefix=dest_root,
                     overwrite=overwrite,
-                    quiet=True,
                 )
-                if result.get("errors"):
-                    stats["errors"] += len(result["errors"])
-                    for err in result["errors"]:
-                        print(f"  move error: {err}", file=sys.stderr)
-                count = int(result.get("move_count") or 0)
-                stats["prefix_objects_moved"] += count
-                print(f"  moved {count} object key(s) under inner prefix")
-            except Exception as e:
+            except (WasabiMoveIncomplete, Exception) as e:
                 stats["errors"] += 1
-                print(f"  ERROR prefix move: {e}", file=sys.stderr)
+                print(f"  ERROR prefix move (nothing deleted): {e}", file=sys.stderr)
                 continue
-        else:
-            resp = client.list_objects_v2(
-                Bucket=bucket, Prefix=inner_under_outer.strip("/") + "/", MaxKeys=1000
-            )
-            n = len(resp.get("Contents") or [])
-            stats["prefix_objects_moved"] += n
-            print(f"  would move ~{n} object(s) under inner prefix")
+            stats["prefix_objects_moved"] += int(result.get("verified_objects") or 0)
+            print(f"  moved and verified {result.get('verified_objects')} object(s)")
 
-        n_del = delete_prefix(client, bucket, outer_path, dry_run=dry_run)
+        try:
+            n_del = delete_folder_placeholders(client, bucket, outer_path, dry_run=dry_run)
+        except RuntimeError as e:
+            if dry_run:
+                # Loose files and the inner prefix are still there in a dry run.
+                n_del = 0
+            else:
+                stats["errors"] += 1
+                print(f"  ERROR cleanup: {e}", file=sys.stderr)
+                continue
         stats["outer_keys_deleted"] += n_del
         if n_del:
-            print(f"  {'would delete' if dry_run else 'deleted'} {n_del} leftover key(s) under {outer_path}/")
+            print(f"  {'would delete' if dry_run else 'deleted'} {n_del} folder placeholder(s) under {outer_path}/")
 
         stats["hoisted"] += 1
 

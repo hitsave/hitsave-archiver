@@ -19,7 +19,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from audit_dump_title_slugs import catalog_title_for_row, host_ready_root  # noqa: E402
 from package_identity import parse_package_id, title_slug  # noqa: E402
 from upload_bag_wasabi import load_wasabi_settings, make_s3_client  # noqa: E402
-from wasabi_rename import wasabi_move_prefix  # noqa: E402
+from wasabi_rename import wasabi_move_prefix_verified  # noqa: E402
 from preservation_common import wasabi_bucket_for_storage_prefix  # noqa: E402
 from sync_dump_bag_metadata_from_ledger import sync_bag_from_ledger  # noqa: E402
 from yaml_config import load_yaml  # noqa: E402
@@ -112,7 +112,8 @@ def main() -> None:
         return
 
     print(f"MOVE s3://{bucket}/{old_p}/ -> s3://{bucket}/{new_p}/")
-    wasabi_move_prefix(
+    # Raises (before any ledger change) unless every object landed at new_p.
+    wasabi_move_prefix_verified(
         s3,
         bucket=bucket,
         source_prefix=old_p,

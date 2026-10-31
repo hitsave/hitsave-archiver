@@ -15,7 +15,7 @@ import psycopg  # noqa: E402
 
 from preservation_common import wasabi_bucket_for_storage_prefix  # noqa: E402
 from upload_bag_wasabi import load_wasabi_settings, make_s3_client  # noqa: E402
-from wasabi_rename import wasabi_move_prefix  # noqa: E402
+from wasabi_rename import WasabiMoveIncomplete, wasabi_move_prefix_verified  # noqa: E402
 from yaml_config import load_yaml  # noqa: E402
 
 _SORT_LETTERS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ") | {"0-9"}
@@ -130,18 +130,25 @@ def main() -> None:
         return
 
     updated_keys: list[str] = []
+    failed_keys: list[str] = []
     for item in planned:
         bucket = item["bucket"]
         old_p = item["old_prefix"]
         new_p = item["new_prefix"]
         print(f"MOVE {old_p}/ -> {new_p}/")
-        wasabi_move_prefix(
-            s3,
-            bucket=bucket,
-            source_prefix=old_p,
-            destination_prefix=new_p,
-            overwrite=False,
-        )
+        try:
+            wasabi_move_prefix_verified(
+                s3,
+                bucket=bucket,
+                source_prefix=old_p,
+                destination_prefix=new_p,
+                overwrite=False,
+            )
+        except WasabiMoveIncomplete as e:
+            # Ledger keeps the old prefix; the operator must reconcile before retrying.
+            print(f"  ERROR (ledger NOT updated): {e}", file=sys.stderr)
+            failed_keys.append(str(item["game_key"]))
+            continue
         aip_uri = f"s3://{bucket}/{new_p}/"
         conn = pg_connect(db_cfg)
         try:
@@ -162,9 +169,13 @@ def main() -> None:
         updated_keys.append(str(item["game_key"]))
 
     print(f"Ledger updated for {len(updated_keys)} package(s).")
+    if failed_keys:
+        print(f"MOVE incomplete for {len(failed_keys)} package(s): {failed_keys}", file=sys.stderr)
 
     if args.register_omeka and updated_keys:
         print(json.dumps({"omeka_refresh_game_keys": updated_keys}, indent=2))
+    if failed_keys:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
