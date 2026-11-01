@@ -4,11 +4,61 @@ See https://docs.wasabi.com/apidocs/operations-on-objects (Renaming Objects).
 """
 from __future__ import annotations
 
+import html
+import re
 import xml.etree.ElementTree as ET
+from xml.sax.saxutils import escape as xml_escape
 from typing import Any
-from botocore.auth import SigV4Auth
+from urllib.parse import quote
+
+from botocore.auth import S3SigV4Auth
 from botocore.awsrequest import AWSRequest
 from botocore.exceptions import ClientError
+
+
+def _encode_key(key: str) -> str:
+    """Percent-encode an S3 key once (UTF-8), keeping '/' and '~' literal."""
+    return quote(key, safe="/~")
+
+
+def _send_move(s3_client, *, bucket: str, source: str, headers: dict[str, str]):
+    """Send a signed Wasabi MOVE for ``source``; return (status, body bytes).
+
+    The URL path is percent-encoded exactly once and signed as-is (S3SigV4Auth does not
+    re-normalize it), so keys with spaces, apostrophes or non-ASCII characters sign correctly.
+    """
+    endpoint = str(s3_client.meta.endpoint_url).rstrip("/")
+    url = f"{endpoint}/{bucket}/{_encode_key(source)}"
+    request = AWSRequest(
+        method="MOVE",
+        url=url,
+        headers={**headers, "X-Amz-Content-Sha256": "UNSIGNED-PAYLOAD"},
+        data=b"",
+    )
+    credentials = s3_client._request_signer._credentials  # noqa: SLF001
+    S3SigV4Auth(credentials, "s3", s3_client.meta.region_name).add_auth(request)
+    http = s3_client._endpoint.http_session  # noqa: SLF001
+    response = http.send(request.prepare())
+    status = getattr(response, "status_code", None) or response.raw.status
+    return int(status), response.content
+
+
+def _raise_for_status(status: int, body: bytes, operation: str) -> None:
+    if status >= 400:
+        code = str(status)
+        if b"<Code>NoSuchKey</Code>" in body:
+            code = "NoSuchKey"
+        raise ClientError(
+            {"Error": {"Code": code, "Message": body.decode("utf-8", errors="replace")[:500]}},
+            operation,
+        )
+
+
+def _list_object_keys(s3_client, *, bucket: str, prefix: str) -> list[str]:
+    keys: list[str] = []
+    for page in s3_client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
+        keys += [str(o["Key"]) for o in page.get("Contents") or []]
+    return keys
 
 
 def wasabi_move_prefix(
@@ -23,44 +73,60 @@ def wasabi_move_prefix(
     """
     Rename all objects whose keys start with source_prefix to destination_prefix.
 
-    Uses Wasabi MOVE with X-Wasabi-Prefix: true (folder-style rename).
+    Uses Wasabi MOVE with X-Wasabi-Prefix: true (folder-style rename). Wasabi only accepts a
+    prefix MOVE when a zero-byte folder placeholder ("prefix/") exists; otherwise it answers
+    404 NoSuchKey. In that case each object is moved individually instead (same result shape).
     """
     src = source_prefix.strip("/") + "/"
     dest = destination_prefix.strip("/") + "/"
     if src == dest:
         return {"move_count": 0, "skipped": True, "errors": []}
 
-    # Path-style URL with literal key bytes; SigV4 must match what Wasabi receives (no pre-encoding).
-    endpoint = str(s3_client.meta.endpoint_url).rstrip("/")
-    url = f"{endpoint}/{bucket}/{src}"
-
     headers = {
-        "Destination": dest,
+        # Percent-encoded: header values can't carry non-ASCII; Wasabi decodes it (verified live).
+        "Destination": _encode_key(dest),
         "X-Wasabi-Prefix": "true",
         "X-Wasabi-Quiet": "true" if quiet else "false",
         "Overwrite": "true" if overwrite else "false",
-        # SigV4 for bodyless MOVE (same as S3 unsigned payload).
-        "X-Amz-Content-Sha256": "UNSIGNED-PAYLOAD",
     }
-
-    request = AWSRequest(method="MOVE", url=url, headers=headers, data=b"")
-    credentials = s3_client._request_signer._credentials  # noqa: SLF001
-    region = s3_client.meta.region_name
-    SigV4Auth(credentials, "s3", region).add_auth(request)
-    prepared = request.prepare()
-
-    http = s3_client._endpoint.http_session  # noqa: SLF001
-    response = http.send(prepared)
-    status = getattr(response, "status_code", None) or response.raw.status
-    body = response.content
-
-    if status >= 400:
-        raise ClientError(
-            {"Error": {"Code": str(status), "Message": body.decode("utf-8", errors="replace")[:500]}},
-            "WasabiMove",
+    status, body = _send_move(s3_client, bucket=bucket, source=src, headers=headers)
+    if status == 404 and b"<Code>NoSuchKey</Code>" in body:
+        return _move_prefix_per_key(
+            s3_client, bucket=bucket, src=src, dest=dest, overwrite=overwrite
         )
-
+    _raise_for_status(status, body, "WasabiMove")
     return _parse_move_result(body)
+
+
+def _move_prefix_per_key(
+    s3_client, *, bucket: str, src: str, dest: str, overwrite: bool
+) -> dict[str, Any]:
+    """Fallback for prefixes without a folder placeholder: MOVE each object on its own."""
+    objects: list[dict[str, str]] = []
+    errors: list[str] = []
+    for key in _list_object_keys(s3_client, bucket=bucket, prefix=src):
+        dest_key = dest + key[len(src):]
+        err = ""
+        try:
+            wasabi_move_key(
+                s3_client, bucket=bucket, source_key=key, destination_key=dest_key, overwrite=overwrite
+            )
+        except ClientError as e:
+            err = str(e)[:300]
+            errors.append(f"{key}: {err}")
+        objects.append({"source_key": key, "destination_key": dest_key, "error": err})
+    if not objects:
+        raise ClientError(
+            {"Error": {"Code": "NoSuchKey", "Message": f"no objects under {src}"}}, "WasabiMove"
+        )
+    return {
+        "move_count": sum(1 for o in objects if not o["error"]),
+        "source_prefix": src,
+        "destination_prefix": dest,
+        "objects": objects,
+        "errors": errors,
+        "per_key_fallback": True,
+    }
 
 
 def wasabi_move_key(
@@ -76,34 +142,35 @@ def wasabi_move_key(
     dest = destination_key.lstrip("/")
     if src == dest:
         return
-    endpoint = str(s3_client.meta.endpoint_url).rstrip("/")
-    url = f"{endpoint}/{bucket}/{src}"
     headers = {
-        "Destination": dest,
+        "Destination": _encode_key(dest),
         "X-Wasabi-Quiet": "true",
         "Overwrite": "true" if overwrite else "false",
-        "X-Amz-Content-Sha256": "UNSIGNED-PAYLOAD",
     }
-    request = AWSRequest(method="MOVE", url=url, headers=headers, data=b"")
-    credentials = s3_client._request_signer._credentials  # noqa: SLF001
-    region = s3_client.meta.region_name
-    SigV4Auth(credentials, "s3", region).add_auth(request)
-    prepared = request.prepare()
-    http = s3_client._endpoint.http_session  # noqa: SLF001
-    response = http.send(prepared)
-    status = getattr(response, "status_code", None) or response.raw.status
-    body = response.content
-    if status >= 400:
-        raise ClientError(
-            {"Error": {"Code": str(status), "Message": body.decode("utf-8", errors="replace")[:500]}},
-            "WasabiMoveKey",
-        )
+    status, body = _send_move(s3_client, bucket=bucket, source=src, headers=headers)
+    _raise_for_status(status, body, "WasabiMoveKey")
+
+
+# Wasabi's MoveObjectResult does not reliably XML-escape key text ('&', '<', '>' come back raw,
+# while "'" comes back as &apos;). Re-escape the text of every key-bearing element before parsing.
+_KEY_ELEMENT = re.compile(
+    r"<(SourceKey|DestinationKey|SourcePrefix|DestinationPrefix|Key|Error)>(.*?)</\1>", re.S
+)
+
+
+def _escape_key_text(xml_text: str) -> str:
+    def fix(m: re.Match) -> str:
+        raw = html.unescape(m.group(2))
+        return f"<{m.group(1)}>{xml_escape(raw)}</{m.group(1)}>"
+
+    return _KEY_ELEMENT.sub(fix, xml_text)
 
 
 def _parse_move_result(body: bytes) -> dict[str, Any]:
     if not body.strip():
         return {"move_count": 0, "errors": [], "objects": []}
-    root = ET.fromstring(body)
+    text = _escape_key_text(body.decode("utf-8", errors="replace"))
+    root = ET.fromstring(text.encode("utf-8"))
     tag = root.tag.split("}")[-1] if "}" in root.tag else root.tag
     if tag != "MoveObjectResult":
         return {"move_count": 0, "errors": [f"unexpected XML root: {root.tag}"], "objects": []}
