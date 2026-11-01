@@ -18,5 +18,5 @@ archiver_compose run --rm -T --no-deps -v "$dest:/backups" --entrypoint sh postg
   pg_restore --list /backups/.$name.partial >/dev/null
   mv /backups/.$name.partial /backups/$name
   ls -1t /backups/hitsave_ledger-*.dump | tail -n +$((keep + 1)) | xargs -r rm -f
-  echo \"backup ok: $name (\$(du -h /backups/$name | cut -f1)); kept newest $keep\"
+  echo \"backup ok: $name (\$(( \$(wc -c < /backups/$name) / 1024 )) KiB); kept newest $keep\"
 "
