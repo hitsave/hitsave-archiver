@@ -118,3 +118,15 @@ def test_all_files_scanned_is_success(tmp_path: Path) -> None:
         report, package_id="p", package_uuid="", repository_code="hitsave", linking_agent="t"
     )
     assert "<premis:eventOutcome>success</premis:eventOutcome>" in xml
+
+
+def test_dotfiles_are_scanned_because_they_go_into_the_bag(tmp_path: Path) -> None:
+    sip = tmp_path / "sip"
+    (sip / "sub").mkdir(parents=True)
+    (sip / "a.txt").write_bytes(b"x")
+    (sip / ".checksum.md5").write_bytes(b"x")
+    (sip / "sub" / ".DS_Store").write_bytes(b"x")
+    clamd = _FakeClamd()
+    report = scan_sip_tree(clamd, sip, max_scan_bytes=None)
+    assert report.files_scanned == 3
+    assert sorted(Path(p).name for p in clamd.scanned) == [".DS_Store", ".checksum.md5", "a.txt"]
