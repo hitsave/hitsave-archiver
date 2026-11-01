@@ -1,0 +1,17 @@
+summary: Ledger backup (pg_dump)
+description: |
+  Nightly `pg_dump -Fc` of the preservation ledger into HOST_LEDGER_BACKUPS on the host,
+  verified with `pg_restore --list` before it is kept. Keeps the newest `keep` dumps.
+  Restore: `pg_restore -h … -U hitsave -d hitsave_ledger --clean <dump>`.
+lock: ''
+kind: script
+language: bash
+schema:
+  $schema: 'https://json-schema.org/draft/2020-12/schema'
+  type: object
+  properties:
+    keep:
+      type: integer
+      description: Number of newest dumps to keep
+      default: 30
+  required: []

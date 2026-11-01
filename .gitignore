@@ -18,5 +18,6 @@ fixtures/submissions-security/bombs/*.zip
 .ci/submissions/
 .ci/output/
 .ci/private-config/
+.ci/ledger/
 __pycache__/
 *.py[cod]
