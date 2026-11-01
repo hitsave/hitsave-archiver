@@ -108,8 +108,8 @@ def scan_sip_tree(clamd, root: Path, *, max_scan_bytes: int | None = -1) -> Viru
     scanned = 0
     not_scanned: list[str] = []
     for path in sorted(root.rglob("*")):
-        if not path.is_file() or path.name.startswith("."):
-            continue
+        if not path.is_file():
+            continue  # dotfiles are scanned too: they go into the bag
         if max_scan_bytes and path.stat().st_size > max_scan_bytes:
             not_scanned.append(path.relative_to(root).as_posix())
             continue

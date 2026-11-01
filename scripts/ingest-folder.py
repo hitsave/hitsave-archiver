@@ -196,24 +196,43 @@ def existing_complete_row(conn, game_key: str) -> dict | None:
 
 
 def sip_inventory_diff(source: Path, inventory: dict | None) -> list[str]:
-    """Compare SIP (payload path, size) pairs with the preserved inventory; [] when identical."""
-    from preservation_common import bagit_payload_relpath, load_packaging_config, should_skip
+    """Compare SIP (payload path, size) pairs with the preserved inventory; [] when identical.
+
+    Files the pre-2026-11-01 policy excluded (dotfiles, desktop.ini, OCR debug) don't count as
+    differences when the preserved bag lacks them: the package was preserved under that policy.
+    """
+    from preservation_common import (
+        bagit_payload_relpath,
+        legacy_skip_reason,
+        load_packaging_config,
+        should_skip,
+    )
 
     bag_cfg = load_packaging_config().get("bagit") or {}
     payload_dir = str(bag_cfg.get("payload_dir") or "data")
     preserve = bool(bag_cfg.get("preserve_source_folder_in_payload", False))
     current = {}
+    legacy_excluded: set[str] = set()
     for path in sorted(source.rglob("*")):
         if path.is_file() and not should_skip(path):
             rel = bagit_payload_relpath(source, path, preserve_source_folder=preserve)
             current[f"{payload_dir}/{rel}"] = path.stat().st_size
+            if legacy_skip_reason(path):
+                legacy_excluded.add(f"{payload_dir}/{rel}")
     preserved = {
         str(f.get("path")): int(f.get("size_bytes") or 0)
         for f in (inventory or {}).get("files") or []
     }
     if not preserved:
         return ["preserved package has no inventory_json to compare against"]
-    diffs = [f"new file {p}" for p in sorted(current.keys() - preserved.keys())]
+    added = current.keys() - preserved.keys()
+    legacy_only = added & legacy_excluded
+    if legacy_only:
+        print(
+            f"  Note: {len(legacy_only)} file(s) (dotfiles etc.) were left out of the preserved bag "
+            "under the previous policy; set HITSAVE_ALLOW_REINGEST=1 to re-ingest with them."
+        )
+    diffs = [f"new file {p}" for p in sorted(added - legacy_only)]
     diffs += [f"missing file {p}" for p in sorted(preserved.keys() - current.keys())]
     diffs += [
         f"size changed {p} ({preserved[p]} -> {current[p]})"

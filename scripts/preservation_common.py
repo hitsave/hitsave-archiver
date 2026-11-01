@@ -273,7 +273,20 @@ def bagit_payload_relpath(source: Path, file_path: Path, *, preserve_source_fold
 
 
 def skip_reason(path: Path) -> str | None:
-    """Why a SIP file is left out of the BagIt payload by policy, or None to include it."""
+    """Why a SIP file is left out of the BagIt payload by policy, or None to include it.
+
+    Policy since 2026-11-01: include everything the submission contains (dotfiles included;
+    e.g. publisher .checksum.md5 manifests turned out to be original source material).
+    Any future exclusion added here is recorded in the bag's inventory.json.
+    """
+    return None
+
+
+def legacy_skip_reason(path: Path) -> str | None:
+    """Files the pre-2026-11-01 policy left out of bags (dotfiles, desktop.ini, OCR debug).
+
+    Only used to recognise packages preserved under that policy; never to exclude files.
+    """
     name = path.name
     if name.startswith("."):
         return "dotfile"
