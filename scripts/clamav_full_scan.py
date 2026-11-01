@@ -13,8 +13,9 @@ Per file, by size and type:
 
 Ranges are visited in ascending offset order, so the SHA-256 of the scanned bytes is computed in the
 same pass (callers compare it with the BagIt manifest to prove they scanned the preserved bytes).
-A clamd limit alert (Heuristics.Limits.Exceeded.*, needs AlertExceedsMax yes) is never treated as
-clean: the file is reported as not fully scanned.
+A clamd limit alert (Heuristics.Limits.Exceeded.*, needs AlertExceedsMax yes) or encrypted-archive
+alert (Heuristics.Encrypted.*, needs AlertEncryptedArchive yes) is never treated as clean: the file
+is reported as not fully scanned.
 """
 from __future__ import annotations
 
@@ -27,8 +28,9 @@ CLAMD_MAX_OBJECT = 2_147_483_645  # libclamav per-object cap (logged by clamd as
 DEFAULT_CHUNK = 1 << 30  # 1 GiB
 DEFAULT_OVERLAP = 4 << 20  # 4 MiB
 SECTOR = 2048
-STREAM_TIMEOUT = 4 * 3600  # seconds clamd may take to answer for one stream
+STREAM_TIMEOUT = 24 * 3600  # client-side wait per stream: a hung scan becomes an error, never "clean"
 ENCRYPTED_CONTAINERS = {".xci", ".nsp", ".nsz", ".xcz"}
+NOT_FULLY_SCANNED_ALERTS = ("Heuristics.Limits.Exceeded", "Heuristics.Encrypted")
 
 
 class MalwareFound(RuntimeError):
@@ -117,7 +119,9 @@ def _stream(clamd, reader) -> str | None:
         return None
     for _name, status in result.items():
         code, reason = (status[0], status[1]) if status else ("", "")
-        if code == "FOUND" and str(reason).startswith("Heuristics.Limits.Exceeded"):
+        # Not malware, but the object was not fully scanned: a limit was hit, or an encrypted
+        # archive could not be opened (AlertEncryptedArchive). Recorded as partial, never clean.
+        if code == "FOUND" and str(reason).startswith(NOT_FULLY_SCANNED_ALERTS):
             return str(reason)
         if code == "FOUND":
             raise MalwareFound(str(reason))
@@ -171,28 +175,41 @@ def iso9660_extents(fh, size: int) -> list[tuple[int, int, str]] | None:
     return sorted(out)
 
 
+def merge_extents(extents: list[tuple[int, int, str]]) -> list[tuple[int, int, str]]:
+    """Join consecutive extents of the same file that are adjacent on disc (UDF stores big files
+    as many <=1 GiB extents; ISO9660 as multi-extent records) so a file is scanned as one range."""
+    out: list[list] = []
+    for start, end, path in sorted(extents):
+        if out and out[-1][2] == path and out[-1][1] == start:
+            out[-1][1] = end
+        else:
+            out.append([start, end, path])
+    return [tuple(x) for x in out]
+
+
 def _image_plan(extents, size: int, chunk: int, overlap: int, max_whole: int):
-    """Ranges in ascending order: ('member', start, end, path) and ('raw', start, end, None)."""
+    """Ranges in ascending order: ('member', start, end, path) — a file, or one overlapping chunk
+    of a file too big to stream whole — and ('raw', start, end, None) for bytes between files."""
     plan, pos = [], 0
 
-    def raw(start: int, end: int):
+    def chunks(kind: str, start: int, end: int, path):
         while start < end:
             stop = min(start + chunk, end)
-            plan.append(("raw", start, stop, None))
+            plan.append((kind, start, stop, path))
             if stop >= end:
                 break
             start = stop - overlap
 
     for start, end, path in extents:
         if start > pos:
-            raw(pos, start)
+            chunks("raw", pos, start, None)
         if end - start > max_whole:
-            raw(start, end)  # a member too big to scan whole (none seen so far)
+            chunks("member", start, end, path)
         else:
             plan.append(("member", start, end, path))
         pos = max(pos, end)
     if pos < size:
-        raw(pos, size)
+        chunks("raw", pos, size, None)
     return plan
 
 
@@ -219,31 +236,62 @@ def scan_path(
         else:
             if chunk <= overlap:
                 raise ValueError("chunk size must exceed the overlap")
+            from archive_scan import archive_kind, scan_archive_members
+            from udf_extents import UdfError, udf_extents
+
+            udf_note = ""
             extents = iso9660_extents(fh, size)
+            if not extents:
+                try:
+                    extents = udf_extents(fh, size)
+                except (UdfError, struct.error) as e:
+                    extents, udf_note = None, f"UDF directory unreadable ({e}); scanned as raw chunks"
+            akind = None if extents else archive_kind(fh)
             if extents:
                 res = FileScan(rel, size, "image-members")
-                plan = _image_plan(extents, size, chunk, overlap, max_whole)
+                plan = _image_plan(merge_extents(extents), size, chunk, overlap, max_whole)
+            elif akind:
+                # Container bytes in raw chunks (SFX stubs, comments, appended data) here; every
+                # file inside streamed separately by scan_archive_members below.
+                res = FileScan(rel, size, "archive-members")
+                plan = _image_plan([], size, chunk, overlap, max_whole)
             else:
                 res = FileScan(rel, size, "chunked-raw")
                 plan = _image_plan([], size, chunk, overlap, max_whole)
+                if udf_note:
+                    res.notes.append(udf_note)
             last_end = 0
+            members_seen: set[str] = set()
+            container_alerts: list[str] = []
             for kind, start, end, member in plan:
                 alert = _stream(clamd, _RangeReader(fh, start, end, hasher, hash_state))
                 res.streams += 1
                 if kind == "member":
-                    res.members += 1
+                    members_seen.add(member)
                 else:
                     res.raw_bytes += max(end - max(start, last_end), 0)  # unique bytes only
                 last_end = max(last_end, end)
-                if alert:
+                if alert and akind:
+                    # clamd recognises the archive header in a container chunk and tries to unpack
+                    # a truncated archive (e.g. a member over 2 GiB). The per-file pass below reads
+                    # every file inside, and that pass decides whether the archive was fully scanned.
+                    container_alerts.append(f"bytes {start}-{end}: {alert}")
+                elif alert:
                     res.fully_scanned = False
                     res.notes.append(f"{member or f'bytes {start}-{end}'}: {alert}")
+            res.members = len(members_seen)
+            if akind:
+                scan_archive_members(clamd, path, akind, res, max_whole=max_whole,
+                                     chunk=chunk, overlap=overlap)
+                if container_alerts:
+                    res.notes.append("container pass alerts (contents covered by the per-file pass): "
+                                     + "; ".join(container_alerts[:5]))
             if res.method == "chunked-raw":
                 res.notes.append(
                     f"scanned as {res.streams} overlapping raw chunk(s); exceeds the ClamAV "
                     "object limit, so whole-file hash signatures could not apply"
                 )
-            elif res.raw_bytes:
+            elif res.method == "image-members" and res.raw_bytes:
                 res.notes.append(f"{res.members} file(s) in the image scanned individually; "
                                  f"{res.raw_bytes} byte(s) outside them scanned raw")
         if Path(rel).suffix.lower() in ENCRYPTED_CONTAINERS:

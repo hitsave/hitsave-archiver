@@ -65,6 +65,8 @@ COPY scripts/batch-expand-preservation.py \
     scripts/ingest-folder.py \
     scripts/premis_virus_check.py \
     scripts/clamav_full_scan.py \
+    scripts/archive_scan.py \
+    scripts/udf_extents.py \
     scripts/fixity-check.py \
     scripts/omeka_dip_media.py \
     scripts/omeka_external_dip.py \

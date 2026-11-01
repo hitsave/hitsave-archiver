@@ -153,3 +153,14 @@ def test_large_non_iso_falls_back_to_chunks(tmp_path):
     res = cfs.scan_path(FakeClamd(max_object=20_000), _write(tmp_path, "big.bin", data), "big.bin",
                         max_whole=20_000, chunk=20_000, overlap=512)
     assert res.method == "chunked-raw" and res.fully_scanned
+
+
+def test_encrypted_archive_alert_is_not_fully_scanned_not_malware(tmp_path):
+    class EncClamd(FakeClamd):
+        def scan_stream(self, reader, chunk_size=4096):
+            super().scan_stream(reader, chunk_size)
+            return {"stream": ("FOUND", "Heuristics.Encrypted.Zip")}
+
+    res = cfs.scan_path(EncClamd(max_object=10_000), _write(tmp_path, "locked.zip", b"PK" * 50),
+                        "locked.zip", max_whole=10_000)
+    assert not res.fully_scanned and res.notes == ["Heuristics.Encrypted.Zip"]
