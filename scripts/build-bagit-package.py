@@ -28,7 +28,7 @@ from preservation_common import (  # noqa: E402
     resolve_game_config,
     resolve_wasabi_bucket,
     sha256_file,
-    should_skip,
+    skip_reason,
     wasabi_package_storage_prefix,
 )
 from ingest_kind import storage_profile_for_kind  # noqa: E402
@@ -57,11 +57,24 @@ def collect_files(
     max_bytes: int,
     *,
     preserve_source_folder: bool = False,
+    excluded: list[dict] | None = None,
 ) -> list[FileRow]:
+    """Payload rows. Files left out by policy are appended to ``excluded`` (if given)."""
     rows: list[FileRow] = []
     total = 0
     for path in sorted(source.rglob("*")):
-        if not path.is_file() or should_skip(path):
+        if not path.is_file():
+            continue
+        reason = skip_reason(path)
+        if reason:
+            if excluded is not None:
+                excluded.append(
+                    {
+                        "path": path.relative_to(source).as_posix(),
+                        "size_bytes": path.stat().st_size,
+                        "reason": reason,
+                    }
+                )
             continue
         size = path.stat().st_size
         total += size
@@ -92,7 +105,7 @@ def collect_files(
     return rows
 
 
-def build_inventory(rows: list[FileRow], payload_dir: str) -> dict:
+def build_inventory(rows: list[FileRow], payload_dir: str, excluded: list[dict] | None = None) -> dict:
     files = []
     ext_counts: Counter[str] = Counter()
     total_bytes = 0
@@ -109,7 +122,7 @@ def build_inventory(rows: list[FileRow], payload_dir: str) -> dict:
                 "mime": rec.mime,
             }
         )
-    return {
+    inventory = {
         "manifest_version": INVENTORY_VERSION,
         "files": files,
         "summary": {
@@ -118,6 +131,12 @@ def build_inventory(rows: list[FileRow], payload_dir: str) -> dict:
             "by_extension": dict(sorted(ext_counts.items())),
         },
     }
+    if excluded:
+        # Left out of the payload by policy (dotfiles, desktop.ini, OCR debug); recorded so the
+        # bag says what the submission contained that it does not.
+        inventory["excluded_from_payload"] = excluded
+        inventory["summary"]["excluded_count"] = len(excluded)
+    return inventory
 
 
 def validate_bag(bag_dir: Path) -> None:
@@ -147,12 +166,18 @@ def build_bagit_package(
         shutil.rmtree(bag_dir)
     bag_dir.mkdir(parents=True)
 
+    excluded: list[dict] = []
     rows = collect_files(
         source,
         max_files,
         max_bytes,
         preserve_source_folder=preserve_source_folder,
+        excluded=excluded,
     )
+    if excluded:
+        print(f"  Excluded from payload by policy ({len(excluded)} file(s), recorded in inventory.json):")
+        for item in excluded[:20]:
+            print(f"    {item['path']} ({item['reason']}, {item['size_bytes']} bytes)")
     # Stage payload at bag root; bagit.make_bag moves files into data/ (RFC 8493 payload).
     for rec in rows:
         dest = bag_dir / rec.rel
@@ -207,7 +232,7 @@ def build_bagit_package(
                 "package_storage_prefix": dump_classification.package_storage_prefix,
             }
         )
-    inventory = build_inventory(rows, payload_dir)
+    inventory = build_inventory(rows, payload_dir, excluded)
 
     bag_info: dict[str, str] = {
         "Bag-Software": "HitSave build-bagit-package.py",
@@ -221,6 +246,13 @@ def build_bagit_package(
         f"{identity.omeka_item_title}; package_id={identity.package_id}; "
         f"wasabi={wasabi_uri}; submission_date={submission_date or ''}"
     )
+
+    if excluded:
+        bag_info["Hitsave-Excluded-File-Count"] = str(len(excluded))
+        bag_info["Hitsave-Excluded-Files-Note"] = (
+            "Files left out of the payload by policy are listed in metadata/inventory.json "
+            "(excluded_from_payload)."
+        )
 
     bagit.make_bag(str(bag_dir), bag_info=bag_info, checksums=["sha256"])
 
