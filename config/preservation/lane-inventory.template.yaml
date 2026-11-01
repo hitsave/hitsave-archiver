@@ -20,8 +20,8 @@ lanes:
       Same intake → archiver pipeline for all org sidecars.
     ingest_kind: dump
     archiver_submission_source_key: gdrive_redump_remote_intake
-    container_ready_prefix: /data/gdrive-intake/ready
-    # Target layout: /data/gdrive-intake/ready/dumps/{slug}
+    container_ready_prefix: /data/intake/ready
+    # Target layout: /data/intake/ready/dumps/{slug}
     gdrive_intake:
       shared_folder_id: REPLACE_ME
       profile: redump

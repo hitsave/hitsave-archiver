@@ -111,7 +111,7 @@ for pair in "${pairs[@]}"; do
   fi
 
   echo "--- ingest (BagIt + Wasabi preservation) $slug ---"
-  if remote_intake_archiver_compose run --rm -T ingest-worker "/data/gdrive-intake/ready/$slug/game.ingest.yaml"; then
+  if remote_intake_archiver_compose run --rm -T ingest-worker "/data/intake/ready/$slug/game.ingest.yaml"; then
     echo "=== done ingest $slug $(date -Is) ==="
     register_omeka "$slug"
   else

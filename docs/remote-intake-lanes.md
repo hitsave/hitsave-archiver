@@ -107,7 +107,7 @@ Optional on-site analog tree (alternative to ready/analog):
 
 Today many deployments use a flat `ready/{slug}/` tree (Redump-only); splitting under `ready/dumps/` is the target when multiple dump drop zones share one mount ([#16](https://github.com/hitsave/hitsave-archiver/issues/16)).
 
-Container bind mounts (archiver) today: `ready/` → `/data/gdrive-intake/ready`. Planned: `HOST_ANALOG` → `/data/analog` ([#17](https://github.com/hitsave/hitsave-archiver/issues/17)).
+Container bind mounts (archiver) today: `ready/` → `/data/intake/ready`. Planned: `HOST_ANALOG` → `/data/analog` ([#17](https://github.com/hitsave/hitsave-archiver/issues/17)).
 
 Each lane needs a **`submission-sources.yaml`** row: longest `container_path_prefix` match against `source_game_folder` ([`submission-sources.yaml`](../config/preservation/submission-sources.yaml)).
 
@@ -132,7 +132,7 @@ Fill in Drive folder IDs, Wasabi incoming bucket/prefixes, and host env variable
 
 1. **Configure** — intake `config/gdrive.yaml`, `config/intake.yaml` (dump profile / sidecar names); archiver `submission-sources` for the ready-tree prefix; private `preservation/wasabi-redump-intake.yaml` for Wasabi drop zones ([example](../config/preservation/wasabi-redump-intake.yaml.example), [intake README](https://github.com/hitsave/hitsave-intake)).
 2. **Stage** — `intake poll --once` / `process --folder-id …`, or `poll-wasabi` / `process-wasabi …` (sidecar verify before promote to `ready/`).
-3. **Ingest** — `docker compose run --rm ingest-worker /data/gdrive-intake/ready/<slug>/game.ingest.yaml`
+3. **Ingest** — `docker compose run --rm ingest-worker /data/intake/ready/<slug>/game.ingest.yaml`
 4. **Catalog** — `scripts/remote-intake/register-dump-omeka.sh` or `register-prod-dumps-omeka.sh` ([intake-handoff.md](./intake-handoff.md)).
 5. **Batch (operator)** — `scripts/remote-intake/run-gdrive-redump-per-folder.sh`, `run-wasabi-redump-per-folder.sh`, or full-batch wrappers; logs under `.generated/` ([README](../scripts/remote-intake/README.md)).
 6. **Incoming cleanup (optional)** — After acceptance passes: move Drive folders to sibling/child `processed/` (`move-gdrive-redump-to-processed.sh`); MOVE Wasabi incoming keys to `processed/…` (`move_wasabi_intake_to_processed.py`). Do **not** move or ingest Drive folders that lack a disc image when the full SIP exists on Wasabi only.

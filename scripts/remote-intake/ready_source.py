@@ -40,7 +40,7 @@ def default_ready_root() -> Path:
     candidates = []
     if host:
         candidates.append(Path(host) / "ready")
-    candidates += [Path("/data/gdrive-intake/ready"), Path("/data/intake/ready")]
+    candidates += [Path("/data/intake/ready")]
     for c in candidates:
         if c.is_dir():
             return c

@@ -51,7 +51,9 @@ MARKER = "PRUNED.txt"
 DETAIL_PREFIX = "wasabi-etag:"
 BAG_ROOT = Path("/output/bag")
 # ledger source_path for intake SIPs, as seen by ingest-worker
-LEDGER_READY_ROOT = "/data/gdrive-intake/ready"
+LEDGER_READY_ROOT = "/data/intake/ready"
+# Pre-2026-11 ledger rows used the gdrive-intake container path; still accepted.
+LEGACY_LEDGER_READY_ROOTS = ("/data/gdrive-intake/ready",)
 TAG_FILE_MAX_BYTES = 64 * 1024 * 1024
 
 
@@ -90,11 +92,12 @@ def contained_dir(path: str | Path | None, root: Path) -> Path | None:
 
 
 def ready_dir_for(source_path: str | None, ready_root: Path) -> Path | None:
-    """Map a ledger source_path /data/gdrive-intake/ready/<slug> to <ready_root>/<slug>."""
+    """Map a ledger source_path /data/intake/ready/<slug> to <ready_root>/<slug>."""
     if not source_path:
         return None
     src = Path(source_path)
-    if src.parent != Path(LEDGER_READY_ROOT) or src.name in ("", ".", ".."):
+    roots = {Path(LEDGER_READY_ROOT), *map(Path, LEGACY_LEDGER_READY_ROOTS)}
+    if src.parent not in roots or src.name in ("", ".", ".."):
         return None
     d = ready_root / src.name
     return contained_dir(d, ready_root) if d.exists() else None
