@@ -19,7 +19,7 @@ UI: **http://127.0.0.1:8089** (or host LAN). Windmill uses its own **`windmill_d
 
 **Remote intake logs/poll JSON:** create **`hitsave-archiver/.generated/windmill`** on the host (`chmod 1777`) before the first sweep. Jobs write there via **`/run/hitsave/generated`** (see **`config/windmill-ops.yaml`**). Do not use repo **`.generated/`** root from Windmill — job UIDs cannot write there.
 
-**Docker compose from the worker:** set **`HITSAVE_PRIVATE_CONFIG_HOST`** in **`worker-paths.env`** (same path as **`HITSAVE_PRIVATE_CONFIG_HOST`** in **`.env`**). Never set **`HITSAVE_PRIVATE_CONFIG=/config/private`** on the worker — the host daemon would create bogus **`/config/private/...`** paths. If file bind mounts fail with “not a directory”, remove empty directories Docker created under **`hitsave-gdrive-intake/config/preservation/`** (and **`/config`** on the host if present).
+**Docker compose from the worker:** set **`HITSAVE_PRIVATE_CONFIG_HOST`** in **`worker-paths.env`** (same path as **`HITSAVE_PRIVATE_CONFIG_HOST`** in **`.env`**). Never set **`HITSAVE_PRIVATE_CONFIG=/config/private`** on the worker — the host daemon would create bogus **`/config/private/...`** paths. If file bind mounts fail with “not a directory”, remove empty directories Docker created under **`/config`** on the host. (`hitsave-gdrive-intake/config/preservation/` placeholders from older compose files can be deleted.)
 
 ## Sync scripts from git
 

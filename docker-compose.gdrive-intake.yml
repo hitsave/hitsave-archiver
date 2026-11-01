@@ -9,8 +9,11 @@ services:
       dockerfile: Dockerfile
     image: ${GDRIVE_INTAKE_IMAGE:-hitsave/gdrive-intake:local}
     volumes:
-      # :rw so Docker can overlay private preservation YAML under /config/preservation.
-      - ${HITSAVE_GDRIVE_INTAKE_CONFIG_DIR}:/config
+      # Mount the gdrive-intake config FILES, not the directory: nesting the private
+      # preservation YAML under a host-backed /config made Docker create empty root-owned
+      # placeholder files in hitsave-gdrive-intake/config/preservation/ on the host.
+      - ${HITSAVE_GDRIVE_INTAKE_CONFIG_DIR}/gdrive.yaml:/config/gdrive.yaml:ro
+      - ${HITSAVE_GDRIVE_INTAKE_CONFIG_DIR}/intake.yaml:/config/intake.yaml:ro
       - ${HITSAVE_GDRIVE_INTAKE_SECRETS_DIR}:/secrets:ro
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/preservation/wasabi-redump-intake.yaml:/config/preservation/wasabi-redump-intake.yaml:ro
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/preservation/ingest.yaml:/config/preservation/ingest.yaml:ro
