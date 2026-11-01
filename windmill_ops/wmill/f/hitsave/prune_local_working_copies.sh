@@ -25,5 +25,5 @@ args=(--min-age-days "$min_age_days" --max-packages "$max_packages" --max-gb "$m
 # Scripts mounted from the checkout so the job does not depend on the image contents.
 remote_intake_archiver_compose run --rm -T --no-deps \
   -v "$ARCHIVER_HOST_PATH/scripts:/app/scripts:ro" \
-  -v "${HOST_GDRIVE_INTAKE:?}/ready:/data/intake-ready" \
+  -v "${HOST_INTAKE:?}/ready:/data/intake-ready" \
   --entrypoint python ingest-worker -u /app/scripts/prune-local-working-copies.py "${args[@]}"

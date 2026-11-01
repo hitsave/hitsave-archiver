@@ -1,5 +1,5 @@
 # Copy to hitsave-archiver-config/preservation/wasabi-redump-intake.yaml
-# Used by hitsave-gdrive-intake poll-wasabi / process-wasabi (mounted at /config/preservation/…).
+# Used by hitsave-intake poll-wasabi / process-wasabi (mounted at /config/preservation/…).
 # Do not list processed/ under source_roots — inbox poll roots only.
 wasabi_redump_intake:
   source:

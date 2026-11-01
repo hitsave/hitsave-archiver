@@ -40,7 +40,7 @@ def pg_connect(db_cfg: dict):
 
 
 def host_ready_root() -> Path | None:
-    host = os.environ.get("HOST_GDRIVE_INTAKE", "").strip()
+    host = (os.environ.get("HOST_INTAKE") or os.environ.get("HOST_GDRIVE_INTAKE", "")).strip()
     if host:
         ready = Path(host) / "ready"
         if ready.is_dir():

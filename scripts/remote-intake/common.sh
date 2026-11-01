@@ -1,6 +1,21 @@
 # shellcheck shell=bash
 # Shared paths for community-dump remote intake (Drive / Wasabi → archiver).
-# Source from operator host.env: HITSAVE_PRIVATE_CONFIG, HOST_GDRIVE_INTAKE, HOST_OUTPUT.
+# Source from operator host.env: HITSAVE_PRIVATE_CONFIG, HOST_INTAKE, HOST_OUTPUT.
+
+remote_intake_compat_env() {
+  # Compatibility: accept the pre-rename gdrive-intake variable names (hitsave-intake rename,
+  # 2026-11). Old names fill in new ones only when the new name is unset.
+  for _pair in HOST_INTAKE:HOST_GDRIVE_INTAKE HITSAVE_INTAKE_HOST:HITSAVE_GDRIVE_INTAKE_HOST \
+    HITSAVE_INTAKE_ROOT:HITSAVE_GDRIVE_INTAKE_ROOT HITSAVE_INTAKE_CONFIG_DIR:HITSAVE_GDRIVE_INTAKE_CONFIG_DIR \
+    HITSAVE_INTAKE_SECRETS_DIR:HITSAVE_GDRIVE_INTAKE_SECRETS_DIR \
+    HITSAVE_INTAKE_BUILD_CONTEXT:HITSAVE_GDRIVE_INTAKE_BUILD_CONTEXT INTAKE_IMAGE:GDRIVE_INTAKE_IMAGE \
+    HITSAVE_WINDMILL_INTAKE_STAGING_HOST:HITSAVE_WINDMILL_GDRIVE_INTAKE_STAGING_HOST; do
+    _new="${_pair%%:*}" _old="${_pair#*:}"
+    if [[ -z "${!_new:-}" && -n "${!_old:-}" ]]; then export "$_new=${!_old}"; fi
+  done
+  unset _pair _new _old
+}
+remote_intake_compat_env
 
 remote_intake_archiver_root() {
   cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd
@@ -13,7 +28,7 @@ remote_intake_bundle_root() {
   fi
   local archiver
   archiver="$(remote_intake_archiver_root)"
-  if [[ -d "$archiver/../hitsave-gdrive-intake" ]]; then
+  if [[ -d "$archiver/../hitsave-intake" ]]; then
     cd "$archiver/.." && pwd
     return
   fi
@@ -21,12 +36,12 @@ remote_intake_bundle_root() {
 }
 
 remote_intake_gdrive_root() {
-  if [[ -n "${HITSAVE_GDRIVE_INTAKE_ROOT:-}" ]]; then
-    echo "$HITSAVE_GDRIVE_INTAKE_ROOT"
+  if [[ -n "${HITSAVE_INTAKE_ROOT:-}" ]]; then
+    echo "$HITSAVE_INTAKE_ROOT"
     return
   fi
   local bundle_gdrive
-  bundle_gdrive="$(remote_intake_bundle_root)/hitsave-gdrive-intake"
+  bundle_gdrive="$(remote_intake_bundle_root)/hitsave-intake"
   if [[ -d "$bundle_gdrive" ]]; then
     echo "$bundle_gdrive"
     return
@@ -35,56 +50,56 @@ remote_intake_gdrive_root() {
 }
 
 remote_intake_gdrive_config_dir() {
-  if [[ -n "${HITSAVE_GDRIVE_INTAKE_CONFIG_DIR:-}" ]]; then
-    echo "$HITSAVE_GDRIVE_INTAKE_CONFIG_DIR"
+  if [[ -n "${HITSAVE_INTAKE_CONFIG_DIR:-}" ]]; then
+    echo "$HITSAVE_INTAKE_CONFIG_DIR"
     return
   fi
   echo "$(remote_intake_gdrive_root)/config"
 }
 
 remote_intake_gdrive_secrets_dir() {
-  if [[ -n "${HITSAVE_GDRIVE_INTAKE_SECRETS_DIR:-}" ]]; then
-    echo "$HITSAVE_GDRIVE_INTAKE_SECRETS_DIR"
+  if [[ -n "${HITSAVE_INTAKE_SECRETS_DIR:-}" ]]; then
+    echo "$HITSAVE_INTAKE_SECRETS_DIR"
     return
   fi
   echo "$(remote_intake_gdrive_root)/secrets"
 }
 
 remote_intake_gdrive_build_context() {
-  if [[ -n "${HITSAVE_GDRIVE_INTAKE_BUILD_CONTEXT:-}" ]]; then
-    echo "$HITSAVE_GDRIVE_INTAKE_BUILD_CONTEXT"
+  if [[ -n "${HITSAVE_INTAKE_BUILD_CONTEXT:-}" ]]; then
+    echo "$HITSAVE_INTAKE_BUILD_CONTEXT"
     return
   fi
   remote_intake_gdrive_docker_host_root
 }
 
-# Host paths for docker compose bind mounts (Windmill worker: set HITSAVE_GDRIVE_INTAKE_HOST).
+# Host paths for docker compose bind mounts (Windmill worker: set HITSAVE_INTAKE_HOST).
 remote_intake_gdrive_docker_host_root() {
-  if [[ -n "${HITSAVE_GDRIVE_INTAKE_HOST:-}" ]]; then
-    echo "$HITSAVE_GDRIVE_INTAKE_HOST"
+  if [[ -n "${HITSAVE_INTAKE_HOST:-}" ]]; then
+    echo "$HITSAVE_INTAKE_HOST"
     return
   fi
   echo "$(remote_intake_gdrive_root)"
 }
 
 remote_intake_gdrive_docker_config_dir() {
-  if [[ -n "${HITSAVE_GDRIVE_INTAKE_CONFIG_DIR:-}" ]]; then
-    echo "$HITSAVE_GDRIVE_INTAKE_CONFIG_DIR"
+  if [[ -n "${HITSAVE_INTAKE_CONFIG_DIR:-}" ]]; then
+    echo "$HITSAVE_INTAKE_CONFIG_DIR"
     return
   fi
   echo "$(remote_intake_gdrive_docker_host_root)/config"
 }
 
 remote_intake_gdrive_docker_secrets_dir() {
-  if [[ -n "${HITSAVE_GDRIVE_INTAKE_SECRETS_DIR:-}" ]]; then
-    echo "$HITSAVE_GDRIVE_INTAKE_SECRETS_DIR"
+  if [[ -n "${HITSAVE_INTAKE_SECRETS_DIR:-}" ]]; then
+    echo "$HITSAVE_INTAKE_SECRETS_DIR"
     return
   fi
   echo "$(remote_intake_gdrive_docker_host_root)/secrets"
 }
 
-# Run gdrive-intake via archiver compose (Drive / Wasabi API poll — not a filesystem scan).
-remote_intake_compose_gdrive_intake() {
+# Run intake via archiver compose (Drive / Wasabi API poll — not a filesystem scan).
+remote_intake_compose_intake() {
   local archiver check_root cfg sec ctx
   archiver="$(remote_intake_archiver_root)"
   check_root="$(remote_intake_gdrive_root)"
@@ -92,24 +107,24 @@ remote_intake_compose_gdrive_intake() {
   sec="$(remote_intake_gdrive_docker_secrets_dir)"
   ctx="$(remote_intake_gdrive_build_context)"
   if [[ ! -d "$check_root/config" ]] && [[ ! -d "$cfg" ]]; then
-    echo "gdrive-intake config missing (check $check_root or HITSAVE_GDRIVE_INTAKE_HOST)" >&2
+    echo "intake config missing (check $check_root or HITSAVE_INTAKE_HOST)" >&2
     return 1
   fi
   if [[ ! -d "$check_root/secrets" ]] && [[ ! -d "$sec" ]]; then
-    echo "gdrive-intake secrets missing (check $check_root or HITSAVE_GDRIVE_INTAKE_HOST)" >&2
+    echo "intake secrets missing (check $check_root or HITSAVE_INTAKE_HOST)" >&2
     return 1
   fi
-  if [[ ! -d "$ctx" ]] && ! docker image inspect "${GDRIVE_INTAKE_IMAGE:-hitsave/gdrive-intake:local}" >/dev/null 2>&1; then
-    echo "gdrive-intake build context missing: $ctx (set HITSAVE_GDRIVE_INTAKE_BUILD_CONTEXT or build hitsave/gdrive-intake:local)" >&2
+  if [[ ! -d "$ctx" ]] && ! docker image inspect "${INTAKE_IMAGE:-hitsave/intake:local}" >/dev/null 2>&1; then
+    echo "intake build context missing: $ctx (set HITSAVE_INTAKE_BUILD_CONTEXT or build hitsave/intake:local)" >&2
     return 1
   fi
-  export HITSAVE_GDRIVE_INTAKE_CONFIG_DIR="$cfg"
-  export HITSAVE_GDRIVE_INTAKE_SECRETS_DIR="$sec"
-  export HITSAVE_GDRIVE_INTAKE_BUILD_CONTEXT="$ctx"
+  export HITSAVE_INTAKE_CONFIG_DIR="$cfg"
+  export HITSAVE_INTAKE_SECRETS_DIR="$sec"
+  export HITSAVE_INTAKE_BUILD_CONTEXT="$ctx"
   local priv
   priv="$(remote_intake_private_config_host)"
   HITSAVE_PRIVATE_CONFIG="$priv" remote_intake_archiver_compose \
-    -f "$(remote_intake_archiver_compose_dir)/docker-compose.gdrive-intake.yml" "$@"
+    -f "$(remote_intake_archiver_compose_dir)/docker-compose.intake.yml" "$@"
 }
 
 # Host checkout for `docker compose` bind mounts (Windmill worker: not /archiver on the daemon host).
@@ -187,6 +202,7 @@ remote_intake_load_host_env() {
     # shellcheck disable=SC1090
     source "$gdrive/config/host.env"
   fi
+  remote_intake_compat_env
 }
 
 # One shared lock for every remote-intake run that stages into ready/ or runs ingest-worker.

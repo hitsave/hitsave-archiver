@@ -15,7 +15,7 @@ mkdir -p "$GEN"
 ROOT="$ARCHIVER"
 CFG_DIR="${HOST_OUTPUT:-$ARCHIVER/data/output}/omeka-register"
 
-INTAKE_HOST="${HOST_GDRIVE_INTAKE:?Set HOST_GDRIVE_INTAKE in host.env}"
+INTAKE_HOST="${HOST_INTAKE:?Set HOST_INTAKE in host.env}"
 PROD_CATALOG="${HITSAVE_PRIVATE_CONFIG}/omeka-catalog.yaml"
 if [[ ! -f "$PROD_CATALOG" ]]; then
   echo "Missing prod omeka catalog config: $PROD_CATALOG" >&2
@@ -44,7 +44,7 @@ if [[ -z "$SLUG" && -z "$GAME_KEY" ]]; then
   exit 2
 fi
 
-READY="${HOST_GDRIVE_INTAKE:?Set HOST_GDRIVE_INTAKE}/ready"
+READY="${HOST_INTAKE:?Set HOST_INTAKE}/ready"
 if [[ -z "$GAME_KEY" && -n "$SLUG" ]]; then
   cfg="$READY/$SLUG/game.ingest.yaml"
   if [[ -f "$cfg" ]]; then

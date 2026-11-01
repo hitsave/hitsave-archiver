@@ -11,7 +11,7 @@ working copies are deleted.
 | Third-party backup | Copied from Wasabi to an outside provider | Disaster recovery | Permanently (planned, not set up yet) |
 | Press-material originals | `/tank2/press-material/<game>/` | Source material | For now; not a preservation copy |
 | Contributor originals | Wasabi `hitsave-incoming/.../processed/`, Drive `processed/` | Source uploads after ingest | Until the lanes' own cleanup |
-| Intake SIP | `<HOST_GDRIVE_INTAKE>/ready/<slug>/` on `/tank` | **Temporary** working copy | Until pruned |
+| Intake SIP | `<HOST_INTAKE>/ready/<slug>/` on `/tank` | **Temporary** working copy | Until pruned |
 | Local bag | `<HOST_OUTPUT>/bag/...` on `/tank` | **Temporary** working copy | Until pruned |
 
 **Local copies on `/tank` are scratch space, not a backup.** It's fine to correct files there
@@ -56,7 +56,7 @@ Manual run (dry run, one package):
 ```bash
 source ../hitsave-archiver-config/host.env
 docker compose run --rm -T --no-deps -v "$PWD/scripts:/app/scripts:ro" \
-  -v "$HOST_GDRIVE_INTAKE/ready:/data/intake-ready:ro" \
+  -v "$HOST_INTAKE/ready:/data/intake-ready:ro" \
   --entrypoint python ingest-worker -u /app/scripts/prune-local-working-copies.py \
   --game-key <game_key> [--min-age-days 0]
 ```

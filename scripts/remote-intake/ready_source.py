@@ -4,7 +4,7 @@
 ready/<slug> names come from slugified folder names with the source root dropped, so
 different packages can map to the same slug (e.g. ``FamitsuWaveDVD/FWD0307`` and
 ``F.Wave/FWD0307``, or ``Game (USA)`` and ``Game [USA]``). The handoff manifest that
-gdrive-intake writes (hitsave-submission.yaml) records the real source: a Drive folder id
+intake writes (hitsave-submission.yaml) records the real source: a Drive folder id
 or a Wasabi ``<source_prefix>/<package_folder>``. Compare against it before treating a
 slug as "already staged / already preserved".
 
@@ -32,11 +32,11 @@ UNKNOWN = "unknown"    # handoff exists but records no source (legacy)
 
 
 def default_ready_root() -> Path:
-    """ready/ as seen from host, Windmill worker, ingest-worker or gdrive-intake containers."""
+    """ready/ as seen from host, Windmill worker, ingest-worker or intake containers."""
     env = os.environ.get("HITSAVE_READY_ROOT", "").strip()
     if env:
         return Path(env)
-    host = os.environ.get("HOST_GDRIVE_INTAKE", "").strip()
+    host = (os.environ.get("HOST_INTAKE") or os.environ.get("HOST_GDRIVE_INTAKE", "")).strip()
     candidates = []
     if host:
         candidates.append(Path(host) / "ready")

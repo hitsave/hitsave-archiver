@@ -94,7 +94,7 @@ Ledger: `dump_class = other`, `dump_system` / `dump_category` null.
 - **Redump:** SHA-1 from sidecar → redump.info → titles, contents, `dcterms:relation`; sidecar **System** / **Category** → `dcterms:format` / `dcterms:type`.
 - **Moby:** optional synopsis and release date via **`game_catalog`** profile when `moby_game_id` or search resolves.
 
-See [`hitsave-gdrive-intake/docs/redump-submissioninfo.md`](../../hitsave-gdrive-intake/docs/redump-submissioninfo.md) for sidecar → Omeka field mapping.
+See [`hitsave-intake/docs/redump-submissioninfo.md`](../../hitsave-intake/docs/redump-submissioninfo.md) for sidecar → Omeka field mapping.
 
 ## Ledger schema
 
@@ -108,11 +108,11 @@ Migration **`schema/009_backfill_ingest_kind_dump.sql`**: `game_dump` / `disc_du
   - Ledger: `apply-dump-catalog-omeka.py <game.yaml> [handoff.yaml] [--item-id ID]` — Redump RDF from SIP + SHA-1 lookup, Moby from ledger, staff **`bibo:uri`** = ledger `aip_wasabi_prefix`.
   - Handoff YAML only: `apply-dump-catalog-omeka.py --manifest <handoff.yaml> [--item-id ID]` (via **`apply_handoff_dump_catalog()`**).
 - **`register-dip-omeka-api.py`** delegates to **`apply_dump_catalog()`** when **`ingest_kind: dump`**.
-- Redump sidecar parser SSOT: **`scripts/dump_redump.py`** (sync to gdrive via **`scripts/sync-redump-parser-to-gdrive.sh`**).
+- Redump sidecar parser SSOT: **`scripts/dump_redump.py`** (sync to hitsave-intake via **`scripts/sync-redump-parser-to-intake.sh`**).
 
 ## GDrive intake
 
-[**hitsave-gdrive-intake**](https://github.com/hitsave/hitsave-gdrive-intake) downloads from Drive, verifies Redump sidecar checksums, and stages **`ready/{game_key}/`** with `game.ingest.yaml` + `hitsave-submission.yaml`. Archiver **`ingest-folder.py`** performs BagIt and Wasabi upload (see [`gdrive-intake-handoff.md`](./gdrive-intake-handoff.md)).
+[**hitsave-intake**](https://github.com/hitsave/hitsave-intake) downloads from Drive, verifies Redump sidecar checksums, and stages **`ready/{game_key}/`** with `game.ingest.yaml` + `hitsave-submission.yaml`. Archiver **`ingest-folder.py`** performs BagIt and Wasabi upload (see [`intake-handoff.md`](./intake-handoff.md)).
 
 ## Related docs
 

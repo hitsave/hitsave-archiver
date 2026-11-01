@@ -92,7 +92,7 @@ def main() -> None:
         "--poll-json",
         type=Path,
         required=True,
-        help="Poll output JSON (gdrive-intake poll-wasabi --once)",
+        help="Poll output JSON (intake poll-wasabi --once)",
     )
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--overwrite", action="store_true", help="Allow MOVE into existing dest prefix")

@@ -33,5 +33,5 @@ Omeka dump catalog needs handoff, ledger `complete`, and Wasabi upload (done ins
 
 ## Related docs
 
-- [GDrive intake handoff](../gdrive-intake-handoff.md)  
+- [Intake handoff](../intake-handoff.md)  
 - [E2E preservation batch](../e2e-preservation-batch.md) — `run-batch-resume-omeka.sh` for press material  

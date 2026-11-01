@@ -261,5 +261,5 @@ def parse_submission_info(text: str) -> RedumpSubmission:
     return sub
 
 
-# Used by hitsave-gdrive-intake verify (keep in sync via scripts/sync-redump-parser-to-gdrive.sh).
+# Used by hitsave-intake verify (keep in sync via scripts/sync-redump-parser-to-intake.sh).
 DISC_IMAGE_SUFFIXES = (".iso", ".bin", ".img", ".chd", ".gdi")

@@ -20,7 +20,7 @@ POLL_JSON="$GEN/gdrive-redump-poll.json"
 
 
 
-READY="${HOST_GDRIVE_INTAKE}/ready"
+READY="${HOST_INTAKE}/ready"
 
 exec > >(tee -a "$LOG") 2>&1
 echo "=== GDrive Redump per-folder pipeline started $(date -Is) ==="
@@ -81,7 +81,7 @@ for pair in "${pairs[@]}"; do
 
   if [[ ! -f "$cfg" ]]; then
     echo "--- stage from Drive (Redump MD5/SHA1 fixity before ready/) $fid ---"
-    if remote_intake_gdrive_compose run --rm -T --user 1000:1000 gdrive-intake process \
+    if remote_intake_gdrive_compose run --rm -T --user 1000:1000 intake process \
       --folder-id "$fid" \
       --config-root /config \
       --skip-stable-check; then

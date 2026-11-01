@@ -1,13 +1,13 @@
 # Remote intake operator scripts
 
-Community dump pipelines (Google Drive and Wasabi incoming → **hitsave-gdrive-intake** → **ingest-worker** → prod Omeka). SSOT: [docs/remote-intake-lanes.md](../../docs/remote-intake-lanes.md).
+Community dump pipelines (Google Drive and Wasabi incoming → **hitsave-intake** → **ingest-worker** → prod Omeka). SSOT: [docs/remote-intake-lanes.md](../../docs/remote-intake-lanes.md).
 
 ## Prerequisites
 
 - `hitsave-archiver-config` on `HITSAVE_PRIVATE_CONFIG` / `host.env`.
-- **Poll** uses the **Google Drive / Wasabi APIs** via the `gdrive-intake` container (`docker-compose.gdrive-intake.yml` from the archiver root). It does **not** scan `HOST_GDRIVE_INTAKE` for new packages.
-- Set **`HITSAVE_GDRIVE_INTAKE_ROOT`** (or **`HITSAVE_GDRIVE_INTAKE_CONFIG_DIR`** + **`HITSAVE_GDRIVE_INTAKE_SECRETS_DIR`**) to the gdrive-intake checkout or config tree — no need for a sibling directory layout if paths are explicit.
-- `source hitsave-archiver-config/host.env` — **`HOST_GDRIVE_INTAKE`**, **`HOST_OUTPUT`**, **`HITSAVE_PRIVATE_CONFIG`**.
+- **Poll** uses the **Google Drive / Wasabi APIs** via the `intake` container (`docker-compose.intake.yml` from the archiver root). It does **not** scan `HOST_INTAKE` for new packages.
+- Set **`HITSAVE_INTAKE_ROOT`** (or **`HITSAVE_INTAKE_CONFIG_DIR`** + **`HITSAVE_INTAKE_SECRETS_DIR`**) to the intake checkout or config tree — no need for a sibling directory layout if paths are explicit.
+- `source hitsave-archiver-config/host.env` — **`HOST_INTAKE`**, **`HOST_OUTPUT`**, **`HITSAVE_PRIVATE_CONFIG`**.
 - Prod Omeka catalog overlay at **`$HITSAVE_PRIVATE_CONFIG/omeka-catalog.yaml`** (for `register-dump-omeka.sh`).
 
 Logs and poll JSON default to **`hitsave-archiver/.generated/`** (override with **`HITSAVE_REMOTE_INTAKE_LOG_DIR`**).

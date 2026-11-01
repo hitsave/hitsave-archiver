@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-GDRIVE_ROOT = REPO_ROOT.parent / "hitsave-gdrive-intake"
+GDRIVE_ROOT = REPO_ROOT.parent / "hitsave-intake"
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 _gdrive_src = GDRIVE_ROOT / "src"

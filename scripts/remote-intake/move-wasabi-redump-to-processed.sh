@@ -21,7 +21,7 @@ exec > >(tee -a "$LOG") 2>&1
 echo "=== Wasabi incoming → processed/ started $(date -Is) execute=$EXECUTE ==="
 
 cd "$GDRIVE"
-docker compose run --rm -T --user 1000:1000 gdrive-intake poll-wasabi --once --config-root /config \
+docker compose run --rm -T --user 1000:1000 intake poll-wasabi --once --config-root /config \
   > "$POLL_JSON"
 
 cd "$ARCHIVER"
