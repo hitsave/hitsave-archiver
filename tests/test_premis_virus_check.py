@@ -71,14 +71,21 @@ from premis_virus_check import clamd_size_limit, scan_sip_tree  # noqa: E402
 
 
 class _FakeClamd:
-    def __init__(self):
-        self.scanned: list[str] = []
+    """Streams only (INSTREAM); alerts above max_object like clamd with AlertExceedsMax."""
+
+    def __init__(self, max_object: int = 10**12):
+        self.scanned: list[bytes] = []
+        self.max_object = max_object
+        self.timeout = 30
 
     def version(self):
         return "ClamAV 1.4.1/27800/Mon Oct 13 2026"
 
-    def scan_file(self, path):
-        self.scanned.append(path)
+    def scan_stream(self, reader, chunk_size=4096):
+        data = b"".join(iter(lambda: reader.read(chunk_size), b""))
+        self.scanned.append(data)
+        if len(data) > self.max_object:
+            return {"stream": ("FOUND", "Heuristics.Limits.Exceeded.MaxScanSize")}
         return None
 
 
@@ -90,30 +97,41 @@ def test_clamd_size_limit_parses_conf(tmp_path: Path) -> None:
     assert clamd_size_limit(conf) is None
 
 
-def test_large_files_not_scanned_and_premis_says_partial(tmp_path: Path) -> None:
+def test_large_file_fully_scanned_in_chunks_is_success(tmp_path: Path) -> None:
     sip = tmp_path / "sip"
     sip.mkdir()
     (sip / "small.txt").write_bytes(b"x" * 10)
-    (sip / "disc.iso").write_bytes(b"x" * 100)
+    (sip / "huge.psd").write_bytes(b"y" * 100)
     clamd = _FakeClamd()
-    report = scan_sip_tree(clamd, sip, max_scan_bytes=50)
-    assert report.files_scanned == 1 and report.files_not_scanned == 1
-    assert report.not_scanned_paths == ["disc.iso"]
-    assert clamd.scanned == [str(sip / "small.txt")]
+    report = scan_sip_tree(clamd, sip, max_whole=50, chunk=40, overlap=5)
+    assert report.files_scanned == 2 and report.files_not_scanned == 0
+    xml = build_virus_check_premis_xml(
+        report, package_id="p", package_uuid="", repository_code="hitsave", linking_agent="t"
+    )
+    assert "<premis:eventOutcome>success</premis:eventOutcome>" in xml
+    assert "Every byte of all 2 file(s)" in xml
+    assert "huge.psd (chunked-raw" in xml and "chunkedRawScans=1" in xml
+
+
+def test_limit_alert_makes_premis_partial(tmp_path: Path) -> None:
+    sip = tmp_path / "sip"
+    sip.mkdir()
+    (sip / "a.txt").write_bytes(b"x" * 10)
+    (sip / "nested.zip").write_bytes(b"z" * 30)
+    report = scan_sip_tree(_FakeClamd(max_object=20), sip)
+    assert report.files_not_scanned == 1 and report.not_scanned_paths == ["nested.zip"]
     xml = build_virus_check_premis_xml(
         report, package_id="p", package_uuid="", repository_code="hitsave", linking_agent="t"
     )
     assert "<premis:eventOutcome>partial</premis:eventOutcome>" in xml
-    assert "were NOT scanned: disc.iso" in xml
-    assert "filesNotScanned=1" in xml
-    assert "full ClamAV scan" not in xml
+    assert "NOT fully scanned (ClamAV limit alert): nested.zip (Heuristics.Limits.Exceeded" in xml
 
 
 def test_all_files_scanned_is_success(tmp_path: Path) -> None:
     sip = tmp_path / "sip"
     sip.mkdir()
     (sip / "a.txt").write_bytes(b"x")
-    report = scan_sip_tree(_FakeClamd(), sip, max_scan_bytes=None)
+    report = scan_sip_tree(_FakeClamd(), sip)
     xml = build_virus_check_premis_xml(
         report, package_id="p", package_uuid="", repository_code="hitsave", linking_agent="t"
     )
@@ -127,6 +145,6 @@ def test_dotfiles_are_scanned_because_they_go_into_the_bag(tmp_path: Path) -> No
     (sip / ".checksum.md5").write_bytes(b"x")
     (sip / "sub" / ".DS_Store").write_bytes(b"x")
     clamd = _FakeClamd()
-    report = scan_sip_tree(clamd, sip, max_scan_bytes=None)
+    report = scan_sip_tree(clamd, sip)
     assert report.files_scanned == 3
-    assert sorted(Path(p).name for p in clamd.scanned) == [".DS_Store", ".checksum.md5", "a.txt"]
+    assert len(clamd.scanned) == 3

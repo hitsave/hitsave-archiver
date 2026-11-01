@@ -25,6 +25,8 @@ class VirusScanReport:
     sip_root: str = ""
     not_scanned_paths: list[str] = field(default_factory=list)
     scan_limit_bytes: int | None = None
+    # How each file was scanned (clamav_full_scan.FileScan); empty for legacy reports.
+    file_scans: list = field(default_factory=list)
 
 
 def iso_now() -> str:
@@ -94,28 +96,32 @@ def clamd_size_limit(conf_path: Path | None = None) -> int | None:
     return None
 
 
-def scan_sip_tree(clamd, root: Path, *, max_scan_bytes: int | None = -1) -> VirusScanReport:
+def scan_sip_tree(clamd, root: Path, **scan_kwargs) -> VirusScanReport:
     """
-    Scan every file under root via clamd SCAN (shared mount paths); raise on malware.
+    Scan every byte of every file under root (dotfiles included: they go into the bag); raise
+    on malware. Files beyond ClamAV's ~2 GiB object limit are scanned file-by-file inside disc
+    images or in overlapping raw chunks (clamav_full_scan). Anything clamd could not fully scan
+    (a limit alert) is reported as not scanned, so the PREMIS event never over-claims.
+    """
+    from clamav_full_scan import MalwareFound, scan_path
 
-    Files larger than the clamd size limit (default: read from clamd.conf) are not sent
-    to clamd and are reported as not scanned, so the PREMIS event does not claim a scan
-    that never happened (DVD ISOs exceed the 512 MiB limit).
-    """
-    if max_scan_bytes == -1:
-        max_scan_bytes = clamd_size_limit()
     program, version, virus_defs = clamav_version_info(clamd)
     scanned = 0
     not_scanned: list[str] = []
+    file_scans = []
     for path in sorted(root.rglob("*")):
         if not path.is_file():
-            continue  # dotfiles are scanned too: they go into the bag
-        if max_scan_bytes and path.stat().st_size > max_scan_bytes:
-            not_scanned.append(path.relative_to(root).as_posix())
             continue
-        result = clamd.scan_file(str(path))
-        _interpret_clamd_result(path, result)
-        scanned += 1
+        rel = path.relative_to(root).as_posix()
+        try:
+            res = scan_path(clamd, path, rel, **scan_kwargs)
+        except MalwareFound as e:
+            raise RuntimeError(f"Virus detected in {path}: {e}") from None
+        file_scans.append(res)
+        if res.fully_scanned:
+            scanned += 1
+        else:
+            not_scanned.append(rel)
 
     return VirusScanReport(
         scanned_at=iso_now(),
@@ -126,7 +132,7 @@ def scan_sip_tree(clamd, root: Path, *, max_scan_bytes: int | None = -1) -> Viru
         virus_definitions=virus_defs,
         sip_root=str(root),
         not_scanned_paths=not_scanned,
-        scan_limit_bytes=max_scan_bytes or None,
+        file_scans=file_scans,
     )
 
 
@@ -165,6 +171,14 @@ def build_virus_check_premis_xml(
     ]
     if report.scan_limit_bytes:
         detail_parts.append(f"scanLimitBytes={report.scan_limit_bytes}")
+    if report.file_scans:
+        methods = {"whole": 0, "image-members": 0, "chunked-raw": 0}
+        for fs in report.file_scans:
+            methods[fs.method] = methods.get(fs.method, 0) + 1
+        detail_parts.append(
+            f"wholeFileScans={methods['whole']}; discImageScans={methods['image-members']}; "
+            f"chunkedRawScans={methods['chunked-raw']}"
+        )
     if report.virus_definitions:
         detail_parts.append(f'virusDefinitions="{report.virus_definitions}"')
     if report.sip_root:
@@ -174,7 +188,17 @@ def build_virus_check_premis_xml(
     ET.SubElement(detail_info, f"{{{PREMIS_NS}}}eventDetail").text = "; ".join(detail_parts)
 
     outcome_info = ET.SubElement(root, f"{{{PREMIS_NS}}}eventOutcomeInformation")
-    if report.files_not_scanned:
+    if report.files_not_scanned and report.file_scans:
+        partial = [fs for fs in report.file_scans if not fs.fully_scanned]
+        shown = "; ".join(f"{fs.rel} ({', '.join(fs.notes)})" for fs in partial[:20])
+        note = (
+            f"No malware detected. {report.files_scanned} file(s) fully scanned; "
+            f"{len(partial)} file(s) NOT fully scanned (ClamAV limit alert): {shown}"
+            + (f" … and {len(partial) - 20} more" if len(partial) > 20 else "")
+            + "."
+        )
+        outcome = "partial"
+    elif report.files_not_scanned:
         shown = ", ".join(report.not_scanned_paths[:20])
         more = len(report.not_scanned_paths) - 20
         note = (
@@ -186,6 +210,21 @@ def build_virus_check_premis_xml(
             + "."
         )
         outcome = "partial"
+    elif report.file_scans:
+        note = (
+            f"No malware detected. Every byte of all {report.files_scanned} file(s) was scanned "
+            "before BagIt build."
+        )
+        special = [fs for fs in report.file_scans if fs.method != "whole" or fs.notes]
+        if special:
+            note += " Files beyond ClamAV's 2 GiB object limit or with caveats: " + "; ".join(
+                f"{fs.rel} ({fs.method}" + (f": {', '.join(fs.notes)}" if fs.notes else "") + ")"
+                for fs in special[:20]
+            )
+            if len(special) > 20:
+                note += f" … and {len(special) - 20} more"
+            note += "."
+        outcome = "success"
     else:
         note = "No malware detected (full ClamAV scan before BagIt build)."
         outcome = "success"

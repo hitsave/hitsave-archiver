@@ -509,10 +509,13 @@ def main() -> None:
             ingest_kind=ingest_kind,
         )
         virus_scan = scan_sip_tree(clamd, source)
+        for fs in virus_scan.file_scans:
+            if fs.method != "whole" or fs.notes:
+                print(f"  ClamAV: {fs.rel} -> {fs.method} ({fs.streams} stream(s)) {'; '.join(fs.notes)}", flush=True)
         if virus_scan.files_not_scanned:
             print(
-                f"  ClamAV: {virus_scan.files_not_scanned} file(s) over the scan limit "
-                f"({virus_scan.scan_limit_bytes} bytes) not scanned; recorded in PREMIS",
+                f"  ClamAV: {virus_scan.files_not_scanned} file(s) NOT fully scanned "
+                f"(limit alerts); recorded as partial in PREMIS: {virus_scan.not_scanned_paths[:10]}",
                 flush=True,
             )
 

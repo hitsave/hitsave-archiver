@@ -143,7 +143,7 @@ Redump is the **reference sidecar** implemented today; No-Intro and other org si
 
 ### Nintendo Switch dumps (in progress, [#18](https://github.com/hitsave/hitsave-archiver/issues/18))
 
-Contributor layout: **`{game title}/Scans/`** (photos) and **`{game title}/{version}/`** (No-Intro-style **`Submission.xml`**, cart **`.xci`**, `.bin` sidecars). **Ingest SIP = the game title folder** (BagIt includes `Scans/`, each `{version}/`, and sidecars; `_ocr_crop_debug/` is omitted). Sidecar XML is resolved under a version subfolder when absent at the game root. Archiver **`dump_class: switch`** → Wasabi `dumps/Nintendo Switch/{sort_letter}/{package_id}/`. Omeka catalog uses folder title + version label (no box/cart serials); title ID (`gameid1`) may be stored as `dcterms:identifier`.
+Contributor layout: **`{game title}/Scans/`** (photos) and **`{game title}/{version}/`** (No-Intro-style **`Submission.xml`**, cart **`.xci`**, `.bin` sidecars). **Ingest SIP = the game title folder** (BagIt includes everything: `Scans/`, each `{version}/`, and sidecars). Sidecar XML is resolved under a version subfolder when absent at the game root. Archiver **`dump_class: switch`** → Wasabi `dumps/Nintendo Switch/{sort_letter}/{package_id}/`. Omeka catalog uses folder title + version label (no box/cart serials); title ID (`gameid1`) may be stored as `dcterms:identifier`.
 
 ### Analog (planned)
 
