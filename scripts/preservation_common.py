@@ -272,11 +272,20 @@ def bagit_payload_relpath(source: Path, file_path: Path, *, preserve_source_fold
     return f"{folder}/{inner}" if inner else folder
 
 
-def should_skip(path: Path) -> bool:
+def skip_reason(path: Path) -> str | None:
+    """Why a SIP file is left out of the BagIt payload by policy, or None to include it."""
     name = path.name
-    if name.startswith(".") or name == "desktop.ini":
-        return True
-    return "_ocr_crop_debug" in path.parts
+    if name.startswith("."):
+        return "dotfile"
+    if name == "desktop.ini":
+        return "desktop.ini"
+    if "_ocr_crop_debug" in path.parts:
+        return "ocr debug output"
+    return None
+
+
+def should_skip(path: Path) -> bool:
+    return skip_reason(path) is not None
 
 
 def sha256_file(path: Path) -> str:
