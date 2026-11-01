@@ -115,9 +115,9 @@ After extract, every file under the source tree must match **`security.allowed_e
 1. **`scan_file`** on the `.zip` before extract (with **`ScanArchive yes`** in [`config/clamav/clamd.conf`](../config/clamav/clamd.conf) so nested archive bytes inside the zip are inspected).
 2. **`scan_sip_tree`** on every extracted file in [`ingest-folder.py`](../scripts/ingest-folder.py) before BagIt build.
 
-On success, ingest writes a **PREMIS 3** virus-check event at `metadata/premis/virus-check-event.xml` (linked to `package_id` / `package_uuid` in `submission.json`) and refreshes BagIt manifests before Wasabi upload. If ClamAV skips any file (daemon size limits), ingest **fails** — no “pass” PREMIS event (same rule as Archivematica).
+On success, ingest writes a **PREMIS 3** virus-check event at `metadata/premis/virus-check-event.xml` (linked to `package_id` / `package_uuid` in `submission.json`) and refreshes BagIt manifests before Wasabi upload. Every byte of every file is scanned, whatever its size ([`scripts/clamav_full_scan.py`](../scripts/clamav_full_scan.py): files over ClamAV's ~2 GiB object cap are scanned as disc-image members or overlapping raw chunks). The event says `success` only when all bytes were scanned and nothing was found; if clamd reports a limit (`AlertExceedsMax`), the event is `partial` and names the file.
 
-ClamAV size/recursion limits on the daemon (`MaxFileSize`, `MaxScanSize`, `MaxRecursion`, `MaxFiles`) align with large press videos and submission caps. ClamAV is signature-based; zero-days and non-malware abuse can still pass.
+ClamAV recursion limits on the daemon (`MaxRecursion`, `MaxFiles`) align with submission caps; size limits are lifted (see [`config/clamav/README.md`](../config/clamav/README.md)). ClamAV is signature-based; zero-days and non-malware abuse can still pass.
 
 **After changing `clamd.conf`**, recreate the ClamAV container so settings load:
 
