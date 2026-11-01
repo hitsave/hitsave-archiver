@@ -14,6 +14,9 @@ if [[ -n "${CI:-}" || ! -d /tank/hitsave-archiver/submissions ]]; then
   mkdir -p "$SUBMISSIONS_ROOT"/{incoming,workspace,processed,failed} "$OUTPUT_ROOT" "$ROOT/.ci/empty" \
     "${HOST_INTAKE:-$ROOT/.ci/gdrive-intake}/ready"
   export HOST_INTAKE="${HOST_INTAKE:-$ROOT/.ci/gdrive-intake}"
+  # Throwaway ledger for CI (the compose bind mount refuses a missing dir by design).
+  export HOST_LEDGER_DATA="${HOST_LEDGER_DATA:-$ROOT/.ci/ledger}"
+  mkdir -p "$HOST_LEDGER_DATA"
   HITSAVE_PRIVATE_CONFIG="$HITSAVE_PRIVATE_CONFIG" "$ROOT/scripts/bootstrap-private-config-from-examples.sh" --force
   HITSAVE_PRIVATE_CONFIG="$HITSAVE_PRIVATE_CONFIG" python3 "$ROOT/scripts/sync-preservation-config.py"
   COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.ci.yml)
