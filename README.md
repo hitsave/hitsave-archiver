@@ -64,7 +64,7 @@ See `docs/portable-submissions.md` and `docs/preservation-wasabi.md`.
 | `~/hitsave-archiver-config` | Private secrets checkout |
 | `~/hitsave-omeka-test` | Local Omeka test stack |
 | `/tank/hitsave-archiver/submissions` | Portable zip intake |
-| `/tank/hitsave-archiver/gdrive-intake` | GDrive Redump downloads (`ready/`, `staging/`, `failed/`) |
+| `/tank/hitsave-archiver/intake` | GDrive Redump downloads (`ready/`, `staging/`, `failed/`) |
 | `/tank2/press-material` | Press-material source tree |
 | `/tank/hitsave-archiver/output` | AIP/DIP output |
 

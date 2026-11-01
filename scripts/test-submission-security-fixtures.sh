@@ -12,8 +12,8 @@ if [[ -n "${CI:-}" || ! -d /tank/hitsave-archiver/submissions ]]; then
   export OUTPUT_ROOT="${OUTPUT_ROOT:-$ROOT/.ci/output}"
   export HITSAVE_PRIVATE_CONFIG="${HITSAVE_PRIVATE_CONFIG:-$ROOT/.ci/private-config}"
   mkdir -p "$SUBMISSIONS_ROOT"/{incoming,workspace,processed,failed} "$OUTPUT_ROOT" "$ROOT/.ci/empty" \
-    "${HOST_INTAKE:-$ROOT/.ci/gdrive-intake}/ready"
-  export HOST_INTAKE="${HOST_INTAKE:-$ROOT/.ci/gdrive-intake}"
+    "${HOST_INTAKE:-$ROOT/.ci/intake}/ready"
+  export HOST_INTAKE="${HOST_INTAKE:-$ROOT/.ci/intake}"
   # Throwaway ledger for CI (the compose bind mount refuses a missing dir by design).
   export HOST_LEDGER_DATA="${HOST_LEDGER_DATA:-$ROOT/.ci/ledger}"
   mkdir -p "$HOST_LEDGER_DATA"

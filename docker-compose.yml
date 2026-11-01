@@ -36,7 +36,7 @@ services:
       - ./config/clamav/clamd.conf:/etc/clamav/clamd.conf:ro
       - ${HOST_PRESS_MATERIAL:-./data/press-material}:/data/press-material:ro
       - ${HOST_SUBMISSIONS:-./data/submissions}:/data/submissions:ro
-      - ${HOST_INTAKE:-./data/gdrive-intake}/ready:/data/gdrive-intake/ready:ro
+      - ${HOST_INTAKE:-./data/intake}/ready:/data/intake/ready:ro
 
   ingest-worker:
     build:
@@ -51,7 +51,7 @@ services:
       - ${HOST_PRESS_MATERIAL:-./data/press-material}:/data/press-material:ro
       - ${HOST_SUBMISSIONS:-./data/submissions}:/data/submissions
       - ${HOST_OUTPUT:-./data/output}:/output
-      - ${HOST_INTAKE:-./data/gdrive-intake}/ready:/data/gdrive-intake/ready:ro
+      - ${HOST_INTAKE:-./data/intake}/ready:/data/intake/ready:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,7 +71,7 @@ services:
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/secrets:/config/secrets:ro
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/preservation/database.yaml:/config/preservation/database.yaml:ro
       - ${HOST_OUTPUT:-./data/output}:/output:ro
-      - ${HOST_INTAKE:-./data/gdrive-intake}/ready:/data/gdrive-intake/ready:ro
+      - ${HOST_INTAKE:-./data/intake}/ready:/data/intake/ready:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

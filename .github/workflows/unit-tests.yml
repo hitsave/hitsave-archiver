@@ -29,14 +29,14 @@ jobs:
     env:
       CI: "true"
       HITSAVE_PRIVATE_CONFIG: ./.ci/private-config
-      HOST_INTAKE: ./.ci/gdrive-intake
+      HOST_INTAKE: ./.ci/intake
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Bootstrap CI private config from examples
         run: |
-          mkdir -p .ci/gdrive-intake/ready
+          mkdir -p .ci/intake/ready
           ./scripts/bootstrap-private-config-from-examples.sh --force
           python3 scripts/sync-preservation-config.py
       - name: Run unit tests in ingest-worker image

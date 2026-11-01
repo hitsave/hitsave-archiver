@@ -8,10 +8,10 @@ Remote contributors upload **community dumps** (Redump, No-Intro, and other org 
 
 ## Layout after gdrive `process`
 
-Mount the intake **ready** tree into the ingest-worker (default host: `/tank/hitsave-archiver/gdrive-intake/ready` → container `/data/gdrive-intake/ready`; set `HOST_INTAKE` in `host.env` if different):
+Mount the intake **ready** tree into the ingest-worker (default host: `/tank/hitsave-archiver/intake/ready` → container `/data/intake/ready`; set `HOST_INTAKE` in `host.env` if different):
 
 ```text
-/data/gdrive-intake/ready/{game_key}/
+/data/intake/ready/{game_key}/
   game.ingest.yaml
   hitsave-submission.yaml
   !submissionInfo.txt
@@ -22,11 +22,11 @@ Mount the intake **ready** tree into the ingest-worker (default host: `/tank/hit
 
 ## Ingest one package
 
-Requires a matching entry in `config/preservation/submission-sources.yaml` (`container_path_prefix: /data/gdrive-intake/ready`).
+Requires a matching entry in `config/preservation/submission-sources.yaml` (`container_path_prefix: /data/intake/ready`).
 
 ```bash
 docker compose run --rm ingest-worker \
-  /data/gdrive-intake/ready/<game_key>/game.ingest.yaml
+  /data/intake/ready/<game_key>/game.ingest.yaml
 ```
 
 Dump classification, Wasabi prefix (`dumps/{System}/{Category}/{game_key}/`), and BagIt upload use the same code path as on-site dump ingest ([`dump-preservation.md`](./dump-preservation.md)).

@@ -6,8 +6,8 @@ sources:
     id: hitsave-submission:gdrive-redump-remote-intake
     type: remote_intake
     submission_date: "2026-01-01"
-    host_path_prefix: /tank/hitsave-archiver/gdrive-intake/ready
-    container_path_prefix: /data/gdrive-intake/ready
+    host_path_prefix: /tank/hitsave-archiver/intake/ready
+    container_path_prefix: /data/intake/ready
     bag_info_external_identifier: hitsave-submission:gdrive-redump-remote-intake
     omeka_provenance_text: >-
       Redump-style disc dumps ingested via Google Drive remote intake (verified sidecar fixity).

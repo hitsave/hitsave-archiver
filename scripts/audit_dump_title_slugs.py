@@ -25,7 +25,7 @@ from package_identity import (  # noqa: E402
 )
 from yaml_config import load_yaml  # noqa: E402
 
-_READY_CONTAINER = "/data/gdrive-intake/ready"
+_READY_CONTAINER = "/data/intake/ready"
 _MACRON_HINT = re.compile(r"[\u0100-\u024f]")  # Latin extended (macrons, etc.)
 
 

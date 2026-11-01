@@ -17,5 +17,5 @@ services:
       - ${HITSAVE_INTAKE_SECRETS_DIR}:/secrets:ro
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/preservation/wasabi-redump-intake.yaml:/config/preservation/wasabi-redump-intake.yaml:ro
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/preservation/ingest.yaml:/config/preservation/ingest.yaml:ro
-      - ${HOST_INTAKE:-./data/gdrive-intake}:/data/intake
+      - ${HOST_INTAKE:-./data/intake}:/data/intake
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/secrets/wasabi-credentials.yaml:/data/intake/.secrets/wasabi-credentials.yaml:ro

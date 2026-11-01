@@ -177,8 +177,10 @@ def test_contained_dir(tmp_path: Path) -> None:
 
 def test_ready_dir_for(tmp_path: Path) -> None:
     (tmp_path / SLUG).mkdir()
-    assert prune.ready_dir_for(f"/data/gdrive-intake/ready/{SLUG}", tmp_path) == (tmp_path / SLUG).resolve()
+    assert prune.ready_dir_for(f"/data/intake/ready/{SLUG}", tmp_path) == (tmp_path / SLUG).resolve()
     assert prune.ready_dir_for("/data/press-material/Some Game", tmp_path) is None
-    assert prune.ready_dir_for(f"/data/gdrive-intake/ready/{SLUG}/sub", tmp_path) is None
-    assert prune.ready_dir_for("/data/gdrive-intake/ready/missing", tmp_path) is None
+    assert prune.ready_dir_for(f"/data/intake/ready/{SLUG}/sub", tmp_path) is None
+    assert prune.ready_dir_for("/data/intake/ready/missing", tmp_path) is None
     assert prune.ready_dir_for(None, tmp_path) is None
+    # legacy ledger prefix (before the intake data-dir rename) still maps
+    assert prune.ready_dir_for(f"/data/gdrive-intake/ready/{SLUG}", tmp_path) == (tmp_path / SLUG).resolve()
