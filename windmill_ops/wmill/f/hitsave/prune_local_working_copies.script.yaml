@@ -1,0 +1,41 @@
+summary: Prune local working copies (Wasabi-verified)
+description: |
+  Runs `scripts/prune-local-working-copies.py`. Local bags and intake ready/ payload are
+  scratch space; Wasabi is the preservation copy (docs/storage-retention.md). For each
+  complete package older than min_age_days it hashes the local copy against the ingest-time
+  SHA-256, compares every Wasabi object's size and ETag (no download), checks the Wasabi
+  manifests, then deletes the local bag and ready/<slug> payload (handoff YAML is kept for
+  the slug-collision guard). Dry run unless execute is true.
+
+  Holds the shared remote-intake lock (sweeps skip while it runs).
+lock: ''
+concurrent_limit: 1
+concurrency_time_window_s: 0
+concurrency_key: hitsave-remote-intake
+kind: script
+language: bash
+schema:
+  $schema: 'https://json-schema.org/draft/2020-12/schema'
+  type: object
+  properties:
+    execute:
+      type: string
+      description: '"true" deletes; anything else is a read-only dry run'
+      default: 'false'
+    min_age_days:
+      type: number
+      description: Only packages uploaded to Wasabi at least this many days ago
+      default: 14
+    max_packages:
+      type: integer
+      description: Max packages per run
+      default: 50
+    max_gb:
+      type: number
+      description: Max local GB hashed per run
+      default: 200
+    kind:
+      type: string
+      description: Optional ingest_kind filter (dump, press_material, …)
+      default: ''
+  required: []

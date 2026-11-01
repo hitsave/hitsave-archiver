@@ -4,6 +4,8 @@ Public preservation machinery for [HitSave](https://hitsave.org): press-material
 
 **Credentials never belong in this repo.** Operator secrets use a separate checkout mounted at runtime; build it from `config/**/*.example` — see **[docs/operator-config.md](docs/operator-config.md)**, **[docs/config-contract.md](docs/config-contract.md)**, and [docs/public-repos.md](docs/public-repos.md).
 
+**Storage and retention:** Wasabi is the permanent copy; local bags and intake `ready/` folders are temporary and pruned once Wasabi is verified. See **[docs/storage-retention.md](docs/storage-retention.md)**.
+
 **Remote ingest (Drive / Wasabi incoming → preservation):** **[docs/remote-intake-lanes.md](docs/remote-intake-lanes.md)** — lane SSOT (community dumps: Redump / No-Intro / …; analog; press material sunset).
 
 Related public repos:
