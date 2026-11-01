@@ -262,6 +262,7 @@ def scan_path(
                     res.notes.append(udf_note)
             last_end = 0
             members_seen: set[str] = set()
+            container_alerts: list[str] = []
             for kind, start, end, member in plan:
                 alert = _stream(clamd, _RangeReader(fh, start, end, hasher, hash_state))
                 res.streams += 1
@@ -270,13 +271,21 @@ def scan_path(
                 else:
                     res.raw_bytes += max(end - max(start, last_end), 0)  # unique bytes only
                 last_end = max(last_end, end)
-                if alert:
+                if alert and akind:
+                    # clamd recognises the archive header in a container chunk and tries to unpack
+                    # a truncated archive (e.g. a member over 2 GiB). The per-file pass below reads
+                    # every file inside, and that pass decides whether the archive was fully scanned.
+                    container_alerts.append(f"bytes {start}-{end}: {alert}")
+                elif alert:
                     res.fully_scanned = False
                     res.notes.append(f"{member or f'bytes {start}-{end}'}: {alert}")
             res.members = len(members_seen)
             if akind:
                 scan_archive_members(clamd, path, akind, res, max_whole=max_whole,
                                      chunk=chunk, overlap=overlap)
+                if container_alerts:
+                    res.notes.append("container pass alerts (contents covered by the per-file pass): "
+                                     + "; ".join(container_alerts[:5]))
             if res.method == "chunked-raw":
                 res.notes.append(
                     f"scanned as {res.streams} overlapping raw chunk(s); exceeds the ClamAV "

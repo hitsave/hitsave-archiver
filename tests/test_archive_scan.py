@@ -141,3 +141,19 @@ def test_unsafe_member_name_flagged(tmp_path):
 def test_merge_extents_joins_adjacent_pieces_of_one_file():
     ext = [(0, 10, "a"), (10, 20, "a"), (20, 25, "b"), (30, 40, "a")]
     assert cfs.merge_extents(ext) == [(0, 20, "a"), (20, 25, "b"), (30, 40, "a")]
+
+
+def test_container_limit_alert_does_not_override_full_member_pass(tmp_path):
+    class ContainerAlertClamd(FakeClamd):
+        def scan_stream(self, reader, chunk_size=4096):
+            data = b"".join(iter(lambda: reader.read(chunk_size), b""))
+            self.streams.append(data)
+            if data.startswith(b"PK\x03\x04"):  # clamd tries to unpack the truncated container chunk
+                return {"stream": ("FOUND", "Heuristics.Limits.Exceeded.MaxFileSize")}
+            return None
+
+    p = _zip(tmp_path, _payloads())
+    p.write_bytes(p.read_bytes() + b"\0" * 5_000)
+    res = cfs.scan_path(ContainerAlertClamd(), p, "t.zip", **SMALL)
+    assert res.fully_scanned and res.members == 3
+    assert any(n.startswith("container pass alerts") for n in res.notes)
