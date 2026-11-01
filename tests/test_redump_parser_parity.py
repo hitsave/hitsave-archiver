@@ -16,6 +16,10 @@ def _normalize_parser_source(text: str) -> str:
     for line in text.splitlines():
         if line.startswith("#") or "sync-redump-parser" in line.lower():
             continue
+        # The sync script writes its own one-line module docstring ("synced from ..."); skip it.
+        stripped = line.strip()
+        if not lines and stripped.startswith('"""') and stripped.endswith('"""') and len(stripped) > 6:
+            continue
         lines.append(line)
     return "\n".join(lines).strip()
 
