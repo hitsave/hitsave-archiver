@@ -1,0 +1,9 @@
+path: f/hitsave/ledger_backup
+# Daily 02:30 UTC, before the 03:00 Sunday fixity run and the 04:30 prune.
+schedule: "0 30 2 * * *"
+timezone: UTC
+enabled: true
+is_flow: false
+script_path: f/hitsave/ledger_backup
+args:
+  keep: 30

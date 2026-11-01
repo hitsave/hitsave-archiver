@@ -10,7 +10,14 @@ services:
     env_file:
       - config/preservation/generated.env
     volumes:
-      - ledger_data:/var/lib/postgresql/data
+      # Ledger data on a host path (HOST_LEDGER_DATA) so it can be snapshotted and backed up.
+      # create_host_path: false -> if the variable is missing, Postgres fails to start instead of
+      # silently initialising an empty ledger in a fresh directory.
+      - type: bind
+        source: ${HOST_LEDGER_DATA:-./data/ledger}
+        target: /var/lib/postgresql/data
+        bind:
+          create_host_path: false
       - ./schema:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
@@ -102,5 +109,4 @@ services:
         condition: service_healthy
 
 volumes:
-  ledger_data:
   clamav_data:
