@@ -38,7 +38,6 @@ COPY scripts/batch-expand-preservation.py \
     scripts/audit_dump_title_slugs.py \
     scripts/rename_dump_package_slug.py \
     scripts/sync_dump_bag_metadata_from_ledger.py \
-    scripts/purge-wasabi-prefix.py \
     scripts/wasabi_rename.py \
     scripts/relocate_dump_bags_by_sort_letter.py \
     scripts/export-preservation-catalog.py \

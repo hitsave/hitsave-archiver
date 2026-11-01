@@ -256,7 +256,7 @@ def upload_bag_to_prefix(
         raise RuntimeError(
             f"{len(stale)} object(s) under s3://{bucket}/{root} are not part of this bag "
             f"(left from an earlier upload?): {stale[:10]}. Inspect and remove them "
-            "deliberately (e.g. purge-wasabi-prefix.py on this package prefix) before retrying."
+            "deliberately, with operator review, before retrying."
         )
 
     s3_uri = package_storage_s3_uri(bucket, package_storage_prefix)
