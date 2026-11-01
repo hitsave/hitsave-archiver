@@ -24,10 +24,10 @@ echo "=== gdrive redump → processed $(date -Is) execute=$EXECUTE ==="
 
 cd "$GDRIVE"
 if [[ "$EXECUTE" == true ]]; then
-  docker compose run --rm -T --user 1000:1000 gdrive-intake poll --once -v --config-root /config \
+  docker compose run --rm -T --user 1000:1000 intake poll --once -v --config-root /config \
     > "$POLL_JSON"
 else
-  docker compose run --rm -T --user 1000:1000 gdrive-intake poll --once -v --config-root /config \
+  docker compose run --rm -T --user 1000:1000 intake poll --once -v --config-root /config \
     > "$POLL_JSON" || cp -f "$ARCHIVER/../gdrive-redump-poll.json" "$POLL_JSON" 2>/dev/null || true
 fi
 
@@ -50,7 +50,7 @@ docker compose run --rm --no-deps --user 1000:1000 \
   -v "${HITSAVE_PRIVATE_CONFIG}/secrets:/config/secrets:ro" \
   -v "$POLL_JSON:/poll/gdrive-redump-poll.json:ro" \
   --entrypoint python \
-  gdrive-intake \
+  intake \
   "$MOVE_PY" \
   "${ARGS[@]}"
 

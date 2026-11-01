@@ -1,4 +1,4 @@
-"""Parse gdrive-intake poll JSON into normalized inbox rows (sweeps / diagnostics)."""
+"""Parse intake poll JSON into normalized inbox rows (sweeps / diagnostics)."""
 from __future__ import annotations
 
 import re

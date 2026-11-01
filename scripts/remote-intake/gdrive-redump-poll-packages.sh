@@ -8,11 +8,11 @@ ARCHIVER="$(remote_intake_archiver_root)"
 GEN="${HITSAVE_REMOTE_INTAKE_LOG_DIR:-$ARCHIVER/.generated}"
 mkdir -p "$GEN"
 
-# Poll Drive once (Google Drive API via gdrive-intake) and print "folder_id<TAB>ready_slug" lines.
+# Poll Drive once (Google Drive API via intake) and print "folder_id<TAB>ready_slug" lines.
 
 POLL_JSON="${POLL_JSON:-$GEN/gdrive-redump-poll.json}"
 
-remote_intake_compose_gdrive_intake run --rm -T --user 1000:1000 gdrive-intake poll --once -v --config-root /config \
+remote_intake_compose_intake run --rm -T --user 1000:1000 intake poll --once -v --config-root /config \
   > "$POLL_JSON"
 
 python3 - <<'PY' "$POLL_JSON"

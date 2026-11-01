@@ -24,9 +24,9 @@ exec > >(tee -a "$LOG") 2>&1
 echo "=== full Wasabi Redump batch started $(date -Is) skip_build=$SKIP_BUILD ==="
 
 if [[ "$SKIP_BUILD" != true ]]; then
-  echo "=== docker build gdrive-intake $(date -Is) ==="
+  echo "=== docker build intake $(date -Is) ==="
   cd "$GDRIVE"
-  docker compose build gdrive-intake
+  docker compose build intake
 
   echo "=== docker build archiver ingest + omeka-catalog $(date -Is) ==="
   cd "$ARCHIVER"

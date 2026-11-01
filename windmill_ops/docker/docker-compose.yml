@@ -44,11 +44,11 @@ services:
       MODE: worker
       WORKER_GROUP: default
       FAVOR_UNSHARE_PID: "true"
-      HITSAVE_GDRIVE_INTAKE_ROOT: /gdrive-intake
-      HITSAVE_GDRIVE_INTAKE_HOST: ${HITSAVE_GDRIVE_INTAKE_HOST}
+      HITSAVE_INTAKE_ROOT: /intake
+      HITSAVE_INTAKE_HOST: ${HITSAVE_INTAKE_HOST}
       HITSAVE_WINDMILL_POLL_STAGING: "1"
-      HITSAVE_WINDMILL_GDRIVE_INTAKE_STAGING_HOST: /tmp/hitsave-windmill-gdrive-intake
-      HOST_GDRIVE_INTAKE: /tmp/hitsave-windmill-gdrive-intake
+      HITSAVE_WINDMILL_INTAKE_STAGING_HOST: /tmp/hitsave-windmill-intake
+      HOST_INTAKE: /tmp/hitsave-windmill-intake
       HITSAVE_PRIVATE_CONFIG_HOST: ${HITSAVE_PRIVATE_CONFIG_HOST:?set HITSAVE_PRIVATE_CONFIG_HOST in .env}
       ARCHIVER_HOST_PATH: ${ARCHIVER_HOST_PATH:?set ARCHIVER_HOST_PATH in .env}
       # Bash jobs must see worker bind mounts (/archiver, /config/private); not nsjail-only paths.
@@ -58,7 +58,7 @@ services:
       - ${ARCHIVER_HOST_PATH:?set ARCHIVER_HOST_PATH in .env}:/archiver
       # Same path on host inside worker so `docker compose --project-directory $ARCHIVER_HOST_PATH` resolves.
       - ${ARCHIVER_HOST_PATH:?set ARCHIVER_HOST_PATH in .env}:${ARCHIVER_HOST_PATH}:ro
-      - ${HITSAVE_GDRIVE_INTAKE_HOST:?set HITSAVE_GDRIVE_INTAKE_HOST in .env}:/gdrive-intake:ro
+      - ${HITSAVE_INTAKE_HOST:?set HITSAVE_INTAKE_HOST in .env}:/intake:ro
       - ${HITSAVE_PRIVATE_CONFIG_HOST:?set HITSAVE_PRIVATE_CONFIG_HOST in .env}/host.env:/run/hitsave/host.env:ro
       - ./worker-paths.env:/run/hitsave/worker-paths.env:ro
       - ${ARCHIVER_HOST_PATH:?set ARCHIVER_HOST_PATH in .env}/windmill_ops/lib/hitsave-bootstrap.sh:/run/hitsave/hitsave-bootstrap.sh:ro

@@ -1,0 +1,21 @@
+# intake one-offs (poll / process) without cd into hitsave-intake.
+# Invoked from hitsave-archiver root via scripts/remote-intake/common.sh.
+name: hitsave-intake-ops
+
+services:
+  intake:
+    build:
+      context: ${HITSAVE_INTAKE_BUILD_CONTEXT}
+      dockerfile: Dockerfile
+    image: ${INTAKE_IMAGE:-hitsave/intake:local}
+    volumes:
+      # Mount the intake config FILES, not the directory: nesting the private
+      # preservation YAML under a host-backed /config made Docker create empty root-owned
+      # placeholder files in hitsave-intake/config/preservation/ on the host.
+      - ${HITSAVE_INTAKE_CONFIG_DIR}/gdrive.yaml:/config/gdrive.yaml:ro
+      - ${HITSAVE_INTAKE_CONFIG_DIR}/intake.yaml:/config/intake.yaml:ro
+      - ${HITSAVE_INTAKE_SECRETS_DIR}:/secrets:ro
+      - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/preservation/wasabi-redump-intake.yaml:/config/preservation/wasabi-redump-intake.yaml:ro
+      - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/preservation/ingest.yaml:/config/preservation/ingest.yaml:ro
+      - ${HOST_INTAKE:-./data/gdrive-intake}:/data/intake
+      - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/secrets/wasabi-credentials.yaml:/data/intake/.secrets/wasabi-credentials.yaml:ro

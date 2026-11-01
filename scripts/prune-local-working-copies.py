@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Free /tank: delete local working copies of packages whose Wasabi copy is proven good.
 
-Local bags (/output/bag/...) and intake SIPs (gdrive-intake ready/<slug>/) are scratch space,
+Local bags (/output/bag/...) and intake SIPs (intake ready/<slug>/) are scratch space,
 not a backup. Wasabi is the preservation copy (see docs/storage-retention.md). Before any
 deletion, this proves the Wasabi copy equals the ingest-time bytes WITHOUT downloading payload:
 
@@ -286,7 +286,7 @@ def main() -> None:
     ap.add_argument("--kind", help="Only this ingest_kind")
     ap.add_argument("--game-key", action="append", help="Only these packages (repeatable)")
     ap.add_argument("--ready-root", type=Path, default=Path("/data/intake-ready"),
-                    help="Writable mount of gdrive-intake ready/ (ingest-worker's own mount is read-only)")
+                    help="Writable mount of intake ready/ (ingest-worker's own mount is read-only)")
     args = ap.parse_args()
 
     import psycopg

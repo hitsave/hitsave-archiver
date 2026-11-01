@@ -21,7 +21,7 @@ POLL_JSON="$GEN/wasabi-redump-poll.json"
 
 
 
-READY="${HOST_GDRIVE_INTAKE}/ready"
+READY="${HOST_INTAKE}/ready"
 
 exec > >(tee -a "$LOG") 2>&1
 echo "=== Wasabi Redump per-folder pipeline started $(date -Is) ==="
@@ -86,7 +86,7 @@ for pair in "${pairs[@]}"; do
 
   if [[ ! -f "$cfg" ]]; then
     echo "--- stage from Wasabi ${source_prefix:+$source_prefix/}$pkg_name ---"
-    if remote_intake_gdrive_compose run --rm -T --user 1000:1000 gdrive-intake process-wasabi \
+    if remote_intake_gdrive_compose run --rm -T --user 1000:1000 intake process-wasabi \
       --source-prefix "$source_prefix" \
       --package-folder-name "$pkg_name" \
       --config-root /config; then

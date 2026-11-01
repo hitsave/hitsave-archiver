@@ -2,13 +2,13 @@
 
 **Lane overview (all remote ingest types):** [remote-intake-lanes.md](./remote-intake-lanes.md).
 
-Remote contributors upload **community dumps** (Redump, No-Intro, and other org sidecars) to Google Drive or Wasabi incoming; [**hitsave-gdrive-intake**](https://github.com/hitsave/hitsave-gdrive-intake) downloads, **verifies sidecar checksums**, and writes a local **ready** tree. **This repo** runs the preservation pipeline (ClamAV → BagIt → Wasabi `hitsave-dumps` → ledger → Omeka catalog). **Redump** is the reference sidecar implemented today; other org formats follow the same flow as parsers land.
+Remote contributors upload **community dumps** (Redump, No-Intro, and other org sidecars) to Google Drive or Wasabi incoming; [**hitsave-intake**](https://github.com/hitsave/hitsave-intake) downloads, **verifies sidecar checksums**, and writes a local **ready** tree. **This repo** runs the preservation pipeline (ClamAV → BagIt → Wasabi `hitsave-dumps` → ledger → Omeka catalog). **Redump** is the reference sidecar implemented today; other org formats follow the same flow as parsers land.
 
 **Full Drive batch (operator):** [`scripts/remote-intake/run-gdrive-redump-per-folder.sh`](../scripts/remote-intake/run-gdrive-redump-per-folder.sh) (stage → ingest → Omeka per package). Wasabi incoming: `run-wasabi-redump-per-folder.sh` in the same directory.
 
 ## Layout after gdrive `process`
 
-Mount the gdrive **ready** tree into the ingest-worker (default host: `/tank/hitsave-archiver/gdrive-intake/ready` → container `/data/gdrive-intake/ready`; set `HOST_GDRIVE_INTAKE` in `host.env` if different):
+Mount the intake **ready** tree into the ingest-worker (default host: `/tank/hitsave-archiver/gdrive-intake/ready` → container `/data/gdrive-intake/ready`; set `HOST_INTAKE` in `host.env` if different):
 
 ```text
 /data/gdrive-intake/ready/{game_key}/
@@ -18,7 +18,7 @@ Mount the gdrive **ready** tree into the ingest-worker (default host: `/tank/hit
   *.iso / *.bin …
 ```
 
-`game.ingest.yaml` is produced by gdrive-intake with `source_game_folder` pointing at that SIP folder (via `handoff.archiver_source_root` in gdrive `config/intake.yaml`).
+`game.ingest.yaml` is produced by intake with `source_game_folder` pointing at that SIP folder (via `handoff.archiver_source_root` in hitsave-intake `config/intake.yaml`).
 
 ## Ingest one package
 
@@ -43,10 +43,10 @@ docker compose run --rm omeka-catalog \
 
 (Use the per-game register YAML + handoff paths documented in `register-prod-dumps-omeka.sh` / `apply_dump_catalog_omeka.py`.)
 
-## What stays in gdrive-intake only
+## What stays in intake only
 
 - Google Drive API poll and quiescence (`upload_stable_seconds`)
 - Resumable download
 - **MD5/SHA1/Size fixity** against `!submissionInfo.txt` (fail closed before handoff)
 
-No Wasabi credentials are required in the gdrive-intake container.
+No Wasabi credentials are required in the intake container.

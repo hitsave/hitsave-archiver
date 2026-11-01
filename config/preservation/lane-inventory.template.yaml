@@ -6,7 +6,7 @@ schema_version: 1
 # Host env (names only — set values in private host.env)
 host_env:
   HITSAVE_PRIVATE_CONFIG: REPLACE_ME
-  HOST_GDRIVE_INTAKE: REPLACE_ME
+  HOST_INTAKE: REPLACE_ME
   HOST_ANALOG: REPLACE_ME
   HOST_OUTPUT: REPLACE_ME
   HOST_PRESS_MATERIAL: REPLACE_ME
@@ -17,7 +17,7 @@ lanes:
     status: live
     description: >-
       Sidecar-verified dumps reported to community catalogs (Redump, No-Intro, …).
-      Same gdrive-intake → archiver pipeline for all org sidecars.
+      Same intake → archiver pipeline for all org sidecars.
     ingest_kind: dump
     archiver_submission_source_key: gdrive_redump_remote_intake
     container_ready_prefix: /data/gdrive-intake/ready

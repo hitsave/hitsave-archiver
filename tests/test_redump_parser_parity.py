@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Redump parser SSOT: archiver dump_redump matches gdrive-intake when sibling repo is present."""
+"""Redump parser SSOT: archiver dump_redump matches intake when sibling repo is present."""
 from __future__ import annotations
 
 import hashlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-GDRIVE_PARSER = ROOT.parent / "hitsave-gdrive-intake" / "src" / "intake" / "redump" / "submission_info.py"
+GDRIVE_PARSER = ROOT.parent / "hitsave-intake" / "src" / "intake" / "redump" / "submission_info.py"
 ARCHIVER_PARSER = ROOT / "scripts" / "dump_redump.py"
 FIXTURE = ROOT / "fixtures" / "redump-submissionInfo-fwd0307.txt"
 

@@ -31,7 +31,7 @@ def test_drive_match_and_mismatch(tmp_path: Path) -> None:
 
 
 def test_wasabi_prefix_normalised(tmp_path: Path) -> None:
-    # gdrive-intake records "<prefix>/<folder>"; an empty prefix yields "/<folder>".
+    # intake records "<prefix>/<folder>"; an empty prefix yields "/<folder>".
     d = _ready(tmp_path, "redump-fwd0307", {"wasabi_source_prefix": "/FWD0307"})
     assert rs.check_source(d, wasabi_prefix="FWD0307")[0] == rs.MATCH
 
