@@ -178,16 +178,6 @@ def require_external_dip_config(catalog_cfg: dict) -> dict:
     }
 
 
-def require_omeka_mariadb_config(catalog_cfg: dict) -> dict:
-    from config_require import require_dict, require_str
-
-    db = require_dict(catalog_cfg, "omeka_mariadb", where="omeka-catalog.yaml")
-    return {
-        "container": require_str(db, "container", where="omeka-catalog.yaml omeka_mariadb"),
-        "database": require_str(db, "database", where="omeka-catalog.yaml omeka_mariadb"),
-    }
-
-
 def apply_staff_aip_uri_after_register(aip_cfg: dict) -> bool:
     from config_require import require_bool
 

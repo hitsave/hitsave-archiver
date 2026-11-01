@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 import sys
 from pathlib import Path
-from typing import Any
 
 try:
     import requests
@@ -27,7 +25,6 @@ from omeka_staff_metadata import (  # noqa: E402
     load_omeka_catalog_config,
     require_external_dip_config,
     require_omeka_api_config,
-    require_omeka_mariadb_config,
     strip_public_wasabi_bibo_uri,
     strip_wasabi_s3_from_relation,
 )
@@ -84,42 +81,12 @@ def patch_media_external_dip(
     verify_data = (verify.json().get("data") or {}) if verify.ok else {}
     if verify_data.get("package_storage_prefix") == package_storage_prefix:
         return
-
-    merge_media_data_json(media_id, merged)
-
-
-def resolve_omeka_mariadb_container() -> str:
-    catalog_cfg = load_omeka_catalog_config(CONFIG_ROOT)
-    return require_omeka_mariadb_config(catalog_cfg)["container"]
-
-
-def merge_media_data_json(media_id: int, merged: dict[str, Any]) -> None:
-    container = resolve_omeka_mariadb_container()
-    catalog_cfg = load_omeka_catalog_config(CONFIG_ROOT)
-    database = require_omeka_mariadb_config(catalog_cfg)["database"]
-    if not container:
-        raise RuntimeError(
-            "Omeka API did not persist media.data.package_storage_prefix; "
-            "configure omeka-catalog.yaml omeka_mariadb.container and re-run."
-        )
-    patch_json = json.dumps(merged, separators=(",", ":"))
-    sql = (
-        f"UPDATE media SET data = JSON_MERGE_PATCH(COALESCE(data, '{{}}'), "
-        f"'{patch_json.replace(chr(39), chr(39) + chr(39))}') WHERE id = {int(media_id)};"
+    # Never patch Omeka's database behind the API (this used to `docker exec` into a MariaDB
+    # container as root, and the configured container was the local test DB, not production).
+    raise RuntimeError(
+        f"Omeka API did not persist media.data.package_storage_prefix on media {media_id} "
+        f"(expected {package_storage_prefix!r}); fix the Omeka module/API, then re-run."
     )
-    cmd = [
-        "docker",
-        "exec",
-        container,
-        "sh",
-        "-c",
-        f'mariadb -uroot -p"$MARIADB_ROOT_PASSWORD" {database} -e {json.dumps(sql)}',
-    ]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-    if proc.returncode != 0:
-        raise RuntimeError(
-            f"MariaDB media.data merge failed ({proc.returncode}): {proc.stderr[:800]}"
-        )
 
 
 def ledger_omeka_moby_row(

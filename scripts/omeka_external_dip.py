@@ -45,7 +45,6 @@ def attach_external_dip_media(
     package_storage_prefix: str = "",
     dip_storage: str,
     api_url: Callable[[str, str, dict], str],
-    merge_media_data_json: Callable[[int, dict[str, Any]], None] | None = None,
 ) -> int:
     """POST omeka_dip_package media row (Wasabi prefix only; no Omeka stored file)."""
     data: dict[str, Any] = {
@@ -78,8 +77,19 @@ def attach_external_dip_media(
     media_id = int(body["o:id"])
     response_data = body.get("data") if isinstance(body.get("data"), dict) else {}
     ok = str(response_data.get("package_storage_prefix") or "") == package_storage_prefix
-    if not ok and merge_media_data_json:
-        merge_media_data_json(media_id, data)
+    if not ok:
+        check = session.get(
+            api_url(base, f"media/{media_id}", creds),
+            headers={"Accept": "application/ld+json"},
+            timeout=120,
+        )
+        stored = (check.json().get("data") or {}) if check.ok else {}
+        if str(stored.get("package_storage_prefix") or "") != package_storage_prefix:
+            # Never patch Omeka's database behind the API; surface it for an operator instead.
+            raise RuntimeError(
+                f"Omeka API did not persist media.data.package_storage_prefix on media {media_id} "
+                f"(expected {package_storage_prefix!r})"
+            )
     return media_id
 
 
