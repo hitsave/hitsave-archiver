@@ -62,7 +62,6 @@ services:
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/preservation/database.yaml:/config/preservation/database.yaml:ro
       - ${HOST_OUTPUT:-./data/output}:/output:ro
       - ${HOST_GDRIVE_INTAKE:-./data/gdrive-intake}/ready:/data/gdrive-intake/ready:ro
-      - /var/run/docker.sock:/var/run/docker.sock
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

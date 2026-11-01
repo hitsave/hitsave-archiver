@@ -144,7 +144,6 @@ def attach_dump_dip(game_key: str) -> dict:
             package_storage_prefix=package_storage_prefix,
             dip_storage=str(external_dip["dip_storage"]),
             api_url=api.api_url,
-            merge_media_data_json=ext.merge_media_data_json,
         )
         action = "attached"
 

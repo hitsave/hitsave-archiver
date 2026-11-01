@@ -557,7 +557,6 @@ def main() -> None:
         )
 
     ext_dip = _external_dip_helpers()
-    merge_media_data_json = ext_dip.merge_media_data_json
 
     try:
         assert_bagit_external_dip_available(
@@ -587,7 +586,6 @@ def main() -> None:
             package_bytes=total_bytes,
             sha256="",
             api_url=api_url,
-            merge_media_data_json=merge_media_data_json,
         )
     else:
         item_id = None
@@ -618,7 +616,6 @@ def main() -> None:
                 package_bytes=total_bytes,
                 sha256="",
                 api_url=api_url,
-                merge_media_data_json=merge_media_data_json,
             )
         except Exception:
             if item_id is not None:
