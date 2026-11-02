@@ -75,19 +75,30 @@ for pair in "${pairs[@]}"; do
     register_omeka "$slug"
     continue
   fi
+  if [[ "$status" == "quarantine" ]]; then
+    # Virus or content-policy hit, or a manual quarantine: never re-ingest automatically.
+    echo "SKIP (ledger quarantine; see status-web Health): $slug"
+    continue
+  fi
 
   echo ""
   echo "=== package $slug ($game_key) ledger=${status:-none} $(date -Is) ==="
 
   if [[ ! -f "$cfg" ]]; then
     echo "--- stage from Drive (Redump MD5/SHA1 fixity before ready/) $fid ---"
-    if remote_intake_gdrive_compose run --rm -T --user 1000:1000 intake process \
+    # intake waits until every file is unchanged for upload_stable_seconds and skips packages
+    # unchanged since they last failed; both exit 3 ("not ready yet"), which is not a failure.
+    rc=0
+    remote_intake_gdrive_compose run --rm -T --user 1000:1000 intake process \
       --folder-id "$fid" \
-      --config-root /config \
-      --skip-stable-check; then
+      --config-root /config || rc=$?
+    if [[ $rc -eq 0 ]]; then
       echo "--- staged $slug ---"
+    elif [[ $rc -eq 3 ]]; then
+      echo "--- not ready yet: $slug (see reason above) ---"
+      continue
     else
-      echo "--- FAILED stage $slug (skip ingest) ---"
+      echo "--- FAILED stage $slug (skip ingest; details in intake failed/$slug/error.txt) ---"
       continue
     fi
     cfg="$READY/$slug/game.ingest.yaml"

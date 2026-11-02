@@ -27,18 +27,21 @@ package it:
 6. **Creates a catalog item** on [archive.hitsave.org](https://archive.hitsave.org). The item starts
    **private**, so only staff can see it until you publish it.
 
-A typical DVD dump goes from upload to a private catalog item in under two hours.
+The system waits until a package has been **unchanged for one hour** before starting, so it never
+picks up a half-finished upload. A typical DVD dump goes from the end of its upload to a private
+catalog item in about two hours.
 
 ## Add a dump from Google Drive
+
+Use Drive for **disc dumps** (Redump). The Drive inbox only picks up folders that contain a disc
+image (`.iso`, `.bin`, `.img`, `.chd` or `.gdi`); add cartridge dumps (No-Intro) through Wasabi.
 
 1. Open the shared Drive inbox folder (usually named `redump`).
 2. Create **one folder per disc**, named after the disc. For example:
    `Famitsu Wave DVD 2008-12 Disc 2`.
 3. Put everything for that disc in the folder:
    - the disc image files, such as `.iso`, or `.bin` and `.cue`
-   - the sidecar file with the checksums:
-     - Redump: `!submissionInfo.txt` or `submissionInfo.txt`
-     - No-Intro: `dumpinfo.txt` or `!dumpinfo.txt`
+   - the Redump sidecar file with the checksums: `!submissionInfo.txt` or `submissionInfo.txt`
    - anything else you want kept with the dump, such as dumping logs. The system preserves every file in the folder.
 4. Leave the folder alone. The system starts on a folder only after **every file in it has been
    unchanged for one hour**, so a slow upload is safe.
@@ -51,15 +54,13 @@ moved too early is never ingested.
 1. In the Wasabi console, open the `hitsave-incoming` bucket.
 2. Find the inbox prefix for your collection, for example `Famitsu Wave/`. Ask an admin to set up a
    new prefix if your material doesn't fit an existing one.
-3. **Upload the complete package to a temporary folder outside the inbox prefix first**, for
-   example `uploads/FWD0812-2/`.
-4. When the upload has finished, move that folder into the inbox prefix: `Famitsu Wave/FWD0812-2/`.
-
-Use the same folder contents as for Drive: one folder per disc, with the images and the sidecar.
-
-Why the extra step: unlike Drive, the Wasabi inbox doesn't wait for uploads to settle. A package
-that's still uploading fails the checksum check. The system retries it every 30 minutes, so it does
-go through once complete, but each retry downloads the whole package again.
+3. Upload **one folder per dump** into the prefix, for example `Famitsu Wave/FWD0812-2/`, with:
+   - the image files (disc images, or ROM files for a cartridge dump)
+   - the sidecar file with the checksums:
+     - Redump: `!submissionInfo.txt` or `submissionInfo.txt`
+     - No-Intro: `dumpinfo.txt` or `!dumpinfo.txt`
+4. Leave the folder alone. As with Drive, the system waits until nothing in the folder has changed
+   for one hour.
 
 ## Check progress in the ledger
 
@@ -72,19 +73,24 @@ Open status-web. The **Ledger** page lists every package, newest first.
 |---|---|---|
 | `registered`, `scanning`, `building_bagit`, `uploading_package` | Still being processed | Wait |
 | `complete` | Safely on Wasabi and in the ledger | Check the catalog item (below) |
-| `quarantine` | Stopped on purpose: the content policy flagged it, or someone quarantined it. The **Error** column says why. | Read the reason; ask an admin if it looks wrong |
-| `failed` | Processing stopped. The **Error** column says why, for example `Virus detected in …` or an upload problem. | Tell an admin |
+| `quarantine` | Stopped on purpose: a virus was found (`Virus detected in …`), the content policy flagged it, or someone quarantined it. The **Error** column says why. Nothing was uploaded. | Read the reason; tell an admin about a virus straight away |
+| `failed` | Processing stopped because something went wrong, for example an upload problem. The **Error** column says why. | Tell an admin |
 
 3. When the status is `complete`, the **Omeka** column links to the catalog item. Open it and check
    the title and description.
 
-The **Health** page lists everything that needs attention: quarantined or failed packages, packages
-with an error, and completed packages without a catalog item. If it lists nothing, nothing needs
-you.
+The **Health** page lists everything that needs attention:
 
-**If your package doesn't appear in the ledger within a few hours**, it probably failed the checksum
-check. The sidecar doesn't match the files, or the upload was incomplete. Those packages never reach
-the ledger. Ask an admin to look in intake's `failed/` folder, which records the exact error.
+- **Attention queue**: quarantined or failed packages, packages with an error, and completed
+  packages without a catalog item.
+- **Intake failures**: packages that never reached the ledger because a file didn't match the
+  checksums in the sidecar. The **Reason** column names the file and the mismatch.
+
+If both lists are empty, nothing needs you.
+
+**To fix an intake failure**, correct the package in the inbox: re-upload the damaged file, or
+replace a wrong sidecar. The system notices the change and tries again on its own; it doesn't
+retry a package that hasn't changed.
 
 The **Windmill runs** page shows the background jobs and whether each one succeeded: the inbox
 sweep, the nightly backup, the fixity check and the cleanup.
@@ -164,9 +170,9 @@ The package id is the title in lowercase with dashes, plus a unique code, for ex
 
 | Check | What it catches | If it fails |
 |---|---|---|
-| **Drive upload settled** (1 hour unchanged) | Uploads still in progress | Waits, then tries again |
-| **Sidecar checksums** (size, MD5, SHA-1, CRC32) | Corrupt or incomplete downloads, wrong sidecar | Package goes to intake's `failed/`; never reaches the ledger |
-| **Virus scan** (ClamAV, every byte of every file) | Known malware | Ledger status `failed` with `Virus detected in …`; nothing uploaded |
+| **Upload settled** (1 hour unchanged, Drive and Wasabi) | Uploads still in progress | Waits, then tries again |
+| **Sidecar checksums** (size, MD5, SHA-1, CRC32) | Corrupt or incomplete files, wrong sidecar | Listed under **Intake failures** on the Health page; never reaches the ledger. Retried once the package changes. |
+| **Virus scan** (ClamAV, every byte of every file) | Known malware | Ledger status `quarantine` (`virus_detected`); nothing uploaded |
 | **Content policy** | Booru-style or hash-named image files | Ledger status `quarantine`; nothing uploaded |
 | **Bag validation** | Missing or changed files while packaging | Ledger status `failed` |
 | **Upload check** (size and checksum of every file on Wasabi) | Damaged uploads | Ledger status `failed`; retried on the next run |

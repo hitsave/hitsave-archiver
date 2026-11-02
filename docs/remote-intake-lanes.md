@@ -133,7 +133,7 @@ Fill in Drive folder IDs, Wasabi incoming bucket/prefixes, and host env variable
 ### Community dumps — Redump, No-Intro, … (live)
 
 1. **Configure** — `hitsave-archiver-config/intake/gdrive.yaml`, `intake/intake.yaml` (dump profile / sidecar names); archiver `submission-sources` for the ready-tree prefix; private `preservation/wasabi-redump-intake.yaml` for Wasabi drop zones ([example](../config/preservation/wasabi-redump-intake.yaml.example), [intake README](https://github.com/hitsave/hitsave-intake)).
-2. **Automatic** — the Windmill `remote_intake_sweep` (every 30 min) runs steps 3–5 for every package in both inboxes. Drive packages are picked up once every file has been unchanged for 1 hour; Wasabi packages as soon as they appear under an inbox prefix.
+2. **Automatic** — the Windmill `remote_intake_sweep` (every 30 min) runs steps 3–5 for every package in both inboxes. Both lanes pick up a package once every file has been unchanged for 1 hour, and don't re-try a package that hasn't changed since it failed. Quarantined packages are skipped.
 3. **Stage** — `intake poll --once` / `process --folder-id …`, or `poll-wasabi` / `process-wasabi …` (sidecar verify before promote to `ready/`).
 4. **Ingest** — `docker compose run --rm ingest-worker /data/intake/ready/<slug>/game.ingest.yaml`
 5. **Catalog** — `scripts/remote-intake/register-dump-omeka.sh` or `register-prod-dumps-omeka.sh` ([intake-handoff.md](./intake-handoff.md)). Items start private.
@@ -171,7 +171,7 @@ Use after stage + ingest; repeat after code or config changes.
 | 1. Stage | Intake `ready/` tree | Handoff YAML present; package not in `failed/` |
 | 2. Sidecar | Community dumps only | Checksums/size match sidecar before archiver (intake verify) |
 | 3. Provenance | Submission source | Ingest registers ledger row (no “no submission-sources match”) |
-| 4. Scan | ClamAV | Ledger not `quarantine` / virus error |
+| 4. Scan | ClamAV | Ledger not `quarantine` (a virus hit quarantines with `block_reason = virus_detected`) |
 | 5. BagIt | Local output | Ledger `complete`; bag under `/output/bag/…` |
 | 6. Preservation Wasabi | Upload | `package_storage_prefix` set; objects in correct **preservation** bucket ([preservation-wasabi.md](./preservation-wasabi.md)) |
 | 7. Omeka | Catalog | `omeka_item_id` set when lane requires public catalog |

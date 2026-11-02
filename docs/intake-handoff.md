@@ -63,6 +63,8 @@ stage the same package at once ([scripts/remote-intake/README.md](../scripts/rem
 
 ## What stays in intake only
 
-- Google Drive and Wasabi API polling. Drive also waits until every file has been unchanged for `upload_stable_seconds` (1 hour); Wasabi has no such wait.
+- Google Drive and Wasabi API polling. Both lanes wait until every file has been unchanged for `upload_stable_seconds` (1 hour), and skip a package that hasn't changed since it last failed. Both cases exit 3 ("not ready yet"), which the sweep logs but doesn't count as a failure.
 - Resumable download.
-- **MD5 / SHA-1 / size** checks against the sidecar. A mismatch sends the package to `failed/`, and archiver never sees it.
+- **MD5 / SHA-1 / size** checks against the sidecar. A mismatch sends the package to `failed/<slug>/` with `error.txt`, and archiver never sees it. status-web's Health page lists open intake failures (it mounts `failed/` read-only). A later successful stage removes the entry.
+
+A package whose ledger status is `quarantine` (virus, content policy or manual) is skipped by the sweep; it is never re-ingested automatically.

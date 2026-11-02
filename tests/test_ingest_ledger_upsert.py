@@ -19,7 +19,7 @@ COLUMNS = (
     "game_key, source_path, status, dip_path, aip_bag_path, package_uuid, file_count, total_bytes, "
     "checksum_manifest_path, error_message, package_format, submission_source_id, inventory_json, "
     "sip_fingerprint, package_id, title_slug, sort_letter, ingest_kind, storage_layout, "
-    "package_storage_prefix, dump_class, dump_system, dump_category, updated_at"
+    "package_storage_prefix, dump_class, dump_system, dump_category, block_reason, updated_at"
 )
 
 
@@ -145,3 +145,21 @@ def test_moby_cannot_block_or_change_ingest_status():
     assert "sys.exit(2)" not in moby_src
     assert "status = COALESCE" not in moby_src  # Moby never writes game_ingest.status
     assert "moby_enrich_game.py" not in inspect.getsource(ingest_folder.run_bagit_ingest)
+
+
+def test_quarantine_records_block_reason_and_later_writes_keep_it():
+    conn = SqliteConn()
+    ingest_folder.upsert_ledger(conn, game_key="pkg-1", source_path="/src/pkg", status="scanning")
+    ingest_folder.upsert_ledger(
+        conn,
+        game_key="pkg-1",
+        source_path="/src/pkg",
+        status="quarantine",
+        error_message="Virus detected in /src/pkg/eicar.com: Eicar-Test-Signature",
+        block_reason="virus_detected",
+    )
+    row = conn.row("pkg-1")
+    assert row["status"] == "quarantine" and row["block_reason"] == "virus_detected"
+    ingest_folder.upsert_ledger(conn, game_key="pkg-1", source_path="/src/pkg", status="quarantine",
+                                error_message="again")
+    assert conn.row("pkg-1")["block_reason"] == "virus_detected"
