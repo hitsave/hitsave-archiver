@@ -181,8 +181,12 @@ remote_intake_archiver_compose() {
   HITSAVE_PRIVATE_CONFIG="$priv" docker compose --project-directory "$dir" -f "$compose_file" "$@"
 }
 
+# The compose FILE is read by this process (inside the Windmill worker that is /intake, the
+# visible mount); --project-directory is the HOST path so relative bind sources resolve on the
+# daemon side. Without -f, Compose looked for a file at the host path, which the worker can't see.
 remote_intake_gdrive_compose() {
-  docker compose --project-directory "$(remote_intake_gdrive_docker_host_root)" "$@"
+  docker compose -f "$(remote_intake_gdrive_root)/docker-compose.yml" \
+    --project-directory "$(remote_intake_gdrive_docker_host_root)" "$@"
 }
 
 remote_intake_load_host_env() {
