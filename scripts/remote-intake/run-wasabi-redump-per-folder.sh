@@ -11,7 +11,8 @@ BUNDLE="$(remote_intake_bundle_root)"
 GEN="${HITSAVE_REMOTE_INTAKE_LOG_DIR:-$ARCHIVER/.generated}"
 mkdir -p "$GEN"
 
-# For each Redump package on Wasabi incoming: stage → ingest → prod Omeka when ledger complete.
+# For each package in the Wasabi incoming lanes (redump/, no-intro/, others/): stage → ingest →
+# prod Omeka, then move it to processed/{lane}/ once the ledger says complete.
 BUNDLE="$(remote_intake_bundle_root)"
 
 
@@ -53,8 +54,30 @@ register_omeka() {
   fi
 }
 
+# Incoming bucket name, as intake saw it (the worker can't read the private intake config).
+INCOMING_BUCKET="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('bucket') or '')" "$POLL_JSON" 2>/dev/null || true)"
+
+# Ledger complete: register in Omeka, then move the inbox copy to processed/{lane}/ (Wasabi MOVE,
+# verified). Omeka retries work from the ledger, so a failed registration doesn't block the move.
+finish_complete() {
+  local slug="$1" lane="$2" src="$3" name="$4"
+  register_omeka "$slug"
+  if [[ -z "$INCOMING_BUCKET" ]]; then
+    echo "WARN: incoming bucket unknown; not moving $name to processed/"
+    return
+  fi
+  if remote_intake_archiver_compose run --rm -T --no-deps \
+    -v "$(remote_intake_archiver_compose_dir)/scripts:/app/scripts:ro" \
+    --entrypoint python ingest-worker /app/scripts/remote-intake/move_wasabi_package_to_processed.py \
+    --bucket "$INCOMING_BUCKET" --source-prefix "$src" --package-folder-name "$name" --lane "$lane"; then
+    echo "--- moved to processed/$lane/: $name ---"
+  else
+    echo "WARN: move to processed/$lane/ failed for $name (stays in the inbox; retried next sweep)"
+  fi
+}
+
 for pair in "${pairs[@]}"; do
-  IFS=$'\t' read -r source_prefix pkg_name slug <<< "$pair"
+  IFS=$'\t' read -r source_prefix lane pkg_name slug <<< "$pair"
   if [[ "$source_prefix" == "." ]]; then
     source_prefix=""
   fi
@@ -77,7 +100,7 @@ for pair in "${pairs[@]}"; do
   status="$(ledger_status_for_slug "$slug")"
   if [[ "$status" == "complete" ]]; then
     echo "SKIP ingest (ledger complete): $slug"
-    register_omeka "$slug"
+    finish_complete "$slug" "$lane" "$source_prefix" "$pkg_name"
     continue
   fi
   if [[ "$status" == "quarantine" ]]; then
@@ -96,6 +119,7 @@ for pair in "${pairs[@]}"; do
     remote_intake_gdrive_compose run --rm -T --user 1000:1000 intake process-wasabi \
       --source-prefix "$source_prefix" \
       --package-folder-name "$pkg_name" \
+      --lane "$lane" \
       --config-root /config || rc=$?
     if [[ $rc -eq 0 ]]; then
       echo "--- staged $slug ---"
@@ -114,7 +138,7 @@ for pair in "${pairs[@]}"; do
     status="$(ledger_status_for_slug "$slug")"
     if [[ "$status" == "complete" ]]; then
       echo "SKIP ledger complete after stage: $slug"
-      register_omeka "$slug"
+      finish_complete "$slug" "$lane" "$source_prefix" "$pkg_name"
       continue
     fi
   else
@@ -124,7 +148,11 @@ for pair in "${pairs[@]}"; do
   echo "--- ingest (BagIt + Wasabi preservation) $slug ---"
   if remote_intake_archiver_compose run --rm -T ingest-worker "/data/intake/ready/$slug/game.ingest.yaml"; then
     echo "=== done ingest $slug $(date -Is) ==="
-    register_omeka "$slug"
+    if [[ "$(ledger_status_for_slug "$slug")" == "complete" ]]; then
+      finish_complete "$slug" "$lane" "$source_prefix" "$pkg_name"
+    else
+      register_omeka "$slug"
+    fi
   else
     echo "=== FAILED ingest $slug $(date -Is) ==="
   fi

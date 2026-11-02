@@ -1,15 +1,20 @@
 # Copy to hitsave-archiver-config/preservation/wasabi-redump-intake.yaml
 # Used by hitsave-intake poll-wasabi / process-wasabi (mounted at /config/preservation/…).
-# Do not list processed/ under source_roots — inbox poll roots only.
+#
+# hitsave-incoming has three monitored inboxes; the lane decides the sidecar rules
+# (hitsave-intake intake.lanes): redump/, no-intro/, others/. Finished packages move to
+# processed/{lane}/ (run-wasabi-redump-per-folder.sh). Every other prefix in the bucket is
+# ignored. Never list processed/ here.
 wasabi_redump_intake:
   source:
     bucket: hitsave-incoming
   source_roots:
-    - prefix: ""
-      top_level_name_prefixes:
-        - "Famitsu Wave DVD "
-    - prefix: FamitsuWaveDVD
-    - prefix: incoming/redump
+    - prefix: redump
+      lane: redump
+    - prefix: no-intro
+      lane: no-intro
+    - prefix: others
+      lane: others
   credentials_file: /secrets/wasabi-credentials.yaml
   ingest_config_file: /config/preservation/ingest.yaml
   intake_config_file: /config/intake.yaml

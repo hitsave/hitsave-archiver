@@ -52,8 +52,22 @@ register_omeka() {
   fi
 }
 
+# Ledger complete: register in Omeka, then move the Drive folder to processed/{lane}/ (intake owns
+# the Drive credentials). Omeka retries work from the ledger, so a failed registration doesn't
+# block the move.
+finish_complete() {
+  local slug="$1" lane="$2" fid="$3"
+  register_omeka "$slug"
+  if remote_intake_gdrive_compose run --rm -T --user 1000:1000 intake move-to-processed \
+    --folder-id "$fid" --lane "$lane" --config-root /config; then
+    echo "--- moved to processed/$lane/: $slug ---"
+  else
+    echo "WARN: move to processed/$lane/ failed for $slug (stays in the inbox; retried next sweep)"
+  fi
+}
+
 for pair in "${pairs[@]}"; do
-  IFS=$'\t' read -r fid slug <<< "$pair"
+  IFS=$'\t' read -r fid lane slug <<< "$pair"
   if [[ -z "$fid" || -z "$slug" ]]; then
     echo "WARN: skip malformed poll line: $pair"
     continue
@@ -72,7 +86,7 @@ for pair in "${pairs[@]}"; do
   status="$(ledger_status_for_slug "$slug")"
   if [[ "$status" == "complete" ]]; then
     echo "SKIP ingest (ledger complete): $slug"
-    register_omeka "$slug"
+    finish_complete "$slug" "$lane" "$fid"
     continue
   fi
   if [[ "$status" == "quarantine" ]]; then
@@ -91,6 +105,7 @@ for pair in "${pairs[@]}"; do
     rc=0
     remote_intake_gdrive_compose run --rm -T --user 1000:1000 intake process \
       --folder-id "$fid" \
+      --lane "$lane" \
       --config-root /config || rc=$?
     if [[ $rc -eq 0 ]]; then
       echo "--- staged $slug ---"
@@ -109,7 +124,7 @@ for pair in "${pairs[@]}"; do
     status="$(ledger_status_for_slug "$slug")"
     if [[ "$status" == "complete" ]]; then
       echo "SKIP ledger complete after stage: $slug"
-      register_omeka "$slug"
+      finish_complete "$slug" "$lane" "$fid"
       continue
     fi
   else
@@ -119,7 +134,11 @@ for pair in "${pairs[@]}"; do
   echo "--- ingest (BagIt manifest + Wasabi; separate from Drive fixity) $slug ---"
   if remote_intake_archiver_compose run --rm -T ingest-worker "/data/intake/ready/$slug/game.ingest.yaml"; then
     echo "=== done ingest $slug $(date -Is) ==="
-    register_omeka "$slug"
+    if [[ "$(ledger_status_for_slug "$slug")" == "complete" ]]; then
+      finish_complete "$slug" "$lane" "$fid"
+    else
+      register_omeka "$slug"
+    fi
   else
     echo "=== FAILED ingest $slug $(date -Is) ==="
   fi

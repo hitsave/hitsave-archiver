@@ -8,7 +8,7 @@ ARCHIVER="$(remote_intake_archiver_root)"
 GEN="${HITSAVE_REMOTE_INTAKE_LOG_DIR:-$ARCHIVER/.generated}"
 mkdir -p "$GEN"
 
-# Poll Wasabi once (S3 API via intake); print "source_prefix<TAB>package_folder_name<TAB>ready_slug".
+# Poll Wasabi once (S3 API via intake); print "source_prefix<TAB>lane<TAB>package_folder_name<TAB>ready_slug".
 
 POLL_JSON="${POLL_JSON:-$GEN/wasabi-redump-poll.json}"
 
@@ -22,8 +22,9 @@ for pkg in data.get("packages") or []:
     src = (pkg.get("source_prefix") or "").strip()
     if not src:
         src = "."
+    lane = pkg.get("lane") or "redump"
     name = pkg.get("package_folder_name") or ""
     slug = pkg.get("ready_slug") or ""
     if name and slug:
-        print(f"{src}\t{name}\t{slug}")
+        print(f"{src}\t{lane}\t{name}\t{slug}")
 PY

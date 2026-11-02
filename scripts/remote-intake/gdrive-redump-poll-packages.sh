@@ -17,28 +17,17 @@ remote_intake_compose_intake run --rm -T --user 1000:1000 intake poll --once -v 
 
 python3 - <<'PY' "$POLL_JSON"
 import json, re, sys
-
-DISC_SUFFIXES = (".iso", ".bin", ".img", ".chd", ".gdi")
-
-
-def has_disc_image(pkg: dict) -> bool:
-    for f in pkg.get("files") or []:
-        n = str(f.get("name") or "").lower()
-        if any(n.endswith(s) for s in DISC_SUFFIXES):
-            return True
-    return False
-
-
+# Lane -> slug prefix (same as hitsave-intake intake.lanes). The lane folder decides the sidecar
+# rules, so there's no disc-image filter here any more.
+PREFIX = {"redump": "redump", "no-intro": "nointro", "others": "others"}
 data = json.load(open(sys.argv[1], encoding="utf-8"))
-prefix = "redump"
 for pkg in data.get("packages") or []:
     fid = pkg.get("id")
     name = pkg.get("name") or ""
-    if not fid or name in ("processed",):
-        continue
-    if not has_disc_image(pkg):
-        print(f"SKIP (Drive folder has no disc image; use Wasabi if duplicate): {name}", file=sys.stderr)
+    lane = pkg.get("lane") or "redump"
+    if not fid or name.strip().lower() == "processed" or lane not in PREFIX:
         continue
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", name.strip()).strip("-").lower()
-    print(f"{fid}\t{prefix}-{slug}")
+    slug = slug or "disc"
+    print(f"{fid}\t{lane}\t{PREFIX[lane]}-{slug}")
 PY

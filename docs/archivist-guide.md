@@ -18,8 +18,8 @@ address behind a Pocket ID login.
 You put a package in an inbox. Every 30 minutes the system checks the inboxes, and for each new
 package it:
 
-1. **Downloads and verifies it.** Every file is checked against the checksums in the package's
-   sidecar file. If any file doesn't match, the package stops here.
+1. **Downloads and verifies it.** In `redump/` and `no-intro/`, every file is checked against the
+   checksums in the package's sidecar file; if any file doesn't match, the package stops here.
 2. **Scans it for viruses** with ClamAV, and checks it against the content policy.
 3. **Packages it as a bag**: a standard archival folder (BagIt) that lists a checksum for every file.
 4. **Uploads the bag to Wasabi**, the permanent copy, and checks every uploaded file.
@@ -31,36 +31,53 @@ The system waits until a package has been **unchanged for one hour** before star
 picks up a half-finished upload. A typical DVD dump goes from the end of its upload to a private
 catalog item in about two hours.
 
+## Pick the right folder
+
+Google Drive and the Wasabi `hitsave-incoming` bucket have the same three inbox folders. The folder
+you use decides what the system checks:
+
+| Folder | For | Needs |
+|---|---|---|
+| `redump/` | Disc dumps made for [Redump](https://redump.info) | the Redump sidecar `!submissionInfo.txt` (or `submissionInfo.txt`) |
+| `no-intro/` | Cartridge dumps made for No-Intro, including Nintendo Switch carts | `dumpinfo.txt` (or `!dumpinfo.txt`), or for a Switch cart the `… Submission.xml` from the dumping tool |
+| `others/` | Anything without a sidecar | nothing |
+
+In `redump/` and `no-intro/` every file is checked against the sidecar's checksums before anything
+is preserved. `others/` has no sidecar to check against, so its files are preserved exactly as
+uploaded (still virus-scanned, packaged with a checksum per file, and fixity-checked later).
+
+If a dump is in the wrong folder, for example a No-Intro dump in `redump/`, it isn't ingested. It
+shows up under **Intake failures** with a hint such as "this looks like a No-Intro dump: move it to
+no-intro/". Move it to the right folder and the next sweep picks it up.
+
 ## Add a dump from Google Drive
 
-Use Drive for **disc dumps** (Redump). The Drive inbox only picks up folders that contain a disc
-image (`.iso`, `.bin`, `.img`, `.chd` or `.gdi`); add cartridge dumps (No-Intro) through Wasabi.
-
-1. Open the shared Drive inbox folder (usually named `redump`).
-2. Create **one folder per disc**, named after the disc. For example:
-   `Famitsu Wave DVD 2008-12 Disc 2`.
-3. Put everything for that disc in the folder:
-   - the disc image files, such as `.iso`, or `.bin` and `.cue`
-   - the Redump sidecar file with the checksums: `!submissionInfo.txt` or `submissionInfo.txt`
-   - anything else you want kept with the dump, such as dumping logs. The system preserves every file in the folder.
+1. Open the shared drive and the right inbox folder: `redump`, `no-intro` or `others`.
+2. Create **one folder per dump**, named after it. For example: `Famitsu Wave DVD 2008-12 Disc 2`.
+3. Put everything for that dump in the folder:
+   - the image files: disc images such as `.iso` or `.bin` and `.cue`, or ROM / cart files
+   - the sidecar for that folder (see the table above; none for `others`)
+   - anything else you want kept with it, such as scans or dumping logs. The system preserves
+     every file in the folder.
 4. Leave the folder alone. The system starts on a folder only after **every file in it has been
    unchanged for one hour**, so a slow upload is safe.
-
-Don't move the folder to `processed` yourself. An admin moves finished packages there. A folder
-moved too early is never ingested.
 
 ## Add a dump from Wasabi
 
 1. In the Wasabi console, open the `hitsave-incoming` bucket.
-2. Find the inbox prefix for your collection, for example `Famitsu Wave/`. Ask an admin to set up a
-   new prefix if your material doesn't fit an existing one.
-3. Upload **one folder per dump** into the prefix, for example `Famitsu Wave/FWD0812-2/`, with:
-   - the image files (disc images, or ROM files for a cartridge dump)
-   - the sidecar file with the checksums:
-     - Redump: `!submissionInfo.txt` or `submissionInfo.txt`
-     - No-Intro: `dumpinfo.txt` or `!dumpinfo.txt`
+2. Open the right inbox prefix: `redump/`, `no-intro/` or `others/`. Only these three are watched;
+   anything uploaded elsewhere in the bucket is ignored.
+3. Upload **one folder per dump** into it, for example `no-intro/Aka 1.0.6/`, with the same
+   contents as for Drive.
 4. Leave the folder alone. As with Drive, the system waits until nothing in the folder has changed
    for one hour.
+
+## What happens to the inbox copy
+
+Once a dump is preserved (ledger status `complete`), the system moves its folder to
+`processed/redump/`, `processed/no-intro/` or `processed/others/`, on the same surface it came from.
+An empty inbox therefore means everything in it has been handled. Don't move folders into
+`processed/` yourself: a folder moved there before it's preserved is never ingested.
 
 ## Check progress in the ledger
 
@@ -94,7 +111,8 @@ Below the counts it lists everything that needs attention:
 - **Attention queue**: quarantined or failed packages, packages with an error, and completed
   packages without a catalog item.
 - **Intake failures**: packages that never reached the ledger, for example because a file didn't
-  match the checksums in the sidecar, or the sidecar was missing. The **Reason** column says which.
+  match the checksums in the sidecar, the sidecar was missing, or the dump is in the wrong folder.
+  The **Reason** column says which.
 
 If both lists are empty, nothing needs you.
 
@@ -187,7 +205,7 @@ The package id is the title in lowercase with dashes, plus a unique code, for ex
 | Check | What it catches | If it fails |
 |---|---|---|
 | **Upload settled** (1 hour unchanged, Drive and Wasabi) | Uploads still in progress | Waits, then tries again |
-| **Sidecar checksums** (size, MD5, SHA-1, CRC32) | Corrupt or incomplete files, wrong sidecar | Listed under **Intake failures** on the Health page; never reaches the ledger. Retried once the package changes. |
+| **Sidecar checksums** (size, MD5, SHA-1, CRC32; `redump/` and `no-intro/`) | Corrupt or incomplete files, wrong sidecar | Listed under **Intake failures** on the Health page; never reaches the ledger. Retried once the package changes. |
 | **Virus scan** (ClamAV, every byte of every file) | Known malware | Ledger status `quarantine` (`virus_detected`); nothing uploaded |
 | **Content policy** | Booru-style or hash-named image files | Ledger status `quarantine`; nothing uploaded |
 | **Bag validation** | Missing or changed files while packaging | Ledger status `failed` |
