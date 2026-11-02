@@ -66,9 +66,10 @@ moved too early is never ingested.
 
 Open status-web. The **Ledger** page lists every package, newest first.
 
-1. Type **one word** from the title, or part of the package name **with dashes**, into the search
-   box, then click **Search**. For example `famitsu`, or `famitsu-wave-dvd-2008-12`. The search
-   matches the text exactly as typed, so `famitsu wave dvd 2008` (with spaces) finds nothing.
+1. Type words from the title into the search box, then click **Search**. For example:
+   `famitsu wave dvd 2008-12`. Every word must appear, in any order; capitals, dashes and
+   punctuation don't matter, and the start of a word is enough (`famit` finds `famitsu`). You can
+   also search by Omeka item number, status (`quarantine`) or system (`playstation`).
 
    ![The Ledger page after searching for famitsu-wave-dvd-2008-12: two complete packages, each with admin, site, correct, quarantine, publish and hide actions](images/archivist-guide/ledger-search.png)
 

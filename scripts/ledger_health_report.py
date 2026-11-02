@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import os
 import sys
 from pathlib import Path
@@ -54,35 +55,43 @@ LEDGER_SORT_COLUMNS: dict[str, str] = {
     "updated_at": "updated_at",
 }
 
-SEARCH_WHERE = """
-game_key ILIKE %s
-   OR source_path ILIKE %s
-   OR moby_title ILIKE %s
-   OR status ILIKE %s
-   OR moby_status ILIKE %s
-   OR block_reason ILIKE %s
-   OR error_message ILIKE %s
-   OR ingest_kind ILIKE %s
-   OR aip_wasabi_prefix ILIKE %s
-   OR package_storage_prefix ILIKE %s
-   OR dump_class ILIKE %s
-   OR dump_system ILIKE %s
-   OR dump_category ILIKE %s
-   OR COALESCE(moby_game_id::text, '') ILIKE %s
-   OR COALESCE(omeka_item_id::text, '') ILIKE %s
-   OR COALESCE(omeka_media_id::text, '') ILIKE %s
-"""
-
-SEARCH_SELECT = f"""
+# Word search: every word of the query must start a word somewhere in the row (any field, any order).
+# Both sides are lowercased and punctuation (dashes, slashes, underscores, …) becomes a space, so
+# "Famitsu Wave DVD 2008-12" matches game_key "famitsu-wave-dvd-2008-12-gatsugou-…".
+SEARCH_FIELDS = (
+    "game_key", "source_path", "moby_title", "status", "moby_status", "block_reason",
+    "error_message", "ingest_kind", "aip_wasabi_prefix", "package_storage_prefix", "dump_class",
+    "dump_system", "dump_category", "moby_game_id::text", "omeka_item_id::text", "omeka_media_id::text",
+)
+SEARCH_HAYSTACK = (
+    "(' ' || regexp_replace(lower(concat_ws(' ', " + ", ".join(SEARCH_FIELDS) + ")), "
+    "'[^[:alnum:]]+', ' ', 'g') || ' ')"
+)
+SEARCH_COLUMNS = """
 SELECT game_key, status, ingest_kind, moby_status, block_reason,
        omeka_item_id, omeka_media_id, moby_title, moby_game_id, source_path,
        error_message, aip_wasabi_prefix, package_storage_prefix,
        dump_class, dump_system, dump_category, updated_at
 FROM game_ingest
-WHERE {SEARCH_WHERE.strip()}
 """
 
-SEARCH_COUNT_SQL = f"SELECT COUNT(*)::int FROM game_ingest WHERE {SEARCH_WHERE.strip()}"
+
+def search_terms(query: str) -> list[str]:
+    """Lowercased words of the query, split on anything that isn't a letter or digit."""
+    return [t for t in re.split(r"[\W_]+", (query or "").lower()) if t]
+
+
+def search_where(query: str) -> tuple[str, tuple[str, ...]]:
+    """(SQL condition, binds): every term starts a word of the normalized row text.
+
+    Prefix-of-a-word matching keeps short terms precise ("12" must not match inside a uuid such
+    as 01a1123...), while "famit" still finds "famitsu".
+    """
+    terms = search_terms(query)
+    if not terms:
+        return "TRUE", ()
+    cond = " AND ".join(f"{SEARCH_HAYSTACK} LIKE %s" for _ in terms)
+    return cond, tuple(f"% {t}%" for t in terms)
 LEDGER_COUNT_SQL = "SELECT COUNT(*)::int FROM game_ingest"
 
 ATTENTION_SELECT = """
@@ -177,15 +186,10 @@ def ledger_summary(conn) -> dict[str, Any]:
     }
 
 
-def _search_pattern_binds(query: str) -> tuple[str, tuple[str, ...]]:
-    pat = f"%{query.strip()}%"
-    return pat, (pat,) * 16
-
-
 def ledger_search_count(conn, query: str) -> int:
-    _, binds = _search_pattern_binds(query)
+    cond, binds = search_where(query)
     with conn.cursor() as cur:
-        cur.execute(SEARCH_COUNT_SQL, binds)
+        cur.execute(f"SELECT COUNT(*)::int FROM game_ingest WHERE {cond}", binds)
         return int(cur.fetchone()[0])
 
 
@@ -205,9 +209,9 @@ def ledger_search(
     sort: str | None = None,
     sort_dir: str | None = None,
 ) -> list[dict[str, Any]]:
-    _, binds = _search_pattern_binds(query)
+    cond, binds = search_where(query)
     order = ledger_order_sql(sort or "updated_at", sort_dir or "desc")
-    sql = SEARCH_SELECT.strip() + f"\n{order}\nLIMIT %s OFFSET %s\n"
+    sql = SEARCH_COLUMNS.strip() + f"\nWHERE {cond}\n{order}\nLIMIT %s OFFSET %s\n"
     params = binds + (limit, offset)
     if log:
         print(
@@ -263,7 +267,7 @@ def main(search: str = "", limit: int = 50) -> None:
 
 def cli_main() -> None:
     ap = argparse.ArgumentParser(description="Ledger health summary and optional search.")
-    ap.add_argument("--search", default="", help="ILIKE on game_key, moby_title, source_path")
+    ap.add_argument("--search", default="", help="Words that must all appear in the row (any field, any order)")
     ap.add_argument("--limit", type=int, default=50)
     ap.add_argument("--no-attention", action="store_true")
     ap.add_argument("--format", choices=("yaml", "json"), default="yaml")
