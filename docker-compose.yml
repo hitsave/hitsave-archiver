@@ -93,6 +93,8 @@ services:
       - ./.generated:/archiver/.generated:ro
       # Outside /config so Docker never creates a placeholder config/status-web.yaml on the host.
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/status-web.yaml:/run/hitsave/status-web.yaml:ro
+      # Intake failures (packages rejected before the ledger) for the Health page.
+      - ${HOST_INTAKE:-./data/intake}/failed:/data/intake-failed:ro
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/omeka-catalog.yaml:/config/omeka-catalog.yaml:ro
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/secrets:/config/secrets:ro
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/preservation/database.yaml:/config/preservation/database.yaml:ro

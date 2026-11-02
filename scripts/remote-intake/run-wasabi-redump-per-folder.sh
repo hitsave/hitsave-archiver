@@ -80,19 +80,30 @@ for pair in "${pairs[@]}"; do
     register_omeka "$slug"
     continue
   fi
+  if [[ "$status" == "quarantine" ]]; then
+    # Virus or content-policy hit, or a manual quarantine: never re-ingest automatically.
+    echo "SKIP (ledger quarantine; see status-web Health): $slug"
+    continue
+  fi
 
   echo ""
   echo "=== package $slug ($game_key) ledger=${status:-none} $(date -Is) ==="
 
   if [[ ! -f "$cfg" ]]; then
     echo "--- stage from Wasabi ${source_prefix:+$source_prefix/}$pkg_name ---"
-    if remote_intake_gdrive_compose run --rm -T --user 1000:1000 intake process-wasabi \
+    # Exit 3 = not ready yet (still uploading, or unchanged since it last failed); not a failure.
+    rc=0
+    remote_intake_gdrive_compose run --rm -T --user 1000:1000 intake process-wasabi \
       --source-prefix "$source_prefix" \
       --package-folder-name "$pkg_name" \
-      --config-root /config; then
+      --config-root /config || rc=$?
+    if [[ $rc -eq 0 ]]; then
       echo "--- staged $slug ---"
+    elif [[ $rc -eq 3 ]]; then
+      echo "--- not ready yet: $slug (see reason above) ---"
+      continue
     else
-      echo "--- FAILED stage $slug (skip ingest) ---"
+      echo "--- FAILED stage $slug (skip ingest; details in intake failed/$slug/error.txt) ---"
       continue
     fi
     cfg="$READY/$slug/game.ingest.yaml"

@@ -25,7 +25,12 @@ from preservation_common import (  # noqa: E402
     resolve_game_config,
     wasabi_package_storage_prefix,
 )
-from premis_virus_check import VirusScanReport, attach_virus_check_premis, scan_sip_tree  # noqa: E402
+from premis_virus_check import (  # noqa: E402
+    VirusDetectedError,
+    VirusScanReport,
+    attach_virus_check_premis,
+    scan_sip_tree,
+)
 from source_content_policy import (  # noqa: E402
     ContentPolicyError,
     check_source_content_policy,
@@ -93,6 +98,7 @@ def upsert_ledger(
     dump_class: str | None = None,
     dump_system: str | None = None,
     dump_category: str | None = None,
+    block_reason: str | None = None,
 ) -> None:
     inv_param = json.dumps(inventory_json) if inventory_json is not None else None
     with conn.cursor() as cur:
@@ -104,10 +110,10 @@ def upsert_ledger(
                 package_format, submission_source_id, inventory_json,
                 sip_fingerprint, package_id, title_slug, sort_letter, ingest_kind,
                 storage_layout, package_storage_prefix, dump_class, dump_system, dump_category,
-                updated_at
+                block_reason, updated_at
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
             )
             ON CONFLICT (game_key) DO UPDATE SET
                 source_path = EXCLUDED.source_path,
@@ -138,6 +144,7 @@ def upsert_ledger(
                 dump_class = COALESCE(EXCLUDED.dump_class, game_ingest.dump_class),
                 dump_system = COALESCE(EXCLUDED.dump_system, game_ingest.dump_system),
                 dump_category = COALESCE(EXCLUDED.dump_category, game_ingest.dump_category),
+                block_reason = COALESCE(EXCLUDED.block_reason, game_ingest.block_reason),
                 updated_at = NOW()
             """,
             (
@@ -164,6 +171,7 @@ def upsert_ledger(
                 dump_class,
                 dump_system,
                 dump_category,
+                block_reason,
             ),
         )
     conn.commit()
@@ -577,8 +585,21 @@ def main() -> None:
             source_path=str(source),
             status="quarantine",
             error_message=str(e),
+            block_reason=e.code,
         )
         write_quarantine_details(quarantine_base, exc=e, matches=e.matches)
+        raise
+    except VirusDetectedError as e:
+        # Malware is a deliberate stop, not a processing error: quarantine, never upload.
+        upsert_ledger(
+            conn,
+            game_key=game_key,
+            source_path=str(source),
+            status="quarantine",
+            error_message=str(e),
+            block_reason="virus_detected",
+        )
+        write_quarantine_details(quarantine_base, exc=e, matches=[str(e.path)])
         raise
     except Exception as e:
         upsert_ledger(

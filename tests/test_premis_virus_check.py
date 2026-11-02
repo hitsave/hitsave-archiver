@@ -148,3 +148,28 @@ def test_dotfiles_are_scanned_because_they_go_into_the_bag(tmp_path: Path) -> No
     report = scan_sip_tree(clamd, sip)
     assert report.files_scanned == 3
     assert len(clamd.scanned) == 3
+
+
+class _InfectedClamd(_FakeClamd):
+    def scan_stream(self, reader, chunk_size=4096):
+        data = b"".join(iter(lambda: reader.read(chunk_size), b""))
+        return {"stream": ("FOUND", "Eicar-Test-Signature")} if b"EICAR" in data else None
+
+
+def test_malware_raises_virus_detected_error(tmp_path: Path) -> None:
+    """Ingest quarantines on VirusDetectedError; message and RuntimeError base stay unchanged."""
+    import pytest
+    from premis_virus_check import VirusDetectedError, _interpret_clamd_result
+
+    sip = tmp_path / "sip"
+    sip.mkdir()
+    (sip / "clean.txt").write_bytes(b"fine")
+    (sip / "eicar.com").write_bytes(b"X5O!P%@AP EICAR test")
+    with pytest.raises(VirusDetectedError) as exc:
+        scan_sip_tree(_InfectedClamd(), sip)
+    assert isinstance(exc.value, RuntimeError)
+    assert str(exc.value).startswith(f"Virus detected in {sip / 'eicar.com'}: ")
+    assert "Eicar-Test-Signature" in exc.value.signature
+
+    with pytest.raises(VirusDetectedError, match=r"^Virus detected in .*x\.bin: Win\.Test$"):
+        _interpret_clamd_result(tmp_path / "x.bin", {"x.bin": ("FOUND", "Win.Test")})

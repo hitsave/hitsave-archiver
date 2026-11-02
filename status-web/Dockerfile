@@ -14,6 +14,7 @@ COPY status-web/app.py /app/app.py
 COPY status-web/catalog_correct.py /app/catalog_correct.py
 COPY status-web/catalog_quarantine.py /app/catalog_quarantine.py
 COPY status-web/catalog_visibility.py /app/catalog_visibility.py
+COPY status-web/intake_failures.py /app/intake_failures.py
 COPY status-web/site_ui.py /app/site_ui.py
 COPY status-web/table_sort.py /app/table_sort.py
 COPY status-web/pagination.py /app/pagination.py

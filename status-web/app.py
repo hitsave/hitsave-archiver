@@ -26,6 +26,7 @@ from catalog_quarantine import (
 )
 from catalog_visibility import run_visibility
 from ledger_health import fetch_attention_rows, fetch_health_summary
+from intake_failures import open_failures, render_intake_failures
 
 sys.path.insert(0, str(Path("/app/scripts")))
 from ledger_health_report import (  # noqa: E402
@@ -424,6 +425,10 @@ def render_health(*, sort: str = "updated_at", sort_dir: str = "desc") -> bytes:
         f'<div class="chip chip-warn"><strong>{missing_omeka}</strong>complete, no Omeka id</div>'
     )
     rows = fetch_attention_rows(connect, sort=sort, sort_dir=sort_dir)
+    intake_open, intake_resolved = open_failures(connect)
+    flag_chips += (
+        f'<div class="chip chip-warn"><strong>{len(intake_open)}</strong>intake failures</div>'
+    )
     inner = f"""
 <p>Same flags as Windmill <code>ledger_health_flags</code> / <code>ledger_health_attention</code>.</p>
 <h2>By status</h2>
@@ -432,7 +437,9 @@ def render_health(*, sort: str = "updated_at", sort_dir: str = "desc") -> bytes:
 <div class="summary">{flag_chips}</div>
 <h2>Attention queue ({len(rows)} rows, max 150)</h2>
 <p>Failed, quarantined, <code>complete</code> without <code>omeka_item_id</code>, or non-empty <code>error_message</code>.</p>
-{_render_attention_table(rows, sort=sort, sort_dir=sort_dir)}"""
+{_render_attention_table(rows, sort=sort, sort_dir=sort_dir)}
+<h2>Intake failures ({len(intake_open)})</h2>
+{render_intake_failures(intake_open, intake_resolved)}"""
     return render_page_shell(
         title="Ledger health", active="health", inner=inner, status_config=CONFIG
     )

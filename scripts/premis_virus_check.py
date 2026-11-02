@@ -50,6 +50,15 @@ def clamav_version_info(clamd) -> tuple[str, str, str | None]:
     return program, version, virus_defs
 
 
+class VirusDetectedError(RuntimeError):
+    """ClamAV found malware. Ingest quarantines the package (ledger block_reason virus_detected)."""
+
+    def __init__(self, path: Path, signature: str) -> None:
+        super().__init__(f"Virus detected in {path}: {signature}")
+        self.path = path
+        self.signature = signature
+
+
 def _interpret_clamd_result(path: Path, result: dict | None) -> None:
     """Raise on malware; None from pyclamd means no infection (clean)."""
     if result is None:
@@ -57,7 +66,7 @@ def _interpret_clamd_result(path: Path, result: dict | None) -> None:
     for _scan_path, status in result.items():
         code = status[0] if status else ""
         if code == "FOUND":
-            raise RuntimeError(f"Virus detected in {path}: {status[1]}")
+            raise VirusDetectedError(path, str(status[1]))
         if code and code not in ("OK", "PASS"):
             raise RuntimeError(f"ClamAV scan error for {path}: {status}")
 
@@ -116,7 +125,7 @@ def scan_sip_tree(clamd, root: Path, **scan_kwargs) -> VirusScanReport:
         try:
             res = scan_path(clamd, path, rel, **scan_kwargs)
         except MalwareFound as e:
-            raise RuntimeError(f"Virus detected in {path}: {e}") from None
+            raise VirusDetectedError(path, str(e)) from None
         file_scans.append(res)
         if res.fully_scanned:
             scanned += 1
