@@ -96,7 +96,7 @@ def test_switch_submission_xml_classifies() -> None:
         assert clf.dump_class == "switch"
         assert clf.dump_system == "Nintendo Switch"
         assert clf.dump_category == "Games"
-        assert clf.package_storage_prefix == "dumps/Nintendo Switch/B/blud-switch-test"
+        assert clf.package_storage_prefix == "dumps/No-Intro/Nintendo - Nintendo Switch/B/blud-switch-test"
 
 
 def test_switch_game_folder_layout_classifies() -> None:

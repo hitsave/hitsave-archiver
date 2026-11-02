@@ -46,3 +46,14 @@ def test_replace_in_media_data_and_uri() -> None:
     swapped = reloc.replace_in(uris, f"s3://hitsave-dumps/{OLD}/", f"s3://hitsave-dumps/{NEW}/")
     assert swapped[0]["@id"].endswith(f"{NEW}/") and swapped[0]["is_public"] is False
     assert swapped[1] == uris[1]
+
+
+def test_switch_target_prefix_and_idempotence() -> None:
+    old = "dumps/Nintendo Switch/A/aka-01a150b3"
+    new = "dumps/No-Intro/Nintendo - Nintendo Switch/A/aka-01a150b3"
+    assert reloc.switch_target_prefix(old) == new
+    assert reloc.switch_target_prefix(old + "/") == new
+    assert reloc.switch_target_prefix(new) == new
+    assert old not in new and f"s3://hitsave-dumps/{old}/" not in f"s3://hitsave-dumps/{new}/"
+    with pytest.raises(ValueError):
+        reloc.switch_target_prefix("dumps/Redump/DVD-Video/Coverdiscs/F/x")

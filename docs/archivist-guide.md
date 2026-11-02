@@ -173,6 +173,7 @@ Where packages live on Wasabi:
 |---|---|---|
 | Redump dumps | `hitsave-dumps` | `dumps/Redump/{System}/{Category}/{first letter}/{package id}/` |
 | No-Intro dumps | `hitsave-dumps` | `dumps/No-Intro/{System}/{first letter}/{package id}/` |
+| Nintendo Switch cart dumps (No-Intro) | `hitsave-dumps` | `dumps/No-Intro/Nintendo - Nintendo Switch/{first letter}/{package id}/` |
 | Other dumps | `hitsave-dumps` | `dumps/Others/{first letter}/{package id}/` |
 | Press material | `hitsave-press-material` | `press-material/{first letter}/{package id}/` |
 
