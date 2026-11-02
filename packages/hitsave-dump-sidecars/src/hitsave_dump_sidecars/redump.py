@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Parse Redump submissionInfo.txt / !submissionInfo.txt (MPF + redumper layouts)."""
 from __future__ import annotations
 

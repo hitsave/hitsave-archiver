@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from dump_redump import RedumpSubmission, pick_omeka_title_from_submission  # noqa: E402
+from hitsave_dump_sidecars.redump import RedumpSubmission, pick_omeka_title_from_submission  # noqa: E402
 from yaml_config import dumps_json  # noqa: E402
 
 

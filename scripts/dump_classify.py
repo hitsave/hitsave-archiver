@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from dump_nointro import NoIntroSubmission, nointro_submission_valid, parse_nointro_submission
-from dump_redump import RedumpSubmission, parse_submission_info, rom_track_submission_valid
+from hitsave_dump_sidecars.nointro import NoIntroSubmission, nointro_submission_valid, parse_nointro_submission
+from hitsave_dump_sidecars.redump import RedumpSubmission, parse_submission_info, rom_track_submission_valid
 from dump_switch import (
     SwitchSubmission,
     parse_switch_submission_xml,

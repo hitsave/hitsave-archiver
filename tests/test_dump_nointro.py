@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from dump_classify import classify_dump_sip  # noqa: E402
-from dump_nointro import (  # noqa: E402
+from hitsave_dump_sidecars.nointro import (  # noqa: E402
     nointro_submission_valid,
     parse_nointro_submission,
 )
