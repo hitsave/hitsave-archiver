@@ -113,7 +113,7 @@ Staff preservation URI: `omeka_staff_metadata.py` → `dcterms:relation` from le
 
 ## 7. Dumps
 
-Ingest kind **`dump`**: unpacked BagIt under `dumps/{System}/{Category}/{sort_letter}/{package_id}/` (No-Intro: `dumps/No-Intro/{System}/…`; unclassified: `dumps/Others/…`). Omeka catalog is metadata-only via `apply_dump_catalog_omeka.py`. Details: [dump-preservation.md](./dump-preservation.md).
+Ingest kind **`dump`**: unpacked BagIt under `dumps/Redump/{System}/{Category}/{sort_letter}/{package_id}/` (No-Intro: `dumps/No-Intro/{System}/…`; unclassified: `dumps/Others/…`). Omeka catalog is metadata-only via `apply_dump_catalog_omeka.py`. Details: [dump-preservation.md](./dump-preservation.md).
 
 ---
 

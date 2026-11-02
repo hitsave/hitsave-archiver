@@ -26,7 +26,7 @@ def test_redump_sidecar_classifies_system_and_category() -> None:
         assert clf.dump_system == "DVD-Video"
         assert clf.dump_category == "Coverdiscs"
         assert clf.package_storage_prefix == (
-            "dumps/DVD-Video/Coverdiscs/F/famitsu-wave-dvd-01947c2a-test"
+            "dumps/Redump/DVD-Video/Coverdiscs/F/famitsu-wave-dvd-01947c2a-test"
         )
 
 
@@ -51,7 +51,7 @@ def test_audio_cd_classifies_as_redump() -> None:
         assert clf.dump_system == "Audio CD"
         assert clf.dump_category == "Coverdiscs"
         assert clf.package_storage_prefix == (
-            "dumps/Audio CD/Coverdiscs/S/redump-fwd0406-2"
+            "dumps/Redump/Audio CD/Coverdiscs/S/redump-fwd0406-2"
         )
 
 
@@ -77,7 +77,7 @@ def test_playstation_rom_track_classifies_as_redump() -> None:
         assert clf.dump_system == "Sony PlayStation"
         assert clf.dump_category == "Coverdiscs"
         assert clf.package_storage_prefix == (
-            "dumps/Sony PlayStation/Coverdiscs/F/slpm-80312-test"
+            "dumps/Redump/Sony PlayStation/Coverdiscs/F/slpm-80312-test"
         )
 
 

@@ -31,7 +31,9 @@ ingest_kinds:
           - Category
         require_checksums:
           - sha1
-        path_pattern: "{system}/{category}/{sort_letter}/{package_id}"
+        # Under Redump/, like No-Intro/ (existing bags moved 2026-11-02 by
+        # scripts/relocate_redump_bags_to_redump_prefix.py).
+        path_pattern: "Redump/{system}/{category}/{sort_letter}/{package_id}"
       no_intro:
         # System value: DAT-o-MATIC label (https://datomatic.no-intro.org/), e.g. Nintendo - Nintendo 64
         submission_info_names:
