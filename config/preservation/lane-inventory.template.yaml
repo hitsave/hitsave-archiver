@@ -16,8 +16,9 @@ lanes:
   community_dumps:
     status: live
     description: >-
-      Sidecar-verified dumps reported to community catalogs (Redump, No-Intro, …).
-      Same intake → archiver pipeline for all org sidecars.
+      Dumps from the three intake lanes on Drive and Wasabi: redump/ and no-intro/
+      (sidecar-verified) and others/ (no sidecar). Ledger-complete packages move to
+      processed/{lane}/. Lane folder ids: intake/gdrive.yaml (gdrive.lanes / gdrive.processed).
     ingest_kind: dump
     archiver_submission_source_key: gdrive_redump_remote_intake
     container_ready_prefix: /data/intake/ready
@@ -30,14 +31,16 @@ lanes:
       config_file: preservation/wasabi-redump-intake.yaml
       bucket: REPLACE_ME
       source_roots:
-        - prefix: REPLACE_ME
+        - {prefix: redump, lane: redump}
+        - {prefix: no-intro, lane: no-intro}
+        - {prefix: others, lane: others}
     preservation_bucket_key: dumps
 
   community_dumps_extra_drop_zones:
-    status: planned
+    status: retired
     description: >-
-      Additional Drive folders or Wasabi prefixes (e.g. console-specific drops).
-      Same sidecar pipeline as community_dumps — see GitHub issue #18.
+      Superseded by the three intake lanes (Switch carts go in no-intro/). Kept so
+      older private inventories still parse.
     ingest_kind: dump
     inherits_pipeline: community_dumps
     gdrive_intake:

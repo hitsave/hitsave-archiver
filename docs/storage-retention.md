@@ -10,7 +10,7 @@ working copies are deleted.
 | **Preservation copy (AIP)** | Wasabi (`hitsave-dumps`, press/analog buckets), unpacked BagIt | The permanent archive | Permanently |
 | Third-party backup | Copied from Wasabi to an outside provider | Disaster recovery | Permanently (planned, not set up yet) |
 | Press-material originals | `/tank2/press-material/<game>/` | Source material | For now; not a preservation copy |
-| Contributor originals | Wasabi `hitsave-incoming/.../processed/`, Drive `processed/` | Source uploads after ingest | Until the lanes' own cleanup |
+| Contributor originals | `processed/{lane}/` in Wasabi `hitsave-incoming` and on the shared Drive (moved there automatically once the ledger says complete) | Source uploads after ingest | Kept; no automatic deletion |
 | Intake SIP | `<HOST_INTAKE>/ready/<slug>/` on `/tank` | **Temporary** working copy | Until pruned |
 | Local bag | `<HOST_OUTPUT>/bag/...` on `/tank` | **Temporary** working copy | Until pruned |
 

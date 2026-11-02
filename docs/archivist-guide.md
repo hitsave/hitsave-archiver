@@ -1,15 +1,15 @@
 # How to add material to the HitSave archive and follow it through
 
-This guide is for archivists who add community dumps to the archive and look after their catalog
-records. It covers four tasks:
+This guide is for archivists who add community dumps and other material to the archive and look
+after their catalog records. It covers four tasks:
 
-- Add a dump from Google Drive or Wasabi.
+- Add a dump, or anything else, from Google Drive or Wasabi.
 - Check its progress in the ledger.
 - Fix, publish, hide or quarantine its catalog record.
 - Understand what's stored in each package and how the system checks it.
 
-You don't need a terminal for any of these. You need access to the shared Google Drive inbox or the
-Wasabi incoming bucket, and to **status-web**, the archive's staff dashboard. Ask an admin for its
+You don't need a terminal for any of these. You need access to the inbox folders on the shared
+Google Drive or in the Wasabi `hitsave-incoming` bucket, and to **status-web**, the archive's staff dashboard. Ask an admin for its
 address. Today it's `http://saturn:8090`; after the move to the new server it will be a tailnet
 address behind a Pocket ID login.
 
@@ -33,8 +33,21 @@ catalog item in about two hours.
 
 ## Pick the right folder
 
-Google Drive and the Wasabi `hitsave-incoming` bucket have the same three inbox folders. The folder
-you use decides what the system checks:
+Google Drive and the Wasabi `hitsave-incoming` bucket have the same layout: three inbox folders,
+and a `processed` folder where finished packages end up.
+
+```text
+redump/                  inbox: Redump disc dumps
+no-intro/                inbox: No-Intro cartridge dumps, including Nintendo Switch
+others/                  inbox: everything else
+processed/
+├── redump/              finished packages, moved here by the system
+├── no-intro/
+└── others/
+```
+
+On Drive these folders are at the top of the HitSave shared drive. The folder you use decides what
+the system checks:
 
 | Folder | For | Needs |
 |---|---|---|
@@ -50,10 +63,23 @@ If a dump is in the wrong folder, for example a No-Intro dump in `redump/`, it i
 shows up under **Intake failures** with a hint such as "this looks like a No-Intro dump: move it to
 no-intro/". Move it to the right folder and the next sweep picks it up.
 
+The folder also decides where the catalog title comes from:
+
+| Folder | Catalog title |
+|---|---|
+| `redump/` | The title in the Redump sidecar |
+| `no-intro/` | The game name in `dumpinfo.txt`; for a Switch cart with its `Submission.xml` in a version folder (the usual layout), the folder name |
+| `others/` | The folder name |
+
+So name folders carefully, especially in `others/`, where the folder name is all the system has.
+You can still fix a title afterwards (see [Fix a catalog record](#fix-a-catalog-record)).
+
 ## Add a dump from Google Drive
 
 1. Open the shared drive and the right inbox folder: `redump`, `no-intro` or `others`.
 2. Create **one folder per dump**, named after it. For example: `Famitsu Wave DVD 2008-12 Disc 2`.
+   Subfolders inside it are fine (a Switch cart typically has `Scans/` and a version folder such
+   as `1.0.6/`); the whole folder becomes one package.
 3. Put everything for that dump in the folder:
    - the image files: disc images such as `.iso` or `.bin` and `.cue`, or ROM / cart files
    - the sidecar for that folder (see the table above; none for `others`)
@@ -66,7 +92,9 @@ no-intro/". Move it to the right folder and the next sweep picks it up.
 
 1. In the Wasabi console, open the `hitsave-incoming` bucket.
 2. Open the right inbox prefix: `redump/`, `no-intro/` or `others/`. Only these three are watched;
-   anything uploaded elsewhere in the bucket is ignored.
+   anything uploaded elsewhere in the bucket is ignored. That includes the older folders such as
+   `F.Wave/` or `GameWaveDVD/`: to have something in them ingested, move its folder into one of
+   the three inboxes.
 3. Upload **one folder per dump** into it, for example `no-intro/Aka 1.0.6/`, with the same
    contents as for Drive.
 4. Leave the folder alone. As with Drive, the system waits until nothing in the folder has changed
@@ -76,8 +104,19 @@ no-intro/". Move it to the right folder and the next sweep picks it up.
 
 Once a dump is preserved (ledger status `complete`), the system moves its folder to
 `processed/redump/`, `processed/no-intro/` or `processed/others/`, on the same surface it came from.
-An empty inbox therefore means everything in it has been handled. Don't move folders into
-`processed/` yourself: a folder moved there before it's preserved is never ingested.
+The move happens in the same sweep that finishes the package, so an inbox normally only holds
+material that's waiting or needs attention.
+
+Folders that don't reach `complete` stay in the inbox:
+
+- **Intake failures** (bad checksum, missing sidecar, wrong folder) stay so you can fix them in
+  place; see [Check progress in the ledger](#check-progress-in-the-ledger).
+- **Quarantined** packages stay, and the system never retries them on its own. Tell an admin;
+  don't delete the folder.
+- **Failed** packages stay and are retried on the next sweep.
+
+Don't move folders into `processed/` yourself: a folder moved there before it's preserved is never
+ingested. Don't delete anything from `processed/` either; those are the contributors' originals.
 
 ## Check progress in the ledger
 
@@ -95,7 +134,7 @@ Open status-web. The **Ledger** page lists every package, newest first.
 | Status | Meaning | What to do |
 |---|---|---|
 | `registered`, `scanning`, `building_bagit`, `uploading_package` | Still being processed | Wait |
-| `complete` | Safely on Wasabi and in the ledger | Check the catalog item (below) |
+| `complete` | Safely on Wasabi and in the ledger; the inbox folder has moved to `processed/` | Check the catalog item (below) |
 | `quarantine` | Stopped on purpose: a virus was found (`Virus detected in …`), the content policy flagged it, or someone quarantined it. The **Error** column says why. Nothing was uploaded. | Read the reason; tell an admin about a virus straight away |
 | `failed` | Processing stopped because something went wrong, for example an upload problem. The **Error** column says why. | Tell an admin |
 
