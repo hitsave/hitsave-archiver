@@ -155,7 +155,7 @@ Each package is a **bag**: a folder in the [BagIt](https://www.rfc-editor.org/rf
 stored unpacked on Wasabi. For example:
 
 ```text
-dumps/DVD-Video/Coverdiscs/F/famitsu-wave-dvd-2008-12-gatsugou-tokubetsu-furoku-01a136e7-…/
+dumps/Redump/DVD-Video/Coverdiscs/F/famitsu-wave-dvd-2008-12-gatsugou-tokubetsu-furoku-01a136e7-…/
 ├── data/                          the files exactly as submitted, folder structure kept
 ├── manifest-sha256.txt            a SHA-256 checksum for every file in data/
 ├── tagmanifest-sha256.txt         checksums for the files below
@@ -171,7 +171,7 @@ Where packages live on Wasabi:
 
 | Material | Bucket | Path |
 |---|---|---|
-| Redump dumps | `hitsave-dumps` | `dumps/{System}/{Category}/{first letter}/{package id}/` |
+| Redump dumps | `hitsave-dumps` | `dumps/Redump/{System}/{Category}/{first letter}/{package id}/` |
 | No-Intro dumps | `hitsave-dumps` | `dumps/No-Intro/{System}/{first letter}/{package id}/` |
 | Other dumps | `hitsave-dumps` | `dumps/Others/{first letter}/{package id}/` |
 | Press material | `hitsave-press-material` | `press-material/{first letter}/{package id}/` |

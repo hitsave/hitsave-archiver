@@ -118,7 +118,7 @@ def classify_dump_sip(
             system = storage_path_segment(submission.system or "Unknown")
             category = storage_path_segment(submission.category or "Unknown")
             pattern = str(
-                redump_cfg.get("path_pattern") or "{system}/{category}/{sort_letter}/{package_id}"
+                redump_cfg.get("path_pattern") or "Redump/{system}/{category}/{sort_letter}/{package_id}"
             )
             prefix = pattern.format(
                 system=system,

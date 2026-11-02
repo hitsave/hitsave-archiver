@@ -35,7 +35,7 @@ Detected automatically when the SIP contains a Redump **`!submissionInfo.txt`** 
 Storage path (system first, then category):
 
 ```text
-dumps/{System}/{Category}/{sort_letter}/{package_id}/
+dumps/Redump/{System}/{Category}/{sort_letter}/{package_id}/
   bagit.txt
   manifest-sha256.txt
   bag-info.txt
@@ -48,12 +48,14 @@ dumps/{System}/{Category}/{sort_letter}/{package_id}/
 
 Examples:
 
-- `dumps/DVD-Video/Coverdiscs/F/{package_id}/` — coverdisc such as [disc 91919](https://redump.info/disc/91919)
-- `dumps/PlayStation/Games/T/{package_id}/` — e.g. [disc 134898](https://redump.info/disc/134898)
+- `dumps/Redump/DVD-Video/Coverdiscs/F/{package_id}/` — coverdisc such as [disc 91919](https://redump.info/disc/91919)
+- `dumps/Redump/PlayStation/Games/T/{package_id}/` — e.g. [disc 134898](https://redump.info/disc/134898)
 
 Path segments use Redump **System** and **Category** strings with `/` and `\` replaced by `-`. **`package_id`** is the same `{title_slug}-{uuid_v7}` identity as press ingest.
 
-Staff URI (Omeka / ledger): `s3://hitsave-dumps/dumps/PlayStation/Games/{sort_letter}/{package_id}/`
+Staff URI (Omeka / ledger): `s3://hitsave-dumps/dumps/Redump/PlayStation/Games/{sort_letter}/{package_id}/`
+
+Redump bags sit under `dumps/Redump/`, like No-Intro under `dumps/No-Intro/`. The 196 bags ingested before 2026-11-02 were moved there with `scripts/relocate_redump_bags_to_redump_prefix.py` (one-shot; Wasabi move, ledger, bag tag files and Omeka media/staff URI, all verified).
 
 ### No-Intro-class dumps
 
