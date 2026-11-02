@@ -53,7 +53,7 @@ Examples:
 
 Path segments use Redump **System** and **Category** strings with `/` and `\` replaced by `-`. **`package_id`** is the same `{title_slug}-{uuid_v7}` identity as press ingest.
 
-Staff URI (Omeka / ledger): `s3://hitsave-dumps/dumps/PlayStation/Games/{package_id}/`
+Staff URI (Omeka / ledger): `s3://hitsave-dumps/dumps/PlayStation/Games/{sort_letter}/{package_id}/`
 
 ### No-Intro-class dumps
 
@@ -110,9 +110,9 @@ Migration **`schema/009_backfill_ingest_kind_dump.sql`**: `game_dump` / `disc_du
 - **`register-dip-omeka-api.py`** delegates to **`apply_dump_catalog()`** when **`ingest_kind: dump`**.
 - Redump and No-Intro sidecar parsers: the shared package **[`packages/hitsave-dump-sidecars`](../packages/hitsave-dump-sidecars/README.md)**, installed in the ingest-worker image and pinned by commit in hitsave-intake.
 
-## GDrive intake
+## Remote intake (Drive and Wasabi)
 
-[**hitsave-intake**](https://github.com/hitsave/hitsave-intake) downloads from Drive, verifies Redump sidecar checksums, and stages **`ready/{game_key}/`** with `game.ingest.yaml` + `hitsave-submission.yaml`. Archiver **`ingest-folder.py`** performs BagIt and Wasabi upload (see [`intake-handoff.md`](./intake-handoff.md)).
+[**hitsave-intake**](https://github.com/hitsave/hitsave-intake) downloads from the Drive inbox or Wasabi incoming, verifies sidecar checksums (Redump, No-Intro), and stages **`ready/{game_key}/`** with `game.ingest.yaml` + `hitsave-submission.yaml`. Archiver **`ingest-folder.py`** performs BagIt and Wasabi upload (see [`intake-handoff.md`](./intake-handoff.md)).
 
 ## Related docs
 

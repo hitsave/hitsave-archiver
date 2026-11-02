@@ -12,7 +12,9 @@ This document is the **single source of truth** for how Hit Save moves contribut
 
 **Do not commit** Drive folder IDs, incoming bucket names tied to contributors, or host paths in the public repo. Copy [`config/preservation/lane-inventory.template.yaml`](../config/preservation/lane-inventory.template.yaml) into your private config checkout and fill it in locally.
 
-Tracking: GitHub [Phase 0–5 remote intake issues](https://github.com/hitsave/hitsave-archiver/issues?q=is%3Aissue+Remote+intake+lanes).
+Tracking: GitHub [Phase 0–5 remote intake issues](https://github.com/hitsave/hitsave-archiver/issues?q=is%3Aissue+Remote+intake+lanes). Archivist-facing steps: [archivist-guide.md](./archivist-guide.md).
+
+**Automation:** Windmill runs `remote_intake_sweep` every 30 minutes (Wasabi lane, then Drive lane): stage → verify → ingest → Omeka register, per package. New Omeka items start private; staff publish them from status-web. Schedules: [windmill_ops/README.md](../windmill_ops/README.md).
 
 ---
 
@@ -74,13 +76,13 @@ See [intake-handoff.md](./intake-handoff.md) and [hitsave-intake `docs/archiver-
 
 ## Lane catalog (target state)
 
-Status key: **Live** = implemented today · **Planned** = documented here; work in GitHub phases · **Sunset** = finishing; no new work after cutoff.
+Status key: **Live** = implemented today · **Planned** = documented here; work in GitHub phases.
 
 | Lane | Status | Contributor surface | Intake | Archiver `ingest_kind` | Preservation Wasabi | Omeka |
 |------|--------|----------------------|--------|------------------------|---------------------|-------|
 | **Community dumps** (Redump, No-Intro, …) | **Live** | Drive child folders; Wasabi incoming prefixes per drop zone | intake dump profile + **sidecar checksum verify** (Redump implemented first) | `dump` — `dump_class` from sidecar (`redump` when Redump sidecar valid; extend for other orgs) | `wasabi.buckets.dumps` / layout in [dump-preservation.md](./dump-preservation.md) | `apply_dump_catalog_omeka.py` (+ org-specific enrichment) |
 | **Analog media** | **Planned** ([#17](https://github.com/hitsave/hitsave-archiver/issues/17)) | Dedicated Drive folder and/or incoming prefix | intake analog profile (no community dump sidecar gate) | `analog` | `wasabi.buckets.analog` / `analog/{relative_sip_path}/` | TBD (no Moby by default) |
-| **Press material** | **Sunset** ([#20](https://github.com/hitsave/hitsave-archiver/issues/20)) | On-site tree only (no remote intake) | — | `press_material` | `wasabi.buckets.press_material` | Moby + press profile |
+| **Press material** | **Live, on-site batches only** ([#20](https://github.com/hitsave/hitsave-archiver/issues/20)) | On-site tree only (no remote intake); operator-run batches on the host that holds the press originals | — | `press_material` | `wasabi.buckets.press_material` | Moby + press profile |
 | **Portable zip** | **Live** | SFTP / shared zip to submissions volume | `ingest-submission.py` | From manifest or `submissions.yaml` | Same as kind (usually press) | Register after ingest |
 
 **Additional dump drop folders** (e.g. Nintendo Switch-only incoming paths) are **not a separate preservation pipeline** — they use the **community dumps** row: sidecar + verify + same archiver path ([#18](https://github.com/hitsave/hitsave-archiver/issues/18) covers extra Drive/Wasabi roots and handoff profiles).
@@ -130,12 +132,13 @@ Fill in Drive folder IDs, Wasabi incoming bucket/prefixes, and host env variable
 
 ### Community dumps — Redump, No-Intro, … (live)
 
-1. **Configure** — intake `config/gdrive.yaml`, `config/intake.yaml` (dump profile / sidecar names); archiver `submission-sources` for the ready-tree prefix; private `preservation/wasabi-redump-intake.yaml` for Wasabi drop zones ([example](../config/preservation/wasabi-redump-intake.yaml.example), [intake README](https://github.com/hitsave/hitsave-intake)).
-2. **Stage** — `intake poll --once` / `process --folder-id …`, or `poll-wasabi` / `process-wasabi …` (sidecar verify before promote to `ready/`).
-3. **Ingest** — `docker compose run --rm ingest-worker /data/intake/ready/<slug>/game.ingest.yaml`
-4. **Catalog** — `scripts/remote-intake/register-dump-omeka.sh` or `register-prod-dumps-omeka.sh` ([intake-handoff.md](./intake-handoff.md)).
-5. **Batch (operator)** — `scripts/remote-intake/run-gdrive-redump-per-folder.sh`, `run-wasabi-redump-per-folder.sh`, or full-batch wrappers; logs under `.generated/` ([README](../scripts/remote-intake/README.md)).
-6. **Incoming cleanup (optional)** — After acceptance passes: move Drive folders to sibling/child `processed/` (`move-gdrive-redump-to-processed.sh`); MOVE Wasabi incoming keys to `processed/…` (`move_wasabi_intake_to_processed.py`). Do **not** move or ingest Drive folders that lack a disc image when the full SIP exists on Wasabi only.
+1. **Configure** — `hitsave-archiver-config/intake/gdrive.yaml`, `intake/intake.yaml` (dump profile / sidecar names); archiver `submission-sources` for the ready-tree prefix; private `preservation/wasabi-redump-intake.yaml` for Wasabi drop zones ([example](../config/preservation/wasabi-redump-intake.yaml.example), [intake README](https://github.com/hitsave/hitsave-intake)).
+2. **Automatic** — the Windmill `remote_intake_sweep` (every 30 min) runs steps 3–5 for every package in both inboxes. Drive packages are picked up once every file has been unchanged for 1 hour; Wasabi packages as soon as they appear under an inbox prefix.
+3. **Stage** — `intake poll --once` / `process --folder-id …`, or `poll-wasabi` / `process-wasabi …` (sidecar verify before promote to `ready/`).
+4. **Ingest** — `docker compose run --rm ingest-worker /data/intake/ready/<slug>/game.ingest.yaml`
+5. **Catalog** — `scripts/remote-intake/register-dump-omeka.sh` or `register-prod-dumps-omeka.sh` ([intake-handoff.md](./intake-handoff.md)). Items start private.
+6. **By hand (operator)** — the same per-folder scripts (`run-gdrive-redump-per-folder.sh`, `run-wasabi-redump-per-folder.sh`) or full-batch wrappers; logs under `.generated/` ([README](../scripts/remote-intake/README.md)).
+7. **Incoming cleanup (manual, optional)** — After acceptance passes: move Drive folders to sibling/child `processed/` (`move-gdrive-redump-to-processed.sh`); MOVE Wasabi incoming keys to `processed/…` (`move_wasabi_intake_to_processed.py`). Do **not** move or ingest Drive folders that lack a disc image when the full SIP exists on Wasabi only.
 
 Redump is the **reference sidecar** implemented today; No-Intro and other org sidecars should reuse this flow as parsers and verify rules are added ([#16](https://github.com/hitsave/hitsave-archiver/issues/16)).
 
@@ -149,9 +152,9 @@ Contributor layout: **`{game title}/Scans/`** (photos) and **`{game title}/{vers
 
 Same poll/process/ingest pattern with **`ingest_kind: analog`**, folder tree preserved under `analog_material_root`, Moby off. See [#17](https://github.com/hitsave/hitsave-archiver/issues/17).
 
-### Press material (sunset)
+### Press material (on-site batches)
 
-Batch expand + `run-batch-resume-omeka.sh` on [`/data/press-material`](../config/preservation/ingest.yaml) — [e2e-preservation-batch.md](./e2e-preservation-batch.md). No new batches after operator cutoff ([#20](https://github.com/hitsave/hitsave-archiver/issues/20)).
+Batch expand + `run-batch-resume-omeka.sh` on [`/data/press-material`](../config/preservation/ingest.yaml), run by an operator on the host that holds the press originals — [e2e-preservation-batch.md](./e2e-preservation-batch.md).
 
 ### Portable zip (live)
 
@@ -196,7 +199,7 @@ docker compose exec -T postgres psql -U hitsave -d hitsave_ledger -c \
 | Omeka API target | [`config/omeka-catalog.yaml`](../config/omeka-catalog.yaml) |
 | Lane inventory (operator copy) | [`config/preservation/lane-inventory.template.yaml`](../config/preservation/lane-inventory.template.yaml) |
 
-Private: `hitsave-archiver-config/secrets/*`, `preservation/database.yaml`, filled `lane-inventory.yaml`, Wasabi incoming YAML (e.g. `wasabi-redump-intake.yaml`).
+Private: `hitsave-archiver-config/secrets/*`, `preservation/database.yaml`, filled `lane-inventory.yaml`, Wasabi incoming YAML (e.g. `wasabi-redump-intake.yaml`), and intake's own config under `intake/` (`gdrive.yaml`, `intake.yaml`, `secrets/gdrive-service-account.json`).
 
 ---
 
@@ -204,12 +207,12 @@ Private: `hitsave-archiver-config/secrets/*`, `preservation/database.yaml`, fill
 
 | Phase | Issue | Focus |
 |-------|-------|--------|
-| 0 | [#15](https://github.com/hitsave/hitsave-archiver/issues/15) | This document + inventory template |
-| 1 | [#16](https://github.com/hitsave/hitsave-archiver/issues/16) | Community dump intake hardening (Drive + Wasabi; Redump reference) |
+| 0 | [#15](https://github.com/hitsave/hitsave-archiver/issues/15) (done) | This document + inventory template |
+| 1 | [#16](https://github.com/hitsave/hitsave-archiver/issues/16) (done) | Community dump intake hardening (Drive + Wasabi; Redump reference) |
 | 2 | [#17](https://github.com/hitsave/hitsave-archiver/issues/17) | Analog lane |
 | 3 | [#18](https://github.com/hitsave/hitsave-archiver/issues/18) | Additional dump drop folders (same sidecar pipeline) |
 | 4 | [#19](https://github.com/hitsave/hitsave-archiver/issues/19) | Scheduling / visibility |
-| 5 | [#20](https://github.com/hitsave/hitsave-archiver/issues/20) | Press material sunset |
+| 5 | [#20](https://github.com/hitsave/hitsave-archiver/issues/20) | Press material batches |
 
 ---
 

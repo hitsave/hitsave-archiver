@@ -1,52 +1,68 @@
-# Google Drive intake handoff (community dumps)
+# Remote intake handoff (community dumps)
 
-**Lane overview (all remote ingest types):** [remote-intake-lanes.md](./remote-intake-lanes.md).
+**Lane overview:** [remote-intake-lanes.md](./remote-intake-lanes.md). **For archivists:**
+[archivist-guide.md](./archivist-guide.md).
 
-Remote contributors upload **community dumps** (Redump, No-Intro, and other org sidecars) to Google Drive or Wasabi incoming; [**hitsave-intake**](https://github.com/hitsave/hitsave-intake) downloads, **verifies sidecar checksums**, and writes a local **ready** tree. **This repo** runs the preservation pipeline (ClamAV → BagIt → Wasabi `hitsave-dumps` → ledger → Omeka catalog). **Redump** is the reference sidecar implemented today; other org formats follow the same flow as parsers land.
+Contributors upload community dumps (Redump, No-Intro, …) to the Google Drive inbox or the Wasabi
+incoming bucket. [**hitsave-intake**](https://github.com/hitsave/hitsave-intake) downloads each
+package, **verifies it against its sidecar checksums**, and writes a `ready/` folder. This repo
+then runs the preservation pipeline: ClamAV → BagIt → Wasabi `hitsave-dumps` → ledger → Omeka.
 
-**Full Drive batch (operator):** [`scripts/remote-intake/run-gdrive-redump-per-folder.sh`](../scripts/remote-intake/run-gdrive-redump-per-folder.sh) (stage → ingest → Omeka per package). Wasabi incoming: `run-wasabi-redump-per-folder.sh` in the same directory.
+**This runs automatically.** The Windmill job `remote_intake_sweep` runs every 30 minutes. For
+each package it calls `scripts/remote-intake/run-wasabi-redump-per-folder.sh`, then
+`run-gdrive-redump-per-folder.sh`:
 
-## Layout after gdrive `process`
+1. **Stage** from Drive or Wasabi when `ready/<slug>/game.ingest.yaml` is missing (intake checksum verification).
+2. **Ingest** when the ledger row isn't `complete`.
+3. **Register in Omeka** (`register-dump-omeka.sh --slug <slug>`) once the ledger row is `complete`. New items start **private**.
 
-Mount the intake **ready** tree into the ingest-worker (default host: `/tank/hitsave-archiver/intake/ready` → container `/data/intake/ready`; set `HOST_INTAKE` in `host.env` if different):
+Omeka errors are logged, and the ingest status stays unchanged.
+
+## Layout of a ready package
+
+The ingest-worker sees the intake `ready/` tree at `/data/intake/ready` (host: `$HOST_INTAKE/ready`):
 
 ```text
-/data/intake/ready/{game_key}/
-  game.ingest.yaml
-  hitsave-submission.yaml
-  !submissionInfo.txt
-  *.iso / *.bin …
+/data/intake/ready/{slug}/
+  game.ingest.yaml          # ingest-folder.py entrypoint: ingest_kind: dump, source_game_folder
+  hitsave-submission.yaml   # catalog and provenance handoff (sidecar fields, Drive/Wasabi source)
+  !submissionInfo.txt       # sidecar
+  *.iso / *.bin / *.cue …
 ```
 
-`game.ingest.yaml` is produced by intake with `source_game_folder` pointing at that SIP folder (via `handoff.archiver_source_root` in hitsave-intake `config/intake.yaml`).
+intake sets `source_game_folder` from `handoff.archiver_source_root` in
+`hitsave-archiver-config/intake/intake.yaml`. After the package is pruned, only the two YAML files
+and a `PRUNED.txt` marker stay. The slug-collision guard reads `hitsave-submission.yaml`
+([storage-retention.md](./storage-retention.md)).
 
-## Ingest one package
+## Run steps by hand
 
-Requires a matching entry in `config/preservation/submission-sources.yaml` (`container_path_prefix: /data/intake/ready`).
+Ingest one package. It needs the `container_path_prefix: /data/intake/ready` entry in
+`config/preservation/submission-sources.yaml`:
 
 ```bash
-docker compose run --rm ingest-worker \
-  /data/intake/ready/<game_key>/game.ingest.yaml
+docker compose run --rm ingest-worker /data/intake/ready/<slug>/game.ingest.yaml
 ```
 
-Dump classification, Wasabi prefix (`dumps/{System}/{Category}/{game_key}/`), and BagIt upload use the same code path as on-site dump ingest ([`dump-preservation.md`](./dump-preservation.md)).
-
-## Omeka (optional)
-
-After each ingest (or on reconcile): **`scripts/remote-intake/register-dump-omeka.sh --slug <ready-folder>`**. Per-folder batch scripts call this automatically; **`register-prod-dumps-omeka.sh`** reconciles rows still missing `omeka_item_id`. See [design note](./design-notes/gdrive-redump-omeka-after-ingest.md).
+Register one package in Omeka. Use `--game-key` instead of `--slug` if you know the ledger key, and
+`--force` to patch an item that already exists:
 
 ```bash
-docker compose run --rm omeka-catalog \
-  /app/scripts/apply_dump_catalog_omeka.py \
-  …
+./scripts/remote-intake/register-dump-omeka.sh --slug <slug>
 ```
 
-(Use the per-game register YAML + handoff paths documented in `register-prod-dumps-omeka.sh` / `apply_dump_catalog_omeka.py`.)
+The title comes from `omeka_item_title` in `hitsave-submission.yaml`, falling back to the
+`game_key`. The script runs `apply_dump_catalog_omeka.py` in the `omeka-catalog` service against
+`$HITSAVE_PRIVATE_CONFIG/omeka-catalog.yaml` (production).
+
+`register-prod-dumps-omeka.sh` reconciles every `complete` row that still has no
+`omeka_item_id`.
+
+Before running a step by hand, hold the remote-intake lock or pause the sweep, so the two don't
+stage the same package at once ([scripts/remote-intake/README.md](../scripts/remote-intake/README.md)).
 
 ## What stays in intake only
 
-- Google Drive API poll and quiescence (`upload_stable_seconds`)
-- Resumable download
-- **MD5/SHA1/Size fixity** against `!submissionInfo.txt` (fail closed before handoff)
-
-No Wasabi credentials are required in the intake container.
+- Google Drive and Wasabi API polling. Drive also waits until every file has been unchanged for `upload_stable_seconds` (1 hour); Wasabi has no such wait.
+- Resumable download.
+- **MD5 / SHA-1 / size** checks against the sidecar. A mismatch sends the package to `failed/`, and archiver never sees it.

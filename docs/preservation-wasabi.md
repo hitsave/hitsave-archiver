@@ -23,6 +23,8 @@ Omeka reads **press** packages via S3 API — see [dip-wasabi-s3.md](./dip-wasab
 
 With `wasabi.enabled: true`, `ingest-folder.py` runs ClamAV → BagIt build → Wasabi sync → ledger `complete` with `package_storage_prefix` and `inventory_json`.
 
-Objects larger than 5 GiB (typical DVD-9 ISOs) use **S3 multipart upload** in `upload_bag_wasabi.py`. With `verify_upload: true`, small objects are re-downloaded for SHA-256 check; objects over 256 MiB get a **Content-Length** check only after upload.
+Large objects use **S3 multipart upload** in `upload_bag_wasabi.py` (part size fixed so the expected ETag is predictable). With `verify_upload: true`, **every** object gets a HEAD check of size and S3 ETag against the local file's MD5 / multipart MD5, and objects up to 256 MiB are also re-downloaded and SHA-256 checked.
 
-Register in Omeka is a separate step: `docker compose run --rm omeka-catalog <game_key> …`.
+Register in Omeka is a separate step (`register-dip-omeka-api.py` / `apply_dump_catalog_omeka.py`; remote intake does it automatically). New items start private.
+
+After upload, Wasabi is the permanent copy: the Wasabi fixity job re-reads every package at most every 90 days, and local copies are pruned once verified — [storage-retention.md](./storage-retention.md).

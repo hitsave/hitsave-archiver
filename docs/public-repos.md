@@ -5,7 +5,8 @@
 | Repo | Visibility | Contents |
 |------|------------|----------|
 | [**hitsave-archiver**](https://github.com/hitsave/hitsave-archiver) | Public (Apache-2.0) | Ingest worker, BagIt scripts, Compose stack, schema, CI fixtures (Python/Postgres: [Chainguard](https://images.chainguard.dev/) `cgr.dev`; ClamAV: Docker Hub) |
-| [**hitsave-archiver-config**](https://github.com/hitsave/hitsave-archiver-config) | **Private** | Wasabi, Omeka API, MobyGames credentials; `preservation/database.yaml` |
+| [**hitsave-archiver-config**](https://github.com/hitsave/hitsave-archiver-config) | **Private** | Wasabi, Omeka API, MobyGames credentials; `preservation/database.yaml`; host paths; intake, status-web and Windmill config |
+| [**hitsave-intake**](https://github.com/hitsave/hitsave-intake) | **Private** | Drive and Wasabi inbox polling, download, sidecar checksum verification; installs the shared `hitsave-dump-sidecars` package from this repo |
 | [**hitsave-omeka-test**](https://github.com/hitsave/hitsave-omeka-test) | Public (Apache-2.0) | Local Omeka S stack, theme/DIP QA, prod mirror scripts |
 | [**hitsave-archive-theme**](https://github.com/hitsave/hitsave-archive-theme) | Public (GPL-3.0-or-later) | Foundation overlay theme build |
 | [**omeka-dip-viewer**](https://github.com/hitsave/omeka-dip-viewer) | Public (Apache-2.0) | Omeka S module `OmekaDipViewer` — BagIt browse on Wasabi S3 (`omeka_dip_package`) |
@@ -38,6 +39,3 @@ git grep -iE 'key_credential|secret_access|password.*[0-9]{6}|BEGIN (RSA|OPENSSH
 
 Rotate credentials if they ever appeared in public git history.
 
-## Legacy monorepo
-
-`hitsave-archive-agent` was the pre-split monorepo checkout; **hitsave-archiver** + **hitsave-omeka-test** are the canonical public code path going forward.
