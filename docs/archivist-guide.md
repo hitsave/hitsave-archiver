@@ -108,23 +108,26 @@ catalog title. You can still [fix a title](#fix-a-catalog-record) later.
 
 The **Health** page shows the same packages from the other side: counts by status, and an
 **Attention queue** of every package that needs someone, such as quarantined or failed packages and
-complete packages without a catalog record. If the attention queue is empty, nothing needs you.
+complete packages without a catalog record. Below it, **Intake failures** lists packages the archive
+rejected before they reached the ledger. If both lists are empty, nothing needs you.
 
 ![The top of the Health page: counts by status and the flags that need attention](images/archivist-guide/health-summary.png)
 
 ### If your package doesn't appear
 
-If a package hasn't appeared in the ledger three hours after its upload finished, the archive
-probably rejected it before it got that far. The usual reasons are:
+If a package doesn't appear in the ledger, the archive probably rejected it before it got that far.
+The **Health** page lists rejected packages, with the reason, under **Intake failures** at the
+bottom. The usual reasons are:
 
 - A file doesn't match the checksums in the sidecar, often because the upload was cut short.
 - The sidecar is missing.
-- The dump is in the wrong inbox, for example a No-Intro dump in `redump`.
+- The dump is in the wrong inbox. The reason then says where it belongs, for example
+  `this looks like a No-Intro dump: move it to no-intro/`.
 
-The ledger can't show these rejections at the moment, so ask an admin, who can see the reason. To
-fix the problem, correct the folder in the inbox: upload the damaged file again, add or replace the
+To fix it, correct the folder in the inbox: upload the damaged file again, add or replace the
 sidecar, or move the folder to the right inbox. The archive notices the change and tries again on
-its own. It doesn't retry a folder that hasn't changed.
+its own; it doesn't retry a folder that hasn't changed. The list updates after every inbox check,
+so a fixed package drops off within about 30 minutes after the archive takes it in.
 
 ## Leave the inbox and processed folders to the archive
 
@@ -223,7 +226,7 @@ Before the archive preserves a package:
 | Check | What it catches | If it fails |
 |---|---|---|
 | **Upload finished**: nothing changed for one hour | Uploads still in progress | The archive waits and checks again. |
-| **Sidecar checksums**: size, MD5, SHA-1 and CRC32 of every file (`redump` and `no-intro`) | Damaged or incomplete files, or the wrong sidecar | The package never reaches the ledger; see [If your package doesn't appear](#if-your-package-doesnt-appear). |
+| **Sidecar checksums**: size, MD5, SHA-1 and CRC32 of every file (`redump` and `no-intro`) | Damaged or incomplete files, or the wrong sidecar | The package never reaches the ledger and appears under **Intake failures** on the Health page; see [If your package doesn't appear](#if-your-package-doesnt-appear). |
 | **Virus scan** of every file | Known malware | Status `quarantine`; nothing uploaded. |
 | **Content rules** | Image collections with meaningless or tag-style file names, typical of image-board downloads | Status `quarantine`; nothing uploaded. |
 | **Package check** | Files that went missing or changed while the archive packed them | Status `failed`. |

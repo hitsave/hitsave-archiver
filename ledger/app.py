@@ -26,7 +26,7 @@ from catalog_quarantine import (
 )
 from catalog_visibility import run_visibility
 from ledger_health import fetch_attention_rows, fetch_health_summary
-from intake_failures import FAILED_DIR, open_failures, render_intake_failures
+from intake_failures import load_failures, render_intake_failures
 
 sys.path.insert(0, str(Path("/app/scripts")))
 from ledger_health_report import (  # noqa: E402
@@ -462,8 +462,7 @@ def render_health(*, sort: str = "updated_at", sort_dir: str = "desc") -> bytes:
         f'<div class="chip chip-warn"><strong>{missing_omeka}</strong>complete, no Omeka id</div>'
     )
     rows = fetch_attention_rows(connect, sort=sort, sort_dir=sort_dir)
-    intake_open, intake_resolved = open_failures(connect)
-    intake_here = FAILED_DIR.is_dir()
+    intake_open, intake_resolved, intake_here = load_failures(connect)
     if intake_here:
         flag_chips += (
             f'<div class="chip chip-warn"><strong>{len(intake_open)}</strong>intake failures</div>'
@@ -478,7 +477,7 @@ def render_health(*, sort: str = "updated_at", sort_dir: str = "desc") -> bytes:
 <p>Failed, quarantined, <code>complete</code> without <code>omeka_item_id</code>, or non-empty <code>error_message</code>.</p>
 {_render_attention_table(rows, sort=sort, sort_dir=sort_dir)}
 <h2>Intake failures{f' ({len(intake_open)})' if intake_here else ''}</h2>
-{render_intake_failures(intake_open, intake_resolved)}"""
+{render_intake_failures(intake_open, intake_resolved, available=intake_here)}"""
     return render_page_shell(
         title="Ledger health", active="health", inner=inner, status_config=CONFIG
     )

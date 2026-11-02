@@ -173,6 +173,23 @@ remote_intake_private_config_host() {
   echo "$(remote_intake_archiver_root)/../hitsave-archiver-config"
 }
 
+# Mirror intake's failed/ folder into the ledger (table intake_rejection) so the ledger app can list
+# rejected packages wherever it runs. Never fails the sweep.
+remote_intake_sync_rejections() {
+  local dir
+  dir="$(remote_intake_archiver_compose_dir)"
+  # Docker would create a missing bind source as an empty folder, which would empty the table.
+  if [[ ! -d "${HOST_INTAKE:?}/failed" ]]; then
+    echo "WARN: ${HOST_INTAKE}/failed missing; intake rejections not synced"
+    return 0
+  fi
+  remote_intake_archiver_compose run --rm -T --no-deps \
+    -v "$dir/scripts:/app/scripts:ro" \
+    -v "${HOST_INTAKE:?}/failed:/data/intake-failed:ro" \
+    --entrypoint python ingest-worker /app/scripts/remote-intake/sync_intake_rejections.py \
+    || echo "WARN: could not sync intake rejections to the ledger"
+}
+
 remote_intake_archiver_compose() {
   local dir compose_file priv
   dir="$(remote_intake_archiver_compose_dir)"

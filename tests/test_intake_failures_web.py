@@ -81,3 +81,50 @@ def test_render_escapes_and_handles_empty(tmp_path: Path) -> None:
 def test_render_says_unavailable_when_folder_not_mounted(tmp_path: Path) -> None:
     page = render_intake_failures([], 0, failed_dir=tmp_path / "not-mounted")
     assert "aren't available here" in page and "No open intake failures" not in page
+
+
+class _TableConn(_Conn):
+    """Fake connection for the ledger-table path (failed/ not mounted where the ledger runs)."""
+
+    def __init__(self, rows, complete_sources=(), table=True):
+        super().__init__(complete_sources)
+        self.rows, self.table = rows, table
+
+    def execute(self, sql, params=None):
+        if "to_regclass" in sql:
+            return _Result([(self.table,)])
+        if "FROM intake_rejection" in sql:
+            return _Result(self.rows)
+        return super().execute(sql, params)
+
+
+class _Result:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def fetchone(self):
+        return self.rows[0]
+
+    def fetchall(self):
+        return self.rows
+
+
+def test_reads_ledger_table_when_failed_dir_not_mounted(tmp_path: Path) -> None:
+    from datetime import datetime, timezone
+
+    from intake_failures import load_failures
+
+    t = datetime(2026, 11, 2, 12, 0, tzinfo=timezone.utc)
+    conn = _TableConn([("nointro-cart", t, "SHA-1 mismatch"), ("redump-fixed", t, "old")],
+                      complete_sources=["/data/intake/ready/redump-fixed"])
+    open_, resolved, available = load_failures(lambda: conn, tmp_path / "not-mounted")
+    assert available and resolved == 1
+    assert [(f.slug, f.reason) for f in open_] == [("nointro-cart", "SHA-1 mismatch")]
+    page = render_intake_failures(open_, resolved, available=True)
+    assert "nointro-cart" in page and "aren't available" not in page
+
+
+def test_unavailable_without_folder_or_table(tmp_path: Path) -> None:
+    from intake_failures import load_failures
+
+    assert load_failures(lambda: _TableConn([], table=False), tmp_path / "x") == ([], 0, False)
