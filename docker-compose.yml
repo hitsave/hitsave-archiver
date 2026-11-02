@@ -1,4 +1,4 @@
-# Preservation ingest stack (Postgres ledger, ClamAV, ingest worker, Omeka catalog register, status UI).
+# Preservation ingest stack (Postgres ledger, ClamAV, ingest worker, Omeka catalog register, ledger UI).
 # Base images: Chainguard (cgr.dev) where available; ClamAV stays on Docker Hub (no public cgr.dev/clamav).
 # Secrets and operator database.yaml: sibling private repo hitsave-archiver-config (see README).
 name: hitsave-preservation
@@ -78,21 +78,24 @@ services:
       postgres:
         condition: service_healthy
 
-  status-web:
+  ledger:
+    # HitSave Ledger (staff dashboard). Production runs ghcr.io/hitsave/ledger behind
+    # Caddy + oauth2-proxy (Pocket ID) on luigi; this service is for local use.
+    image: ghcr.io/hitsave/ledger:local
     build:
       context: .
-      dockerfile: status-web/Dockerfile
+      dockerfile: ledger/Dockerfile
     ports:
       - "0.0.0.0:8090:8090"
     environment:
       HITSAVE_CONFIG_ROOT: /config
-      HITSAVE_STATUS_WEB_CONFIG: /run/hitsave/status-web.yaml
+      HITSAVE_LEDGER_CONFIG: /run/hitsave/ledger.yaml
     volumes:
       - ./config:/config:ro
       - ./scripts:/app/scripts:ro
       - ./.generated:/archiver/.generated:ro
-      # Outside /config so Docker never creates a placeholder config/status-web.yaml on the host.
-      - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/status-web.yaml:/run/hitsave/status-web.yaml:ro
+      # Outside /config so Docker never creates a placeholder config/ledger.yaml on the host.
+      - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/ledger.yaml:/run/hitsave/ledger.yaml:ro
       # Intake failures (packages rejected before the ledger) for the Health page.
       - ${HOST_INTAKE:-./data/intake}/failed:/data/intake-failed:ro
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/omeka-catalog.yaml:/config/omeka-catalog.yaml:ro

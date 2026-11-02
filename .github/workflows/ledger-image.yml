@@ -1,0 +1,78 @@
+name: ledger-image
+
+# Builds the HitSave Ledger image. Pull requests only build; main pushes
+# ghcr.io/hitsave/ledger:{main,sha-<short>,latest}. luigi (Komodo stack luigi/ledger) pulls it.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ledger/**"
+      - "scripts/*.py"
+      - "config/**"
+      - ".dockerignore"
+      - ".github/workflows/ledger-image.yml"
+  pull_request:
+    paths:
+      - "ledger/**"
+      - "scripts/*.py"
+      - "config/**"
+      - ".dockerignore"
+      - ".github/workflows/ledger-image.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ledger-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/hitsave/ledger
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build (and push from main)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ledger/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test (PR build)
+        if: github.event_name == 'pull_request'
+        run: |
+          set -eu
+          tag=$(echo "${{ steps.meta.outputs.tags }}" | head -1)
+          docker run --rm --entrypoint python "$tag" -c "
+          import sys; sys.path[:0] = ['/app', '/app/scripts']
+          import site_ui, ledger_health, catalog_correct, catalog_quarantine, catalog_visibility, intake_failures, windmill_client
+          import ledger_health_report, omeka_catalog_common
+          omeka_catalog_common.load_register_dip_omeka_api()
+          print('imports ok')"

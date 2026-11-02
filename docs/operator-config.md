@@ -36,7 +36,7 @@ hitsave-archiver-config/
     mobygames-credentials.yaml
     omeka-api-credentials-local.yaml
     omeka-api-credentials-prod.yaml
-    windmill-status-web.token   # Windmill API token for status-web /ops job list (mode 644)
+    windmill-ledger.token   # Windmill API token for the ledger's /ops job list (mode 644)
   preservation/
     database.yaml
     lane-inventory.yaml       # optional; Drive IDs / Wasabi prefixes — not in git
@@ -51,12 +51,12 @@ hitsave-archiver-config/
 | `secrets/mobygames-credentials.yaml` | [`config/secrets/mobygames-credentials.yaml.example`](../config/secrets/mobygames-credentials.yaml.example) |
 | `secrets/omeka-api-credentials-local.yaml` | [`config/secrets/omeka-api-credentials-local.yaml.example`](../config/secrets/omeka-api-credentials-local.yaml.example) |
 | `secrets/omeka-api-credentials-prod.yaml` | [`config/secrets/omeka-api-credentials-prod.yaml.example`](../config/secrets/omeka-api-credentials-prod.yaml.example) |
-| `secrets/windmill-status-web.token` | [`config/secrets/windmill-status-web.token.example`](../config/secrets/windmill-status-web.token.example) — Windmill UI → Settings → Account → Tokens; one line, no quotes |
+| `secrets/windmill-ledger.token` | [`config/secrets/windmill-ledger.token.example`](../config/secrets/windmill-ledger.token.example) — Windmill UI → Settings → Account → Tokens; one line, no quotes |
 | `preservation/database.yaml` | [`config/preservation/database.yaml.example`](../config/preservation/database.yaml.example) |
 | `preservation/lane-inventory.yaml` | [`config/preservation/lane-inventory.template.yaml`](../config/preservation/lane-inventory.template.yaml) |
 | `preservation/wasabi-redump-intake.yaml` | [`config/preservation/wasabi-redump-intake.yaml.example`](../config/preservation/wasabi-redump-intake.yaml.example) |
 | `host.env` (shell exports for `HOST_*`) | [`config/host.env.example`](../config/host.env.example) |
-| `status-web.yaml` | [`config/status-web.yaml.example`](../config/status-web.yaml.example) — set `ops.windmill.api_url` to a host reachable from the status-web container; `/correct` uses Windmill `correct_catalog_script`. Mounted at `/run/hitsave/status-web.yaml`. |
+| `ledger.yaml` | [`config/ledger.yaml.example`](../config/ledger.yaml.example) — set `ops.windmill.api_url` to a host reachable from the ledger container; `/correct` uses Windmill `correct_catalog_script`. Mounted at `/run/hitsave/ledger.yaml`. |
 | `windmill/.env`, `windmill/worker-paths.env` | [`windmill_ops/docker/.env.example`](../windmill_ops/docker/.env.example), [`worker-paths.env.example`](../windmill_ops/docker/worker-paths.env.example) — symlink `.env` as `windmill_ops/docker/.env`; see [windmill_ops/README.md](../windmill_ops/README.md) |
 | `intake/{host.env,intake.yaml,gdrive.yaml}` | hitsave-intake `config/*.example` — remote intake mounts these into the intake container |
 | `intake/secrets/gdrive-service-account.json` | Google Cloud service account key. Mounted alone as `/secrets` in the intake container (keeps Wasabi/Omeka keys out of it). |

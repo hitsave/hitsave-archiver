@@ -21,7 +21,7 @@ checkout, mounted at runtime. See [docs/operator-config.md](docs/operator-config
 |---|---|---|
 | **Remote intake** | Every 30 minutes, picks up community dumps (Redump, No-Intro, …) from the Google Drive inbox and the Wasabi incoming bucket. It verifies their checksums, then ingests and catalogs them. | Windmill `remote_intake_sweep` → [hitsave-intake](https://github.com/hitsave/hitsave-intake) + `ingest-worker` |
 | **Press-material batches** | Ingests game folders from the on-site press-material tree, started by an operator | [docs/e2e-preservation-batch.md](docs/e2e-preservation-batch.md) |
-| **status-web** (`:8090`) | Ledger browser, health page, and catalog correction, quarantine and publish/hide | `status-web/` |
+| **ledger** (`:8090`; production: `https://ledger.hitsave.org` behind Pocket ID) | Ledger browser, health page, and catalog correction, quarantine and publish/hide | `ledger/` |
 | **Windmill** (`:8089`) | Schedules and job logs: intake sweep, nightly ledger backup, Wasabi fixity, pruning of local working copies | [windmill_ops/README.md](windmill_ops/README.md) |
 | **Ledger** | Postgres `game_ingest` table, one row per package; dumped nightly | `docker-compose.yml` `postgres` |
 
@@ -31,8 +31,8 @@ deleted once their Wasabi copy is verified. See [docs/storage-retention.md](docs
 ## Repositories
 
 ```text
-hitsave-archiver/          # this repo (public): pipeline, compose stack, status-web, Windmill jobs
-hitsave-archiver-config/   # private: credentials, host paths, intake / status-web / Windmill config
+hitsave-archiver/          # this repo (public): pipeline, compose stack, ledger UI, Windmill jobs
+hitsave-archiver-config/   # private: credentials, host paths, intake / ledger / Windmill config
 hitsave-intake/            # private: Drive and Wasabi inbox polling, download, checksum verification
 ```
 
@@ -60,7 +60,7 @@ On a production host, with real files in `hitsave-archiver-config`:
 ```bash
 source ../hitsave-archiver-config/host.env    # HOST_* paths and HITSAVE_PRIVATE_CONFIG
 python3 scripts/sync-preservation-config.py   # writes config/preservation/generated.env
-docker compose up -d postgres clamav status-web
+docker compose up -d postgres clamav ledger
 (cd windmill_ops/docker && docker compose up -d)   # see windmill_ops/README.md
 ```
 

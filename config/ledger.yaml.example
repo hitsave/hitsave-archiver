@@ -1,8 +1,12 @@
-# Copy to hitsave-archiver-config/status-web.yaml (private repo) — see docs/operator-config.md
+# Copy to hitsave-archiver-config/ledger.yaml (private repo) — see docs/operator-config.md
 server:
-  # Listen on all interfaces (pair with compose 0.0.0.0:8090:8090 for LAN access).
+  # Listen on all interfaces inside the container. In production no port is published:
+  # Caddy -> oauth2-proxy (Pocket ID) -> ledger:8090 over the Docker network.
   host: 0.0.0.0
   port: 8090
+  # true only when oauth2-proxy is the sole way in: show and record the signed-in user from
+  # its X-Forwarded-Email header. Leave false when the port is reachable directly.
+  trust_forwarded_user: false
 database:
   config_file: /config/preservation/database.yaml
 omeka:
@@ -20,12 +24,12 @@ ops:
   windmill_ui_url: http://127.0.0.1:8089
   windmill:
     workspace: hitsave-archiver
-    # From status-web container use a reachable API base (not 127.0.0.1). Examples:
+    # From the ledger container use a reachable API base (not 127.0.0.1). Examples:
     # api_url: http://host.docker.internal:8089/api
     # api_url: http://windmill_server:8000/api   # when windmill_server joins preservation network
     correct_catalog_script: f/hitsave/correct_catalog_item
     job_wait_timeout_seconds: 900
-    token_file: /config/secrets/windmill-status-web.token
+    token_file: /config/secrets/windmill-ledger.token
     scripts:
       Remote intake sweep: f/hitsave/remote_intake_sweep
       Wasabi inbox sweep: f/hitsave/wasabi_redump_inbox_sweep

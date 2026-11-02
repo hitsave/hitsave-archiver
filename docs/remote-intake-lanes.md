@@ -29,7 +29,7 @@ intake service account is Content manager on the shared drive. Wasabi lanes are 
 (with `lane:`) in private `preservation/wasabi-redump-intake.yaml`. Older Wasabi prefixes
 (`F.Wave/`, `GameWaveDVD/`, …) are not polled and are left as they are.
 
-**Automation:** Windmill runs `remote_intake_sweep` every 30 minutes (Wasabi lanes, then Drive lanes): stage → verify → ingest → Omeka register → move to `processed/{lane}/`, per package. New Omeka items start private; staff publish them from status-web. Schedules: [windmill_ops/README.md](../windmill_ops/README.md).
+**Automation:** Windmill runs `remote_intake_sweep` every 30 minutes (Wasabi lanes, then Drive lanes): stage → verify → ingest → Omeka register → move to `processed/{lane}/`, per package. New Omeka items start private; staff publish them from the ledger. Schedules: [windmill_ops/README.md](../windmill_ops/README.md).
 
 ---
 

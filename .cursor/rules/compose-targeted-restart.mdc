@@ -1,6 +1,6 @@
 ---
 description: hitsave-archiver — restart only the compose service you changed (--no-deps)
-globs: docker-compose*.yml,status-web/**,ingest-worker/**,omeka-catalog/**
+globs: docker-compose*.yml,ledger/**,ingest-worker/**,omeka-catalog/**
 alwaysApply: false
 ---
 
@@ -18,16 +18,16 @@ docker compose build <service>
 docker compose up -d --no-deps <service>
 ```
 
-Examples: `status-web`, `ingest-worker`, `omeka-catalog`, profile services.
+Examples: `ledger`, `ingest-worker`, `omeka-catalog`, profile services.
 
-- If only **bind-mounted** paths changed (e.g. `./scripts`, `hitsave-archiver-config/status-web.yaml`), **`docker compose restart --no-deps <service>`** may be enough — no rebuild.
+- If only **bind-mounted** paths changed (e.g. `./scripts`, `hitsave-archiver-config/ledger.yaml`), **`docker compose restart --no-deps <service>`** may be enough — no rebuild.
 - Use **`docker compose exec`** for read-only checks; no restart.
 
 ## Do not
 
 - Run **`docker compose up -d <service>`** without **`--no-deps`** when the goal is only to refresh that service — Compose may **recreate** dependencies (`postgres`, etc.).
 - **`docker compose down`** / recreate the whole **`hitsave-preservation`** project for a single-service fix unless the user asked or shared compose/network volumes changed.
-- Restart **Postgres** for status-web, Windmill ops, or script-only ledger changes.
+- Restart **Postgres** for ledger, Windmill ops, or script-only ledger changes.
 
 ## When Postgres legitimately moves
 
