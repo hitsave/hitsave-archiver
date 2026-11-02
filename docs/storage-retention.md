@@ -47,8 +47,10 @@ package with the same slug would be skipped as "already preserved". Originals un
 Each verified package gets a `fixity_run` row with detail `wasabi-etag: …`. The job exits
 non-zero if any package fails verification, and that package's local copy is kept.
 
-**Dry run by default.** The schedule ships with `execute: "false"`, which reports what would be
-deleted and is read-only everywhere. Set `execute` to `"true"` once a dry-run report looks right.
+**Deleting since 2026-11-02.** The schedule runs with `execute: "true"`. It was enabled after the
+first scheduled dry run verified all 50 candidates (199.9 GB). Set `execute` to `"false"` for a
+read-only report of what would be deleted; the script itself is a dry run unless `--execute` is
+passed.
 The job holds the shared remote-intake lock, so intake sweeps skip while it runs.
 
 Manual run (dry run, one package):
