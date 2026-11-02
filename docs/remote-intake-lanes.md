@@ -14,7 +14,9 @@ This document is the **single source of truth** for how Hit Save moves contribut
 
 Tracking: GitHub [Phase 0–5 remote intake issues](https://github.com/hitsave/hitsave-archiver/issues?q=is%3Aissue+Remote+intake+lanes). Archivist-facing steps: [archivist-guide.md](./archivist-guide.md).
 
-**Automation:** Windmill runs `remote_intake_sweep` every 30 minutes (Wasabi lane, then Drive lane): stage → verify → ingest → Omeka register, per package. New Omeka items start private; staff publish them from status-web. Schedules: [windmill_ops/README.md](../windmill_ops/README.md).
+**Inbox lanes (Drive and Wasabi alike):** `redump/` (Redump sidecar required, verified), `no-intro/` (`dumpinfo.txt` or a Nintendo Switch `* Submission.xml`, verified), `others/` (no sidecar; no checksum gate). The lane decides the rules ([hitsave-intake `intake/lanes.py`](https://github.com/hitsave/hitsave-intake/blob/main/src/intake/lanes.py)); only these three Wasabi prefixes in `hitsave-incoming` are polled. Once the ledger says `complete`, the sweep moves the package to `processed/{lane}/` on its own surface (Drive: `intake move-to-processed`; Wasabi: `move_wasabi_package_to_processed.py`).
+
+**Automation:** Windmill runs `remote_intake_sweep` every 30 minutes (Wasabi lanes, then Drive lanes): stage → verify → ingest → Omeka register → move to `processed/{lane}/`, per package. New Omeka items start private; staff publish them from status-web. Schedules: [windmill_ops/README.md](../windmill_ops/README.md).
 
 ---
 
@@ -138,7 +140,7 @@ Fill in Drive folder IDs, Wasabi incoming bucket/prefixes, and host env variable
 4. **Ingest** — `docker compose run --rm ingest-worker /data/intake/ready/<slug>/game.ingest.yaml`
 5. **Catalog** — `scripts/remote-intake/register-dump-omeka.sh` or `register-prod-dumps-omeka.sh` ([intake-handoff.md](./intake-handoff.md)). Items start private.
 6. **By hand (operator)** — the same per-folder scripts (`run-gdrive-redump-per-folder.sh`, `run-wasabi-redump-per-folder.sh`) or full-batch wrappers; logs under `.generated/` ([README](../scripts/remote-intake/README.md)).
-7. **Incoming cleanup (manual, optional)** — After acceptance passes: move Drive folders to sibling/child `processed/` (`move-gdrive-redump-to-processed.sh`); MOVE Wasabi incoming keys to `processed/…` (`move_wasabi_intake_to_processed.py`). Do **not** move or ingest Drive folders that lack a disc image when the full SIP exists on Wasabi only.
+7. **Incoming cleanup (automatic since the lane layout; the scripts below remain for legacy prefixes)** — After acceptance passes: move Drive folders to sibling/child `processed/` (`move-gdrive-redump-to-processed.sh`); MOVE Wasabi incoming keys to `processed/…` (`move_wasabi_intake_to_processed.py`). Do **not** move or ingest Drive folders that lack a disc image when the full SIP exists on Wasabi only.
 
 Redump is the **reference sidecar** implemented today; No-Intro and other org sidecars should reuse this flow as parsers and verify rules are added ([#16](https://github.com/hitsave/hitsave-archiver/issues/16)).
 
