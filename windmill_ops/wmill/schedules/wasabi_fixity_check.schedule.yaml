@@ -1,11 +1,16 @@
 path: f/hitsave/wasabi_fixity_check
-# Weekly, Sunday 03:00 UTC. Enabled 2026-10-31 (owner accepted the Wasabi read volume:
-# default 50 GB/run, ~45 min; a full pass over ~1 TB takes ~20 weeks at that rate).
-schedule: "0 0 3 * * Sun"
+# Daily 03:00 UTC: up to 300 packages, least-recently-checked first (owner request 2026-11-01).
+# Packages average ~426 MB, so 300/day reads ~130 GB/day (~4 TB/month). max_gb 150 lets a
+# typical day's 300 through; worst case ~4.5 TB/month stays under Wasabi's free-egress
+# allowance (egress <= active storage, ~7 TB stored) with headroom for other reads such as the
+# planned third-party backup. A full pass over the ~2,500 packages takes ~8-9 days.
+# Packages too big for the remaining budget are skipped; the least-recently-checked one
+# always runs first, so big packages are never starved.
+schedule: "0 0 3 * * *"
 timezone: UTC
 enabled: true
 is_flow: false
 script_path: f/hitsave/wasabi_fixity_check
 args:
-  max_packages: 10
-  max_gb: 50
+  max_packages: 300
+  max_gb: 150
