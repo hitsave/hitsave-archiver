@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import os
 import sys
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -50,7 +51,10 @@ from windmill_client import (
     windmill_script_ui_url,
 )
 
-CONFIG = yaml.safe_load(Path("/config/status-web.yaml").read_text())
+# Private operator file (hitsave-archiver-config/status-web.yaml), mounted by compose.
+CONFIG = yaml.safe_load(
+    Path(os.environ.get("HITSAVE_STATUS_WEB_CONFIG", "/config/status-web.yaml")).read_text()
+)
 DB = yaml.safe_load(Path(CONFIG["database"]["config_file"]).read_text())["postgres"]
 _server = CONFIG.get("server") or {}
 HOST = str(_server.get("host") or "0.0.0.0").strip() or "0.0.0.0"

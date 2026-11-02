@@ -49,9 +49,20 @@ remote_intake_gdrive_root() {
   echo "$bundle_gdrive"
 }
 
+# Intake config lives in the private config repo (intake/, intake/secrets/). The legacy
+# hitsave-intake/config and hitsave-intake/secrets are used only when that folder is missing.
+# Host paths: the Windmill worker mounts <private>/intake at the same path, so -d works there.
+remote_intake_private_intake_dir() {
+  echo "$(remote_intake_private_config_host)/intake"
+}
+
 remote_intake_gdrive_config_dir() {
   if [[ -n "${HITSAVE_INTAKE_CONFIG_DIR:-}" ]]; then
     echo "$HITSAVE_INTAKE_CONFIG_DIR"
+    return
+  fi
+  if [[ -d "$(remote_intake_private_intake_dir)" ]]; then
+    remote_intake_private_intake_dir
     return
   fi
   echo "$(remote_intake_gdrive_root)/config"
@@ -60,6 +71,10 @@ remote_intake_gdrive_config_dir() {
 remote_intake_gdrive_secrets_dir() {
   if [[ -n "${HITSAVE_INTAKE_SECRETS_DIR:-}" ]]; then
     echo "$HITSAVE_INTAKE_SECRETS_DIR"
+    return
+  fi
+  if [[ -d "$(remote_intake_private_intake_dir)/secrets" ]]; then
+    echo "$(remote_intake_private_intake_dir)/secrets"
     return
   fi
   echo "$(remote_intake_gdrive_root)/secrets"
@@ -87,12 +102,20 @@ remote_intake_gdrive_docker_config_dir() {
     echo "$HITSAVE_INTAKE_CONFIG_DIR"
     return
   fi
+  if [[ -d "$(remote_intake_private_intake_dir)" ]]; then
+    remote_intake_private_intake_dir
+    return
+  fi
   echo "$(remote_intake_gdrive_docker_host_root)/config"
 }
 
 remote_intake_gdrive_docker_secrets_dir() {
   if [[ -n "${HITSAVE_INTAKE_SECRETS_DIR:-}" ]]; then
     echo "$HITSAVE_INTAKE_SECRETS_DIR"
+    return
+  fi
+  if [[ -d "$(remote_intake_private_intake_dir)/secrets" ]]; then
+    echo "$(remote_intake_private_intake_dir)/secrets"
     return
   fi
   echo "$(remote_intake_gdrive_docker_host_root)/secrets"
@@ -106,12 +129,12 @@ remote_intake_compose_intake() {
   cfg="$(remote_intake_gdrive_docker_config_dir)"
   sec="$(remote_intake_gdrive_docker_secrets_dir)"
   ctx="$(remote_intake_gdrive_build_context)"
-  if [[ ! -d "$check_root/config" ]] && [[ ! -d "$cfg" ]]; then
-    echo "intake config missing (check $check_root or HITSAVE_INTAKE_HOST)" >&2
+  if [[ ! -d "$cfg" ]] && [[ ! -d "$check_root/config" ]]; then
+    echo "intake config missing: $cfg (expected <private config>/intake)" >&2
     return 1
   fi
-  if [[ ! -d "$check_root/secrets" ]] && [[ ! -d "$sec" ]]; then
-    echo "intake secrets missing (check $check_root or HITSAVE_INTAKE_HOST)" >&2
+  if [[ ! -d "$sec" ]] && [[ ! -d "$check_root/secrets" ]]; then
+    echo "intake secrets missing: $sec (expected <private config>/intake/secrets)" >&2
     return 1
   fi
   if [[ ! -d "$ctx" ]] && ! docker image inspect "${INTAKE_IMAGE:-hitsave/intake:local}" >/dev/null 2>&1; then
@@ -198,7 +221,10 @@ remote_intake_load_host_env() {
   fi
   local gdrive
   gdrive="$(remote_intake_gdrive_root)"
-  if [[ -f "$gdrive/config/host.env" ]]; then
+  if [[ -f "$HITSAVE_PRIVATE_CONFIG/intake/host.env" ]]; then
+    # shellcheck disable=SC1090
+    source "$HITSAVE_PRIVATE_CONFIG/intake/host.env"
+  elif [[ -f "$gdrive/config/host.env" ]]; then
     # shellcheck disable=SC1090
     source "$gdrive/config/host.env"
   fi

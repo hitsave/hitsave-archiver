@@ -4,10 +4,18 @@ Self-hosted [Windmill](https://www.windmill.dev/) for preservation **run**, **sc
 
 ## Start
 
+Both env files live in the private config repo, under `hitsave-archiver-config/windmill/`:
+- `.env`: compose variables (Windmill DB password, `WMILL_TOKEN`, host paths)
+- `worker-paths.env`: host paths for jobs; compose mounts it from there
+
+Compose only auto-loads `.env` from its own folder, so link it in:
+
 ```bash
-cp windmill_ops/docker/.env.example windmill_ops/docker/.env
-cp windmill_ops/docker/worker-paths.env.example windmill_ops/docker/worker-paths.env
-# Edit both: ARCHIVER_HOST_PATH, private config, intake host paths, WMILL_TOKEN
+PRIVATE=../hitsave-archiver-config   # relative to the hitsave-archiver checkout
+# New host without windmill/ yet: ./scripts/windmill-ops-up.sh creates both from the examples.
+ln -s "$(cd "$PRIVATE" && pwd)/windmill/.env" windmill_ops/docker/.env
+# Edit $PRIVATE/windmill/.env and worker-paths.env: ARCHIVER_HOST_PATH, HITSAVE_PRIVATE_CONFIG_HOST,
+# HITSAVE_INTAKE_HOST, WMILL_TOKEN
 
 cd windmill_ops/docker
 docker compose up -d
@@ -19,7 +27,7 @@ UI: **http://127.0.0.1:8089** (or host LAN). Windmill uses its own **`windmill_d
 
 **Remote intake logs/poll JSON:** create **`hitsave-archiver/.generated/windmill`** on the host (`chmod 1777`) before the first sweep. Jobs write there via **`/run/hitsave/generated`** (see **`config/windmill-ops.yaml`**). Do not use repo **`.generated/`** root from Windmill — job UIDs cannot write there.
 
-**Docker compose from the worker:** set **`HITSAVE_PRIVATE_CONFIG_HOST`** in **`worker-paths.env`** (same path as **`HITSAVE_PRIVATE_CONFIG_HOST`** in **`.env`**). Never set **`HITSAVE_PRIVATE_CONFIG=/config/private`** on the worker — the host daemon would create bogus **`/config/private/...`** paths. If file bind mounts fail with “not a directory”, remove empty directories Docker created under **`/config`** on the host. (`hitsave-intake/config/preservation/` placeholders from older compose files can be deleted.)
+**Docker compose from the worker:** set **`HITSAVE_PRIVATE_CONFIG_HOST`** in **`worker-paths.env`** (same path as **`HITSAVE_PRIVATE_CONFIG_HOST`** in **`.env`**). The worker mounts **`<private>/intake`** at that same host path so remote intake finds its config there. Never set **`HITSAVE_PRIVATE_CONFIG=/config/private`** on the worker — the host daemon would create bogus **`/config/private/...`** paths. If file bind mounts fail with “not a directory”, remove empty directories Docker created under **`/config`** on the host. (`hitsave-intake/config/preservation/` placeholders from older compose files can be deleted.)
 
 ## Sync scripts from git
 

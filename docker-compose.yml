@@ -86,10 +86,13 @@ services:
       - "0.0.0.0:8090:8090"
     environment:
       HITSAVE_CONFIG_ROOT: /config
+      HITSAVE_STATUS_WEB_CONFIG: /run/hitsave/status-web.yaml
     volumes:
       - ./config:/config:ro
       - ./scripts:/app/scripts:ro
       - ./.generated:/archiver/.generated:ro
+      # Outside /config so Docker never creates a placeholder config/status-web.yaml on the host.
+      - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/status-web.yaml:/run/hitsave/status-web.yaml:ro
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/omeka-catalog.yaml:/config/omeka-catalog.yaml:ro
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/secrets:/config/secrets:ro
       - ${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}/preservation/database.yaml:/config/preservation/database.yaml:ro

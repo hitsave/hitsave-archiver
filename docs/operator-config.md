@@ -56,6 +56,10 @@ hitsave-archiver-config/
 | `preservation/lane-inventory.yaml` | [`config/preservation/lane-inventory.template.yaml`](../config/preservation/lane-inventory.template.yaml) |
 | `preservation/wasabi-redump-intake.yaml` | [`config/preservation/wasabi-redump-intake.yaml.example`](../config/preservation/wasabi-redump-intake.yaml.example) |
 | `host.env` (shell exports for `HOST_*`) | [`config/host.env.example`](../config/host.env.example) |
+| `status-web.yaml` | [`config/status-web.yaml.example`](../config/status-web.yaml.example) — set `ops.windmill.api_url` to a host reachable from the status-web container; `/correct` uses Windmill `correct_catalog_script`. Mounted at `/run/hitsave/status-web.yaml`. |
+| `windmill/.env`, `windmill/worker-paths.env` | [`windmill_ops/docker/.env.example`](../windmill_ops/docker/.env.example), [`worker-paths.env.example`](../windmill_ops/docker/worker-paths.env.example) — symlink `.env` as `windmill_ops/docker/.env`; see [windmill_ops/README.md](../windmill_ops/README.md) |
+| `intake/{host.env,intake.yaml,gdrive.yaml}` | hitsave-intake `config/*.example` — remote intake mounts these into the intake container |
+| `intake/secrets/gdrive-service-account.json` | Google Cloud service account key. Mounted alone as `/secrets` in the intake container (keeps Wasabi/Omeka keys out of it). |
 
 Use **local** credentials for test Omeka: copy `hitsave-archiver-config/omeka-catalog.test.yaml` over `omeka-catalog.yaml` (Compose mounts the private file at `/config/omeka-catalog.yaml`). **Production** batches and `register-dump-omeka.sh` use `omeka-catalog.yaml` → `secrets/omeka-api-credentials-prod.yaml` → `https://archive.hitsave.org/api`.
 
@@ -83,7 +87,6 @@ These stay in **your hitsave-archiver working tree**, not in the private repo. C
 |------|---------|
 | `config/preservation/game.yml` | [`config/preservation/game.yml.example`](../config/preservation/game.yml.example) |
 | `config/preservation/batch.yml` | [`config/preservation/batch.yml.example`](../config/preservation/batch.yml.example) — `source_subpath` is relative to [`ingest.yaml`](../config/preservation/ingest.yaml) `paths.press_material_root`; expand via [`batch-expand-preservation.sh`](../scripts/batch-expand-preservation.sh) |
-| `config/status-web.yaml` | [`config/status-web.yaml.example`](../config/status-web.yaml.example) — set `ops.windmill.api_url` to a host reachable from the status-web container; `/correct` uses Windmill `correct_catalog_script` |
 
 Committed policy (no secrets): [`config/omeka-catalog.yaml`](../config/omeka-catalog.yaml), [`config/preservation/ingest.yaml`](../config/preservation/ingest.yaml), [`config/preservation/submissions.yaml`](../config/preservation/submissions.yaml).
 
