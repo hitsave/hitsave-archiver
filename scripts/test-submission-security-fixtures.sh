@@ -38,16 +38,17 @@ mkdir -p "$INCOMING"
 "${COMPOSE[@]}" build ingest-worker >/dev/null
 
 # A case passes only for the RIGHT reason. A reject must exit 1 (ingest-submission.py's
-# SystemExit) with a last line matching the expected rejection; anything else (compose or
+# SystemExit) and print a line matching the expected rejection (any line: stdout and stderr
+# interleave, so the message is not reliably last); anything else (compose or
 # container failure, traceback, ClamAV not ready, a different check firing) is a harness FAIL,
 # so a broken environment can never make reject cases pass vacuously.
 run_case() {
   local name="$1"
   local zip="$2"
   local expect="$3"  # reject | accept
-  local pattern="$4" # ERE the last output line must match
+  local pattern="$4" # ERE some output line must match
   local sub_cfg="${5:-/config/preservation/submissions.yaml}"
-  local base out code last
+  local base out code hit
   base="$(basename "$zip")"
   cp -f "$zip" "$INCOMING/test-$base"
   set +e
@@ -58,7 +59,6 @@ run_case() {
   code=$?
   set -e
   rm -f "$INCOMING/test-$base"
-  last="$(printf '%s\n' "$out" | tail -1)"
   if [[ "$expect" == "reject" ]]; then
     if [[ $code -ne 1 ]]; then
       echo "FAIL $name: expected rejection (exit 1), got exit $code"
@@ -70,17 +70,16 @@ run_case() {
     printf '%s\n' "$out"
     return 1
   fi
-  if ! grep -Eq -- "$pattern" <<<"$last"; then
+  if ! hit="$(grep -Em1 -- "$pattern" <<<"$out")"; then
     echo "FAIL $name: exit $code as expected, but for the wrong reason"
-    echo "     expected last line to match: $pattern"
-    echo "     got: $last"
+    echo "     expected a line matching: $pattern"
     printf '%s\n' "$out"
     return 1
   fi
   if [[ "$expect" == "reject" ]]; then
-    echo "OK   $name (rejected: ${last})"
+    echo "OK   $name (rejected: ${hit})"
   else
-    echo "OK   $name (accepted: ${last})"
+    echo "OK   $name (accepted: ${hit})"
   fi
   return 0
 }
