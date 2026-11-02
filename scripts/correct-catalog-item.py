@@ -21,8 +21,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_ROOT = Path(__import__("os").environ.get("HITSAVE_CONFIG_ROOT", str(REPO_ROOT / "config")))
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from moby_omeka_fields import moby_bibo_uri_rows  # noqa: E402
+from moby_omeka_fields import moby_bibo_uri_rows, public_bibo_uri_rows_without_moby  # noqa: E402
 from omeka_catalog_common import load_register_dip_omeka_api  # noqa: E402
+from press_material_description import press_material_description  # noqa: E402
 from yaml_config import load_yaml  # noqa: E402
 
 register_api = load_register_dip_omeka_api()
@@ -50,6 +51,24 @@ def parse_omeka_item_id(ref: str) -> int:
     raise SystemExit(
         f"Could not parse Omeka item id from {ref!r} (use numeric id or a URL containing /item/<id>)"
     )
+
+
+def _parse_json_field(raw: object) -> dict | list | None:
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        return json.loads(raw) if raw.strip() else None
+    return raw
+
+
+def _rights_rows_without_moby(item_body: dict) -> list[dict]:
+    rows: list[dict] = []
+    for row in item_body.get("dcterms:rights") or []:
+        text = str(row.get("@value") or "")
+        if "mobygames" in text.casefold():
+            continue
+        rows.append(dict(row))
+    return rows
 
 
 def _split_names(value: str | None) -> list[str] | None:
@@ -136,14 +155,41 @@ def _fetch_item(session: requests.Session, base: str, creds: dict, item_id: int)
     return resp.json()
 
 
+def _reset_ledger_moby_match(game_key: str) -> None:
+    ingest_cfg = load_yaml(CONFIG_ROOT / "preservation/ingest.yaml")
+    db_cfg = load_yaml(Path(ingest_cfg["database"]["config_file"]))["postgres"]
+    conn = register_api.pg_connect(db_cfg)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE game_ingest
+                SET moby_game_id = NULL,
+                    moby_title = NULL,
+                    moby_status = 'no_match',
+                    block_reason = 'moby_catalog_cleared',
+                    metadata_json = NULL,
+                    updated_at = NOW()
+                WHERE game_key = %s
+                """,
+                (game_key,),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def apply_omeka_corrections(
     *,
     item_id: int,
     title: str | None,
     moby_url: str | None,
+    clear_moby_url: bool,
     description: str | None,
     developers: list[str] | None,
     publishers: list[str] | None,
+    clear_developer: bool,
+    clear_publisher: bool,
 ) -> dict[str, Any]:
     session, base, creds = _omeka_session()
     item_body = _fetch_item(session, base, creds, item_id)
@@ -157,19 +203,28 @@ def apply_omeka_corrections(
         desc_pid = register_api.resolve_property_id(session, base, creds, "dcterms:description")
         updates["dcterms:description"] = [register_api.literal_value(desc_pid, description)]
 
-    if moby_url is not None:
+    if clear_moby_url:
+        kept = public_bibo_uri_rows_without_moby(item_body)
+        updates["bibo:uri"] = kept if kept else []
+        updates["dcterms:date"] = []
+        updates["dcterms:rights"] = _rights_rows_without_moby(item_body)
+    elif moby_url is not None:
         bibo_pid = register_api.resolve_property_id(session, base, creds, "bibo:uri")
         updates["bibo:uri"] = moby_bibo_uri_rows(
             item_body, moby_url.strip(), bibo_pid, register_api.uri_value
         )
 
-    if publishers is not None:
+    if clear_publisher:
+        updates["dcterms:publisher"] = []
+    elif publishers is not None:
         publisher_pid = register_api.resolve_property_id(session, base, creds, "dcterms:publisher")
         updates["dcterms:publisher"] = [
             register_api.literal_value(publisher_pid, name) for name in publishers
         ]
 
-    if developers is not None:
+    if clear_developer:
+        updates["dcterms:creator"] = []
+    elif developers is not None:
         creator_pid = register_api.resolve_property_id(session, base, creds, "dcterms:creator")
         updates["dcterms:creator"] = [
             register_api.literal_value(creator_pid, name) for name in developers
@@ -212,9 +267,32 @@ def main() -> None:
     )
     parser.add_argument("--title")
     parser.add_argument("--moby-url", help="MobyGames game page URL (public bibo:uri)")
+    parser.add_argument(
+        "--clear-moby-url",
+        action="store_true",
+        help="Remove Moby catalog from Omeka: Moby bibo:uri, reset description to press-kit "
+        "text (unless --description is set), strip Moby dcterms:rights and release date, "
+        "clear dcterms:creator and dcterms:publisher unless --developer / --publisher is set",
+    )
     parser.add_argument("--description")
     parser.add_argument("--developer", help="One name or comma-separated list (dcterms:creator)")
+    parser.add_argument(
+        "--clear-developer",
+        action="store_true",
+        help="Clear all dcterms:creator values on the item",
+    )
     parser.add_argument("--publisher", help="One name or comma-separated list (dcterms:publisher)")
+    parser.add_argument(
+        "--clear-publisher",
+        action="store_true",
+        help="Clear all dcterms:publisher values on the item",
+    )
+    parser.add_argument(
+        "--reset-ledger-moby",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="When --clear-moby-url, clear ledger Moby match fields (default: on)",
+    )
     parser.add_argument(
         "--former-title",
         help="Previous catalog title (for bag notes; default: current Omeka title before patch)",
@@ -236,6 +314,11 @@ def main() -> None:
     if args.description is not None:
         description = (args.description or "").strip()
 
+    clear_flags = (
+        args.clear_moby_url,
+        args.clear_developer,
+        args.clear_publisher,
+    )
     correction_inputs = [
         title,
         moby_url,
@@ -243,11 +326,14 @@ def main() -> None:
         developers,
         publishers,
     ]
-    if not any(v is not None for v in correction_inputs):
+    if not any(v is not None for v in correction_inputs) and not any(clear_flags):
         raise SystemExit(
             "Provide at least one correction field "
-            "(--title, --moby-url, --description, --developer, or --publisher)"
+            "(--title, --moby-url, --description, --developer, --publisher, "
+            "or --clear-moby-url / --clear-developer / --clear-publisher)"
         )
+    if args.clear_moby_url and moby_url is not None:
+        raise SystemExit("Use either --moby-url or --clear-moby-url, not both")
 
     item_id = parse_omeka_item_id(args.omeka_ref)
     ledger = _ledger_row_by_omeka_item_id(item_id)
@@ -256,19 +342,48 @@ def main() -> None:
     item_before = _fetch_item(session, base, creds, item_id)
     former_title = (args.former_title or "").strip() or _catalog_title(item_before)
 
+    if args.clear_moby_url and args.description is None:
+        inventory = _parse_json_field(ledger.get("inventory_json"))
+        if not isinstance(inventory, dict):
+            inventory = {}
+        catalog_title = title or _catalog_title(item_before)
+        description = press_material_description(catalog_title, inventory)
+
+    clear_developer = args.clear_developer or (
+        args.clear_moby_url and args.developer is None
+    )
+    clear_publisher = args.clear_publisher or (
+        args.clear_moby_url and args.publisher is None
+    )
+
     apply_omeka_corrections(
         item_id=item_id,
         title=title,
         moby_url=moby_url,
+        clear_moby_url=args.clear_moby_url,
         description=description,
         developers=developers,
         publishers=publishers,
+        clear_developer=clear_developer,
+        clear_publisher=clear_publisher,
     )
 
+    if args.clear_moby_url and args.reset_ledger_moby:
+        _reset_ledger_moby_match(str(ledger["game_key"]))
+        print(
+            json.dumps(
+                {"ledger_moby_reset": True, "game_key": ledger["game_key"]},
+                indent=2,
+            )
+        )
+
     bag_title = title or _catalog_title(item_before)
-    bag_moby = moby_url or _public_moby_uri(item_before) or ""
-    if title is not None or moby_url is not None:
-        if not bag_moby:
+    if args.clear_moby_url:
+        bag_moby = ""
+    else:
+        bag_moby = moby_url or _public_moby_uri(item_before) or ""
+    if title is not None or moby_url is not None or args.clear_moby_url:
+        if not bag_moby and not args.clear_moby_url:
             print(
                 json.dumps(
                     {
@@ -280,10 +395,16 @@ def main() -> None:
                 file=sys.stderr,
             )
         else:
-            summary = (args.correction_summary or "").strip() or (
-                f"Catalog correction ({date.today().isoformat()}): "
-                f"former title “{former_title}”; reference {bag_moby}."
-            )
+            if args.clear_moby_url:
+                summary = (args.correction_summary or "").strip() or (
+                    f"Catalog correction ({date.today().isoformat()}): "
+                    f"removed MobyGames catalog link; former title “{former_title}”."
+                )
+            else:
+                summary = (args.correction_summary or "").strip() or (
+                    f"Catalog correction ({date.today().isoformat()}): "
+                    f"former title “{former_title}”; reference {bag_moby}."
+                )
             ingest_kind = str(ledger.get("ingest_kind") or "press_material").strip() or "press_material"
             patch_mod = _patch_wasabi_module()
             patch_mod.patch_wasabi_bag(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -20,6 +21,20 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from omeka_catalog_common import load_register_dip_omeka_api, set_resource_public  # noqa: E402
 from yaml_config import load_yaml  # noqa: E402
+
+_ITEM_ID_RE = re.compile(r"/item/(\d+)(?:/|$|\?)")
+
+
+def parse_omeka_item_id(ref: str) -> int:
+    raw = ref.strip()
+    if raw.isdigit():
+        return int(raw)
+    m = _ITEM_ID_RE.search(raw)
+    if m:
+        return int(m.group(1))
+    raise SystemExit(
+        f"Could not parse Omeka item id from {ref!r} (use numeric id or a URL containing /item/<id>)"
+    )
 
 
 def _ledger_connect(register_api, ingest_cfg):
@@ -67,6 +82,10 @@ def main() -> None:
         type=int,
         help="Resolve game_key from game_ingest.omeka_item_id (e.g. ARK name segment)",
     )
+    id_group.add_argument(
+        "--omeka-ref",
+        help="Omeka item id or public/admin URL containing /item/<id> (same as catalog correction)",
+    )
     parser.add_argument(
         "--reason",
         default="curation_review",
@@ -81,6 +100,10 @@ def main() -> None:
     note = " ".join(args.note).strip()
     if not note:
         raise SystemExit("Curation note is required.")
+
+    omeka_item_id = args.omeka_item_id
+    if args.omeka_ref:
+        omeka_item_id = parse_omeka_item_id(args.omeka_ref)
 
     register_api = load_register_dip_omeka_api()
     api_cfg = load_yaml(CONFIG_ROOT / "omeka-catalog.yaml")["api"]
@@ -98,7 +121,7 @@ def main() -> None:
         game_key, item_id, media_id = _fetch_row(
             conn,
             game_key=args.game_key,
-            omeka_item_id=args.omeka_item_id,
+            omeka_item_id=omeka_item_id,
         )
         with conn.cursor() as cur:
             cur.execute(

@@ -27,6 +27,7 @@ def render_nav(*, active: str, status_config: dict) -> str:
         ("ledger", "/", "Ledger"),
         ("health", "/health", "Health"),
         ("correct", "/correct", "Catalog correction"),
+        ("quarantine", "/quarantine", "Quarantine"),
         ("ops", "/ops", "Windmill runs"),
         ("logs", "/logs", "Batch logs"),
     ]

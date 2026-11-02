@@ -533,6 +533,26 @@ ul.log-list li {
   color: var(--hs-content-fg);
 }
 
+.inline-form {
+  display: inline;
+  margin: 0;
+  padding: 0;
+}
+
+.inline-form button.linkish {
+  font: inherit;
+  color: var(--hs-link);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.inline-form button.linkish:hover {
+  color: var(--hs-link-hover, var(--hs-link));
+}
+
 @media (max-width: 640px) {
   .site-nav .nav-extra {
     margin-left: 0;

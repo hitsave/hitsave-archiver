@@ -12,7 +12,7 @@ Remote contributor ingest (Drive, Wasabi incoming, lane routing): **[remote-inta
 | Ingest kind → catalog routing | [`config/preservation/ingest-kinds.yaml`](../config/preservation/ingest-kinds.yaml) | `press_material`, `dump`, `other`; Wasabi unpacked prefixes — see [`dump-preservation.md`](./dump-preservation.md) |
 | BagIt packaging | [`config/preservation/packaging.yaml`](../config/preservation/packaging.yaml) | BagIt dirs, Wasabi unpacked key pattern, validation |
 | Portable zip limits, allowlists | [`config/preservation/submissions.yaml`](../config/preservation/submissions.yaml) | `limits.*`, `security.*`, submission-only `preservation.video_access` |
-| Omeka catalog registration target | [`config/omeka-catalog.yaml`](../config/omeka-catalog.yaml) | API base URL, site slug, `external_dip`, `aip_wasabi` staff URI (`is_public: false`) |
+| Omeka catalog registration target | [`config/omeka-catalog.yaml`](../config/omeka-catalog.yaml) | API base URL, site slug, `api.default_is_public` (new items start private; publish via status-web or `set-omeka-visibility.py`), `external_dip`, `aip_wasabi` staff URI (`is_public: false`) |
 | Service host paths (shell helpers) | [`config/preservation/host-paths.yaml`](../config/preservation/host-paths.yaml) | `submissions_root`, `output_root` — collection paths stay in `ingest.yaml` / `host.env` `HOST_*` |
 | MobyGames API + public URLs | [`config/mobygames.yaml`](../config/mobygames.yaml) | `api_base`, `public_game_url_template`, ad blurb fetch, `block_on_failure` |
 | ClamAV scan caps (aligned with submissions) | [`config/clamav/clamd.conf`](../config/clamav/clamd.conf) | Must stay in sync with `submissions.yaml` `limits.max_member_bytes` / `max_archive_members` — see [`config/clamav/README.md`](../config/clamav/README.md) |
@@ -40,7 +40,7 @@ Batch expand writes **minimal** per-game YAML under `config/preservation/generat
 |------|------|--------|
 | `clamd.conf` byte limits | `submissions.yaml` `limits.max_member_bytes` | ClamAV has no YAML import; tune both when changing submission caps |
 | `status-web.yaml` `omeka.public_admin_base` / `public_site_base` | Production `https://archive.hitsave.org` | Status UI Omeka links (use `public_url` + `site_slug` for local test stack only) |
-| `status-web.yaml` `ops.windmill_ui_url` / `ops.windmill.workspace` | Operator copy from [`status-web.yaml.example`](../config/status-web.yaml.example) | `/ops` script links + completed job list when Windmill is configured |
+| `status-web.yaml` `ops.windmill` (`api_url`, `workspace`, `token_file`, `correct_catalog_script`) | Operator copy from [`status-web.yaml.example`](../config/status-web.yaml.example) | `/correct` runs Windmill `correct_catalog_item`; `/ops` script links + completed job list |
 | Private `secrets/windmill-status-web.token` | Windmill personal/workspace token | Bearer token for `ops.windmill.token_file`; file must be world-readable in container (644) |
 | `status-web.yaml` `ledger.default_per_page` / `per_page_options` | e.g. 50, [25, 50, 100, 200] | Ledger table pagination on `/` |
 | Status-web compose mounts | Same private `omeka-catalog.yaml` + `secrets` as `omeka-catalog` | Powers **`/correct`** (runs `correct-catalog-item.py` in-container) |

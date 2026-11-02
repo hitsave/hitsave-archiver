@@ -1,0 +1,30 @@
+summary: Quarantine catalog item (manual curation)
+description: |
+  Runs `scripts/curation-quarantine-omeka.py` via the `omeka-catalog` compose service.
+  Sets ledger status=quarantine, block_reason, and error_message; hides Omeka item and DIP media.
+lock: ''
+kind: script
+language: bash
+schema:
+  $schema: 'https://json-schema.org/draft/2020-12/schema'
+  type: object
+  required:
+    - omeka_ref
+    - note
+  properties:
+    omeka_ref:
+      type: string
+      description: Omeka item id or URL containing /item/<id>
+    block_reason:
+      type: string
+      description: Ledger block_reason code
+      default: curation_review
+      enum:
+        - curation_review
+        - manual_quarantine
+        - hash_named_images
+        - booru_tagged_filenames
+        - not_press_material
+    note:
+      type: string
+      description: Human-readable curation note (stored on ledger error_message)

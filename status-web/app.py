@@ -16,8 +16,14 @@ from catalog_correct import (
     ledger_hint_for_omeka,
     render_correct_page,
     run_correction,
-    validate_and_argv,
+    validate_and_job_args,
 )
+from catalog_quarantine import (
+    render_quarantine_page,
+    run_quarantine,
+    validate_and_argv as validate_quarantine_argv,
+)
+from catalog_visibility import run_visibility
 from ledger_health import fetch_attention_rows, fetch_health_summary
 
 sys.path.insert(0, str(Path("/app/scripts")))
@@ -148,9 +154,24 @@ def _action_links(item_id) -> list[str]:
     admin = f"{ADMIN}/item/{item_id}/show"
     public = f"{SITE}/item/{item_id}"
     correct = f"/correct?{urlencode({'omeka_ref': str(item_id)})}"
+    quarantine = f"/quarantine?{urlencode({'omeka_ref': str(item_id)})}"
     links.append(f'<a href="{html.escape(admin)}">admin</a>')
     links.append(f'<a href="{html.escape(public)}">site</a>')
     links.append(f'<a href="{html.escape(correct)}">correct</a>')
+    links.append(f'<a href="{html.escape(quarantine)}">quarantine</a>')
+    ref = html.escape(str(item_id))
+    links.append(
+        f'<form method="post" action="/visibility" class="inline-form">'
+        f'<input type="hidden" name="omeka_ref" value="{ref}">'
+        f'<input type="hidden" name="is_public" value="true">'
+        f'<button type="submit" class="linkish">publish</button></form>'
+    )
+    links.append(
+        f'<form method="post" action="/visibility" class="inline-form">'
+        f'<input type="hidden" name="omeka_ref" value="{ref}">'
+        f'<input type="hidden" name="is_public" value="false">'
+        f'<button type="submit" class="linkish">hide</button></form>'
+    )
     return links
 
 
@@ -251,6 +272,7 @@ def _windmill_scripts_cfg() -> dict[str, str]:
         "Batch resume Omeka": "f/hitsave/batch_resume_omeka",
         "Ledger health report": "f/hitsave/ledger_health_report",
         "Catalog correction (Windmill)": "f/hitsave/correct_catalog_item",
+        "Quarantine catalog item": "f/hitsave/quarantine_catalog_item",
     }
     merged = {**defaults, **{str(k): str(v) for k, v in scripts.items() if v}}
     return merged
@@ -561,36 +583,85 @@ class Handler(BaseHTTPRequestHandler):
                 ),
             )
             return
+        if path == "/quarantine":
+            form = parse_qs(parsed.query, keep_blank_values=True)
+            omeka_ref = (form.get("omeka_ref") or [""])[0]
+            hint = ledger_hint_for_omeka(connect, omeka_ref) if omeka_ref else None
+            self._send_html(
+                render_quarantine_page(
+                    form=form, hint=hint, is_post=False, status_config=CONFIG
+                ),
+            )
+            return
+        if path == "/visibility":
+            self.send_response(405)
+            self.end_headers()
+            return
         self.send_response(404)
         self.end_headers()
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
-        if parsed.path.rstrip("/") != "/correct":
-            self.send_response(404)
+        path = parsed.path.rstrip("/")
+        form = self._read_form()
+        if path == "/correct":
+            job_args, errors, values = validate_and_job_args(form, is_post=True)
+            hint = ledger_hint_for_omeka(connect, values.get("omeka_ref", ""))
+            result = None
+            if not errors and job_args is not None:
+                result = run_correction(CONFIG.get("ops") or {}, job_args)
+                if result[0] != 0:
+                    errors.append("Windmill correction job failed (see output below).")
+            display_form = dict(form)
+            if "description" not in display_form:
+                display_form["description"] = [values.get("description", "")]
+            self._send_html(
+                render_correct_page(
+                    form=display_form,
+                    hint=hint,
+                    errors=errors,
+                    result=result,
+                    is_post=True,
+                    status_config=CONFIG,
+                ),
+            )
+            return
+        if path == "/quarantine":
+            argv, errors, values = validate_quarantine_argv(form, is_post=True)
+            hint = ledger_hint_for_omeka(connect, values.get("omeka_ref", ""))
+            result = None
+            if not errors and argv:
+                result = run_quarantine(argv)
+                if result[0] != 0:
+                    errors.append("Quarantine script exited with an error (see output below).")
+            self._send_html(
+                render_quarantine_page(
+                    form=form,
+                    hint=hint,
+                    errors=errors,
+                    result=result,
+                    is_post=True,
+                    status_config=CONFIG,
+                ),
+            )
+            return
+        if path == "/visibility":
+            omeka_ref = (form.get("omeka_ref") or [""])[0].strip()
+            is_public_raw = (form.get("is_public") or [""])[0].strip().lower()
+            is_public = is_public_raw in ("true", "1", "yes", "on")
+            if omeka_ref:
+                run_visibility(omeka_ref, is_public=is_public)
+            self.send_response(303)
+            back = (form.get("return_to") or [""])[0].strip()
+            if not back.startswith("/"):
+                referer = (self.headers.get("Referer") or "").strip()
+                ref_path = urlparse(referer).path if referer else "/"
+                back = ref_path if ref_path.startswith("/") else "/"
+            self.send_header("Location", back)
             self.end_headers()
             return
-        form = self._read_form()
-        argv, errors, values = validate_and_argv(form, is_post=True)
-        hint = ledger_hint_for_omeka(connect, values.get("omeka_ref", ""))
-        result = None
-        if not errors and argv:
-            result = run_correction(argv)
-            if result[0] != 0:
-                errors.append("Correction script exited with an error (see output below).")
-        display_form = dict(form)
-        if "description" not in display_form:
-            display_form["description"] = [values.get("description", "")]
-        self._send_html(
-            render_correct_page(
-                form=display_form,
-                hint=hint,
-                errors=errors,
-                result=result,
-                is_post=True,
-                status_config=CONFIG,
-            ),
-        )
+        self.send_response(404)
+        self.end_headers()
 
     def log_message(self, fmt: str, *args) -> None:
         return

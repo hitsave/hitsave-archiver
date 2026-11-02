@@ -83,7 +83,7 @@ These stay in **your hitsave-archiver working tree**, not in the private repo. C
 |------|---------|
 | `config/preservation/game.yml` | [`config/preservation/game.yml.example`](../config/preservation/game.yml.example) |
 | `config/preservation/batch.yml` | [`config/preservation/batch.yml.example`](../config/preservation/batch.yml.example) — `source_subpath` is relative to [`ingest.yaml`](../config/preservation/ingest.yaml) `paths.press_material_root`; expand via [`batch-expand-preservation.sh`](../scripts/batch-expand-preservation.sh) |
-| `config/status-web.yaml` | [`config/status-web.yaml.example`](../config/status-web.yaml.example) — set `ops.windmill_ui_url` on hosts that run Windmill |
+| `config/status-web.yaml` | [`config/status-web.yaml.example`](../config/status-web.yaml.example) — set `ops.windmill.api_url` to a host reachable from the status-web container; `/correct` uses Windmill `correct_catalog_script` |
 
 Committed policy (no secrets): [`config/omeka-catalog.yaml`](../config/omeka-catalog.yaml), [`config/preservation/ingest.yaml`](../config/preservation/ingest.yaml), [`config/preservation/submissions.yaml`](../config/preservation/submissions.yaml).
 

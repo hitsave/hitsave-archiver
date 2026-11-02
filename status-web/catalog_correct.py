@@ -1,19 +1,23 @@
-"""Catalog correction form and runner (wraps scripts/correct-catalog-item.py)."""
+"""Catalog correction form; runs Windmill f/hitsave/correct_catalog_item."""
 from __future__ import annotations
 
 import html
 import re
-import subprocess
-from pathlib import Path
 from typing import Any
 
-SCRIPT = Path("/app/scripts/correct-catalog-item.py")
+from windmill_client import run_correction_via_windmill
+
 CORRECTION_FIELD_NAMES = ("title", "moby_url", "description", "developer", "publisher")
+CLEAR_FIELD_NAMES = ("clear_moby_url", "clear_developer", "clear_publisher")
 _ITEM_ID_RE = re.compile(r"/item/(\d+)(?:/|$|\?)")
 
 
 def _field(form: dict[str, list[str]], name: str) -> str:
     return (form.get(name) or [""])[0].strip()
+
+
+def _form_bool(values: dict[str, str], name: str) -> bool:
+    return values.get(name) in ("true", "on", "1", "yes")
 
 
 def parse_omeka_item_id(ref: str) -> int | None:
@@ -56,13 +60,19 @@ def validate_correction_form(
         values[name] = _field(form, name)
     values["former_title"] = _field(form, "former_title")
     values["correction_summary"] = _field(form, "correction_summary")
-    values["description_in_form"] = "1" if "description" in form else "0"
+    for name in CLEAR_FIELD_NAMES:
+        values[name] = _field(form, name) if is_post else ""
+    values["reset_ledger_moby"] = _field(form, "reset_ledger_moby") if is_post else "true"
+
     has_correction = any(values[name] for name in CORRECTION_FIELD_NAMES if name != "description")
-    if values.get("description_in_form") == "1":
+    if values.get("description", "").strip():
+        has_correction = True
+    if any(_field(form, name) in ("true", "on", "1", "yes") for name in CLEAR_FIELD_NAMES):
         has_correction = True
     if not errors and not has_correction:
         errors.append(
-            "Provide at least one of title, Moby URL, description, developer, or publisher."
+            "Provide at least one field to change or clear (title, Moby URL, description, "
+            "developer, publisher, or a clear checkbox)."
         )
     if is_post:
         execute = _field(form, "execute") in ("true", "on", "1", "yes")
@@ -72,60 +82,56 @@ def validate_correction_form(
     return values, errors
 
 
-def build_argv(values: dict[str, str]) -> list[str]:
-    argv = ["python", str(SCRIPT), "--omeka-ref", values["omeka_ref"]]
+def description_for_windmill(values: dict[str, str]) -> str | None:
+    """Description override only when non-empty (omit so clear_moby restores press-kit text)."""
+    desc = (values.get("description") or "").strip()
+    if not desc:
+        return None
+    return desc
+
+
+def build_windmill_args(values: dict[str, str]) -> dict[str, Any]:
+    """JSON body for Windmill correct_catalog_item (matches script schema)."""
+    args: dict[str, Any] = {"omeka_ref": values["omeka_ref"]}
     if values.get("title"):
-        argv += ["--title", values["title"]]
+        args["title"] = values["title"]
     if values.get("moby_url"):
-        argv += ["--moby-url", values["moby_url"]]
-    if values.get("description_in_form") == "1":
-        argv += ["--description", values.get("description", "")]
+        args["moby_url"] = values["moby_url"]
+    if _form_bool(values, "clear_moby_url"):
+        args["clear_moby_url"] = True
+    desc = description_for_windmill(values)
+    if desc is not None:
+        args["description"] = desc
     if values.get("developer"):
-        argv += ["--developer", values["developer"]]
+        args["developer"] = values["developer"]
+    if _form_bool(values, "clear_developer"):
+        args["clear_developer"] = True
     if values.get("publisher"):
-        argv += ["--publisher", values["publisher"]]
+        args["publisher"] = values["publisher"]
+    if _form_bool(values, "clear_publisher"):
+        args["clear_publisher"] = True
     if values.get("former_title"):
-        argv += ["--former-title", values["former_title"]]
+        args["former_title"] = values["former_title"]
     if values.get("correction_summary"):
-        argv += ["--correction-summary", values["correction_summary"]]
-    if values.get("execute") == "true":
-        argv.append("--execute")
-    else:
-        argv.append("--no-execute")
-    return argv
+        args["correction_summary"] = values["correction_summary"]
+    if values.get("reset_ledger_moby") == "false":
+        args["reset_ledger_moby"] = False
+    if values.get("execute") != "true":
+        args["execute"] = False
+    return args
 
 
-def validate_and_argv(
+def validate_and_job_args(
     form: dict[str, list[str]], *, is_post: bool
-) -> tuple[list[str] | None, list[str], dict[str, str]]:
+) -> tuple[dict[str, Any] | None, list[str], dict[str, str]]:
     values, errors = validate_correction_form(form, is_post=is_post)
     if errors:
         return None, errors, values
-    if not SCRIPT.is_file():
-        errors.append(f"Correction script not found at {SCRIPT} (check compose mounts).")
-        return None, errors, values
-    return build_argv(values), errors, values
+    return build_windmill_args(values), errors, values
 
 
-def run_correction(argv: list[str]) -> tuple[int, str]:
-    proc = subprocess.run(
-        argv,
-        capture_output=True,
-        text=True,
-        timeout=900,
-        env=_runner_env(),
-    )
-    out = (proc.stdout or "") + (proc.stderr or "")
-    return proc.returncode, out.strip()
-
-
-def _runner_env() -> dict[str, str]:
-    import os
-
-    env = os.environ.copy()
-    env.setdefault("HITSAVE_CONFIG_ROOT", "/config")
-    env.setdefault("PYTHONPATH", "/app/scripts")
-    return env
+def run_correction(ops: dict[str, Any], script_args: dict[str, Any]) -> tuple[int, str]:
+    return run_correction_via_windmill(ops, script_args)
 
 
 def render_correct_page(
@@ -178,8 +184,8 @@ def render_correct_page(
     from site_ui import render_page_shell
 
     inner = f"""<div class="panel">
-<p>Updates Omeka via the preservation API. When <strong>title</strong> or <strong>Moby URL</strong> changes,
-bag metadata on Wasabi is updated by default.</p>
+<p>Submits <code>f/hitsave/correct_catalog_item</code> on Windmill (same bash wrapper as the Windmill UI).
+Omeka and optional Wasabi bag updates run on the hitsave worker.</p>
 {hint_block}
 {err_block}
 {result_block}
@@ -190,12 +196,18 @@ bag metadata on Wasabi is updated by default.</p>
 <input type="text" name="title" value="{val('title')}"></label>
 <label class="field">MobyGames URL (bibo:uri)
 <input type="text" name="moby_url" value="{val('moby_url')}"></label>
-<label class="field">Description
+<label class="field"><input type="checkbox" name="clear_moby_url" value="true">
+ Clear MobyGames catalog (URL, Moby description/rights, developer/publisher from match; resets ledger)</label>
+<label class="field">Description <span class="hint-inline">(optional; leave blank when clearing Moby to restore press-kit text)</span>
 <textarea name="description">{val('description')}</textarea></label>
 <label class="field">Developer(s) <span class="hint-inline">(comma-separated)</span>
 <input type="text" name="developer" value="{val('developer')}"></label>
+<label class="field"><input type="checkbox" name="clear_developer" value="true">
+ Clear developer(s)</label>
 <label class="field">Publisher(s) <span class="hint-inline">(comma-separated)</span>
 <input type="text" name="publisher" value="{val('publisher')}"></label>
+<label class="field"><input type="checkbox" name="clear_publisher" value="true">
+ Clear publisher(s)</label>
 <label class="field">Former title <span class="hint-inline">(bag notes; default current title)</span>
 <input type="text" name="former_title" value="{val('former_title')}"></label>
 <label class="field">Correction summary <span class="hint-inline">(bag catalog_notes)</span>
