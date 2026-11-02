@@ -66,7 +66,12 @@ moved too early is never ingested.
 
 Open status-web. The **Ledger** page lists every package, newest first.
 
-1. Type part of the title, or the folder name, into the search box. For example: `famitsu wave dvd 2008`.
+1. Type **one word** from the title, or part of the package name **with dashes**, into the search
+   box, then click **Search**. For example `famitsu`, or `famitsu-wave-dvd-2008-12`. The search
+   matches the text exactly as typed, so `famitsu wave dvd 2008` (with spaces) finds nothing.
+
+   ![The Ledger page after searching for famitsu-wave-dvd-2008-12: two complete packages, each with admin, site, correct, quarantine, publish and hide actions](images/archivist-guide/ledger-search.png)
+
 2. Read the **Status** column:
 
 | Status | Meaning | What to do |
@@ -79,14 +84,20 @@ Open status-web. The **Ledger** page lists every package, newest first.
 3. When the status is `complete`, the **Omeka** column links to the catalog item. Open it and check
    the title and description.
 
-The **Health** page lists everything that needs attention:
+The **Health** page starts with counts by status and the flags that need attention:
+
+![Health page summary: counts by status, and flags for failed packages, completed packages without a catalog item, and intake failures](images/archivist-guide/health-summary.png)
+
+Below the counts it lists everything that needs attention:
 
 - **Attention queue**: quarantined or failed packages, packages with an error, and completed
   packages without a catalog item.
-- **Intake failures**: packages that never reached the ledger because a file didn't match the
-  checksums in the sidecar. The **Reason** column names the file and the mismatch.
+- **Intake failures**: packages that never reached the ledger, for example because a file didn't
+  match the checksums in the sidecar, or the sidecar was missing. The **Reason** column says which.
 
 If both lists are empty, nothing needs you.
+
+![The Intake failures section of the Health page: package folder, time of failure and the reason, such as a missing sidecar](images/archivist-guide/health-intake-failures.png)
 
 **To fix an intake failure**, correct the package in the inbox: re-upload the damaged file, or
 replace a wrong sidecar. The system notices the change and tries again on its own; it doesn't
@@ -103,6 +114,9 @@ Every ledger row has these actions: **admin** (Omeka admin page), **site** (publ
 To fix a title or other details:
 
 1. Click **correct** on the ledger row. The form opens with the Omeka item filled in.
+
+   ![The Catalog correction form: Omeka item id, title, MobyGames URL, clear-Moby checkbox, description, developers, publishers, former title, correction summary, and the Wasabi upload checkbox](images/archivist-guide/correct-form.png)
+
 2. Fill in only the fields you want to change:
    - **Title**
    - **MobyGames URL**, the correct MobyGames page
