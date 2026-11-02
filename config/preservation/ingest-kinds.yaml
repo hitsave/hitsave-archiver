@@ -50,6 +50,12 @@ ingest_kinds:
           - sha1
           - md5
         path_pattern: "No-Intro/{system}/{sort_letter}/{package_id}"
+      switch:
+        # Nintendo Switch cart dumps: No-Intro submissions (Submission.xml), stored with the other
+        # No-Intro dumps under the DAT-o-MATIC-style system name. dump_system stays "Nintendo Switch"
+        # (catalog wording); only the storage path is No-Intro. Existing bag moved 2026-11-02 with
+        # scripts/relocate_redump_bags_to_redump_prefix.py --layout switch.
+        path_pattern: "No-Intro/Nintendo - Nintendo Switch/{sort_letter}/{package_id}"
       other:
         path_pattern: "Others/{sort_letter}/{package_id}"
 

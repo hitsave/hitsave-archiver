@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""One-shot: move Redump dump bags on Wasabi under dumps/Redump/ (like dumps/No-Intro/).
+"""One-shot: move dump bags on Wasabi to their current layout, with ledger, bag and Omeka updates.
 
-    dumps/{System}/{Category}/{L}/{package_id}/  ->  dumps/Redump/{System}/{Category}/{L}/{package_id}/
+    --layout redump (default):
+      dumps/{System}/{Category}/{L}/{package_id}/  ->  dumps/Redump/{System}/{Category}/{L}/{package_id}/
+    --layout switch (Nintendo Switch cart dumps are No-Intro submissions):
+      dumps/Nintendo Switch/{L}/{package_id}/      ->  dumps/No-Intro/Nintendo - Nintendo Switch/{L}/{package_id}/
 
 Per package, each step resumable (re-running picks up where a previous run stopped):
 
@@ -45,6 +48,8 @@ from yaml_config import load_yaml  # noqa: E402
 
 CONFIG_ROOT = Path("/config")
 NEW_ROOT = "dumps/Redump/"
+SWITCH_OLD_ROOT = "dumps/Nintendo Switch/"
+SWITCH_NEW_ROOT = "dumps/No-Intro/Nintendo - Nintendo Switch/"
 
 
 def redump_target_prefix(old_prefix: str) -> str:
@@ -111,11 +116,29 @@ def tag_files_consistent(s3, bucket: str, prefix: str) -> list[str]:
     return problems
 
 
+def switch_target_prefix(old_prefix: str) -> str:
+    """dumps/Nintendo Switch/... -> dumps/No-Intro/Nintendo - Nintendo Switch/... (idempotent)."""
+    p = old_prefix.strip("/")
+    if p.startswith(SWITCH_NEW_ROOT):
+        return p
+    if not p.startswith(SWITCH_OLD_ROOT):
+        raise ValueError(f"not a Nintendo Switch layout: {old_prefix!r}")
+    return SWITCH_NEW_ROOT + p[len(SWITCH_OLD_ROOT):]
+
+
+# layout -> (ledger dump_class, target fn, (new root, old root) for resuming after the ledger moved)
+LAYOUTS = {
+    "redump": ("redump", redump_target_prefix, (NEW_ROOT, "dumps/")),
+    "switch": ("switch", switch_target_prefix, (SWITCH_NEW_ROOT, SWITCH_OLD_ROOT)),
+}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--execute", action="store_true", help="Move, update ledger, bag tag files and Omeka")
     ap.add_argument("--game-key", action="append", help="Only these packages (repeatable)")
     ap.add_argument("--limit", type=int, default=0, help="Stop after N packages (0 = all)")
+    ap.add_argument("--layout", choices=sorted(LAYOUTS), default="redump", help="Which dumps to move (default redump)")
     args = ap.parse_args()
 
     ingest_path = CONFIG_ROOT / "preservation" / "ingest.yaml"
@@ -136,9 +159,10 @@ def main() -> None:
     http = requests.Session()
     hdr = {"Accept": "application/ld+json"}
 
-    where = ["ingest_kind = 'dump'", "dump_class = 'redump'", "status = 'complete'",
+    where = ["ingest_kind = 'dump'", "dump_class = %s", "status = 'complete'",
              "COALESCE(package_storage_prefix, '') <> ''"]
-    params: list = []
+    dump_class, target_prefix, _ = LAYOUTS[args.layout]
+    params: list = [dump_class]
     if args.game_key:
         where.append("game_key = ANY(%s)")
         params.append(args.game_key)
@@ -152,8 +176,9 @@ def main() -> None:
     todo = []
     for game_key, title_slug, prefix, aip, letter, item_id, media_id in rows:
         old = str(prefix).strip("/")
-        old_root = old if not old.startswith(NEW_ROOT) else "dumps/" + old[len(NEW_ROOT):]
-        new = redump_target_prefix(old)
+        new_root, prev_root = LAYOUTS[args.layout][2]
+        old_root = old if not old.startswith(new_root) else prev_root + old[len(new_root):]
+        new = target_prefix(old)
         bucket = wasabi_bucket_for_storage_prefix(wasabi_cfg, old, ingest_kind="dump")
         todo.append(dict(game_key=game_key, title_slug=title_slug, old=old_root, new=new, bucket=bucket,
                          ledger_prefix=old, item_id=item_id, media_id=media_id, sort_letter=letter))
@@ -161,7 +186,7 @@ def main() -> None:
         todo = todo[: args.limit]
 
     pending = [t for t in todo if t["ledger_prefix"] != t["new"]]
-    print(json.dumps({"dry_run": not args.execute, "redump_packages": len(rows),
+    print(json.dumps({"dry_run": not args.execute, "layout": args.layout, "packages": len(rows),
                       "selected": len(todo), "ledger_not_yet_moved": len(pending)}))
     if not args.execute:
         for t in pending[:10]:

@@ -174,7 +174,7 @@ def classify_dump_sip(
             category = storage_path_segment(str(sw.categories or "Games"))
             pattern = str(
                 switch_cfg.get("path_pattern")
-                or "{system}/{sort_letter}/{package_id}"
+                or "No-Intro/Nintendo - Nintendo Switch/{sort_letter}/{package_id}"
             )
             prefix = pattern.format(
                 system=system,

@@ -73,6 +73,14 @@ Example: `dumps/No-Intro/Nintendo - Nintendo 64/F/{package_id}/`
 
 Ledger: `dump_class = no-intro`, `dump_system` = DAT-o-MATIC system label, `dump_category = ROM`.
 
+**Nintendo Switch cart dumps** are No-Intro submissions too (`Submission.xml` under a version folder) and are stored with them:
+
+```text
+dumps/No-Intro/Nintendo - Nintendo Switch/{sort_letter}/{package_id}/
+```
+
+Ledger: `dump_class = switch` (Switch-specific catalog: folder title, version, title ID), `dump_system = Nintendo Switch`. The path pattern is `ingest-kinds.yaml` → `dump_layout.switch.path_pattern`.
+
 Intake verifies each ROM file against the sidecar hashes before `ready/` (same pipeline as Redump).
 
 ### Other dumps
