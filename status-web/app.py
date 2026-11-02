@@ -391,14 +391,15 @@ def render_ledger(
 <div class="summary">{chips or '<span class="muted">No ledger rows yet.</span>'}</div>
 <p class="muted"><a href="/health">Ledger health</a> — flags and attention queue.</p>
 <form class="search-form" method="get"><input type="search" name="q" value="{html.escape(q)}"
-placeholder="Search key, path, status, moby, error, Wasabi prefix, Omeka id, …">
+placeholder="Words from the title, e.g. famitsu wave dvd 2008">
 <input type="hidden" name="sort" value="{html.escape(sort)}">
 <input type="hidden" name="dir" value="{html.escape(sort_dir)}">
 <input type="hidden" name="page" value="1">
 <input type="hidden" name="per_page" value="{pp}">
 <button type="submit">Search</button></form>
-<p class="muted">Matches any of: game key, source path, status, moby status/title/id, block reason,
-error text, ingest kind, Wasabi prefixes, dump class/system/category, Omeka item/media id.</p>
+<p class="muted">Every word must appear somewhere in the row, in any order; case, dashes and
+punctuation don't matter. Searches game key, source path, status, Moby status/title/id, block reason,
+error text, ingest kind, Wasabi prefixes, dump class/system/category and Omeka item/media id.</p>
 {pagination_html}
 <div class="table-wrap"><table><thead><tr>
 {ledger_headers}
