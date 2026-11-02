@@ -14,7 +14,7 @@ Community dump pipelines (Google Drive and Wasabi incoming → **hitsave-intake*
 
 Logs and poll JSON default to **`hitsave-archiver/.generated/`** (override with **`HITSAVE_REMOTE_INTAKE_LOG_DIR`**).
 
-Poll JSON under `.generated/` is for sweeps and move-to-processed scripts only. **Ops visibility:** `game_ingest` ledger + status-web **Health** (not a separate inbox poll UI).
+Poll JSON under `.generated/` is for sweeps and move-to-processed scripts only. **Ops visibility:** `game_ingest` ledger + the ledger's **Health** page (not a separate inbox poll UI).
 
 ## Main commands
 

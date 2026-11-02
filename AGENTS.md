@@ -3,7 +3,7 @@
 ## Repos
 
 - **Public:** this repo — no credentials in git.
-- **Private:** `hitsave-archiver-config` — Wasabi, Omeka API, MobyGames, ledger Postgres password, host paths, intake / status-web / Windmill config.
+- **Private:** `hitsave-archiver-config` — Wasabi, Omeka API, MobyGames, ledger Postgres password, host paths, intake / ledger / Windmill config.
 - **Private:** `hitsave-intake` — Drive and Wasabi inbox polling and sidecar checksum verification.
 - **Omeka QA:** `hitsave-omeka-test` — local MariaDB/Omeka stack (not in this repo).
 - **Theme:** `hitsave-archive-theme` — rebuild/deploy separately.
@@ -16,7 +16,7 @@ Compose expects `HITSAVE_PRIVATE_CONFIG` (default sibling `../hitsave-archiver-c
 
 **Remote intake lanes:** **`docs/remote-intake-lanes.md`** (intake handoff → archiver; private lane inventory template in `config/preservation/lane-inventory.template.yaml`).
 
-**Ops UI:** preservation **status-web** on `:8090` (ledger, health, **`/correct`**, **`/quarantine`**, publish/hide) — config in the private repo (`status-web.yaml`, from **`config/status-web.yaml.example`**). **Windmill** (schedules, job logs): **`windmill_ops/README.md`**; Windmill keeps its own copy of each script, so push changes (targeted `script push` / `schedule push`).
+**Ops UI:** the **ledger** app (`ledger/`, image `ghcr.io/hitsave/ledger`) on `:8090`; production at `https://ledger.hitsave.org` behind Caddy + oauth2-proxy (Pocket ID) on luigi (ledger, health, **`/correct`**, **`/quarantine`**, publish/hide) — config in the private repo (`ledger.yaml`, from **`config/ledger.yaml.example`**). **Windmill** (schedules, job logs): **`windmill_ops/README.md`**; Windmill keeps its own copy of each script, so push changes (targeted `script push` / `schedule push`).
 
 **Storage:** Wasabi is the permanent copy; local bags and `ready/` are pruned after verification — **`docs/storage-retention.md`**. Archivist-facing usage: **`docs/archivist-guide.md`**.
 

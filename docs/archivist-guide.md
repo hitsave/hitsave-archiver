@@ -9,9 +9,9 @@ after their catalog records. It covers four tasks:
 - Understand what's stored in each package and how the system checks it.
 
 You don't need a terminal for any of these. You need access to the inbox folders on the shared
-Google Drive or in the Wasabi `hitsave-incoming` bucket, and to **status-web**, the archive's staff dashboard. Ask an admin for its
-address. Today it's `http://saturn:8090`; after the move to the new server it will be a tailnet
-address behind a Pocket ID login.
+Google Drive or in the Wasabi `hitsave-incoming` bucket, and to the **ledger**, the archive's staff
+dashboard at [ledger.hitsave.org](https://ledger.hitsave.org). Sign in with your `@hitsave.org`
+account through Pocket ID (the same login as the other HitSave staff tools).
 
 ## What happens after you upload
 
@@ -120,7 +120,7 @@ ingested. Don't delete anything from `processed/` either; those are the contribu
 
 ## Check progress in the ledger
 
-Open status-web. The **Ledger** page lists every package, newest first.
+Open the ledger. The **Ledger** page lists every package, newest first.
 
 1. Type words from the title into the search box, then click **Search**. For example:
    `famitsu wave dvd 2008-12`. Every word must appear, in any order; capitals, dashes and
@@ -204,7 +204,7 @@ material, or files with meaningless hash names.
 3. Submit. The ledger status changes to `quarantine` and the catalog item is hidden from the public.
 
 The preserved copy on Wasabi stays untouched. Releasing an item from quarantine isn't possible from
-status-web yet; ask an admin.
+the ledger yet; ask an admin.
 
 ## What's in a package
 

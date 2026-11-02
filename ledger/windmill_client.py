@@ -198,7 +198,7 @@ def run_correction_via_windmill(
         return (
             1,
             "Windmill is not configured. Set ops.windmill.workspace and ops.windmill_ui_url "
-            "(or ops.windmill.api_url) in status-web.yaml.",
+            "(or ops.windmill.api_url) in ledger.yaml.",
         )
     token = settings.get("token") or ""
     if not token:

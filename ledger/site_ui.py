@@ -1,12 +1,23 @@
-"""Shared status-web chrome (nav + page wrapper)."""
+"""Shared HitSave Ledger chrome (nav + page wrapper)."""
 from __future__ import annotations
 
 import html
+import threading
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 _THEME_PATH = Path(__file__).resolve().parent / "preserve_theme.css"
+_REQUEST = threading.local()
+
+
+def set_current_user(user: str) -> None:
+    """Signed-in user for the request being handled on this thread ('' when unknown)."""
+    _REQUEST.user = user or ""
+
+
+def current_user() -> str:
+    return getattr(_REQUEST, "user", "")
 
 
 @lru_cache(maxsize=1)
@@ -48,6 +59,13 @@ def render_nav(*, active: str, status_config: dict) -> str:
             f"</span>"
         )
 
+    user = current_user()
+    if user:
+        extra += (
+            f'<span class="nav-extra">Signed in as {html.escape(user)} · '
+            f'<a href="/oauth2/sign_out">Sign out</a></span>'
+        )
+
     return f'<nav class="site-nav">{"".join(nav_links)}{extra}</nav>'
 
 
@@ -59,14 +77,14 @@ def render_page_shell(*, title: str, active: str, inner: str, status_config: dic
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{html.escape(title)} · HitSave preservation</title>
+<title>{html.escape(title)} · HitSave Ledger</title>
 <style>{css}</style>
 </head><body>
 <header class="site-header">
 <div class="brand-stripe" aria-hidden="true"></div>
 <div class="header-inner">
 <div class="family-bar">
-<a class="brand-mark" href="/">HitSave preservation</a>
+<a class="brand-mark" href="/">HitSave Ledger</a>
 <span class="muted">·</span>
 <a href="https://preserve.games/" target="_blank" rel="noopener">preserve.games</a>
 <span class="muted">·</span>

@@ -1,11 +1,11 @@
-"""Status-web catalog correction → Windmill job args."""
+"""Ledger catalog correction → Windmill job args."""
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "status-web"))
+sys.path.insert(0, str(ROOT / "ledger"))
 
 from catalog_correct import build_windmill_args, description_for_windmill  # noqa: E402
 

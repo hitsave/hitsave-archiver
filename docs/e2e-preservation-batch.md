@@ -6,7 +6,7 @@ press material and no Windmill schedule; an operator starts each batch.
 
 **Omeka target.** Compose mounts the private `hitsave-archiver-config/omeka-catalog.yaml`, which
 points at **production** (`archive.hitsave.org`). New items start **private**; publish them from
-status-web once checked. For a dry run against the local test stack, copy
+the ledger once checked. For a dry run against the local test stack, copy
 `omeka-catalog.test.yaml` over it first, and use [hitsave-omeka-test](https://github.com/hitsave/hitsave-omeka-test/blob/main/docs/build-real-dip.md).
 
 ## Host paths (private `host.env`, not in git)
@@ -77,6 +77,6 @@ Log: `.generated/register-manifest-dips-omeka.log` (override with `HITSAVE_REGIS
 
 ## Verify
 
-- **status-web** ledger and Health page: every game `complete` with an Omeka id, or listed in the attention queue with a reason ([archivist-guide.md](./archivist-guide.md)).
+- the **ledger**'s Ledger and Health pages: every game `complete` with an Omeka id, or listed in the attention queue with a reason ([archivist-guide.md](./archivist-guide.md)).
 - Ledger by hand: `docker compose exec -T postgres psql -U hitsave -d hitsave_ledger -c 'SELECT game_key, status, omeka_item_id FROM game_ingest ORDER BY updated_at DESC LIMIT 20;'`
 - Local bags under `$HOST_OUTPUT/bag/batch/<batch_key>/` are temporary; the prune job deletes them 14 days after upload once Wasabi is verified ([storage-retention.md](./storage-retention.md)).

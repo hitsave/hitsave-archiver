@@ -1,4 +1,4 @@
-"""status-web Health page: intake failures that never reached the ledger."""
+"""Ledger Health page: intake failures that never reached the ledger."""
 from __future__ import annotations
 
 import os
@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "status-web"))
+sys.path.insert(0, str(ROOT / "ledger"))
 
 from intake_failures import open_failures, render_intake_failures, scan_failed_dir  # noqa: E402
 

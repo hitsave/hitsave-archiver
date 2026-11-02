@@ -17,7 +17,7 @@ services:
       - ${HITSAVE_PRIVATE_CONFIG:-./.ci/private-config}/preservation/database.yaml:/config/preservation/database.yaml:ro
       - ${OUTPUT_ROOT:-./.ci/output}:/output:ro
 
-  status-web:
+  ledger:
     volumes:
       - ./config:/config:ro
       - ./scripts:/app/scripts:ro

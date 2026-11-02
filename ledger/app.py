@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Preservation ledger dashboard, health, Windmill ops, catalog correction."""
+"""HitSave Ledger: preservation ledger dashboard, health, Windmill ops, catalog correction."""
 from __future__ import annotations
 
 import html
 import os
 import sys
 from datetime import datetime
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 
@@ -35,7 +35,7 @@ from ledger_health_report import (  # noqa: E402
     ledger_search,
     ledger_search_count,
 )
-from site_ui import render_page_shell
+from site_ui import render_page_shell, set_current_user
 from pagination import (
     ledger_pagination_config,
     parse_page,
@@ -52,30 +52,66 @@ from windmill_client import (
     windmill_script_ui_url,
 )
 
-# Private operator file (hitsave-archiver-config/status-web.yaml), mounted by compose.
-CONFIG = yaml.safe_load(
-    Path(os.environ.get("HITSAVE_STATUS_WEB_CONFIG", "/config/status-web.yaml")).read_text()
-)
+def _config_path() -> Path:
+    """Private operator file (hitsave-archiver-config/ledger.yaml). Old status-web names still work."""
+    for env in ("HITSAVE_LEDGER_CONFIG", "HITSAVE_STATUS_WEB_CONFIG"):
+        if os.environ.get(env):
+            return Path(os.environ[env])
+    for cand in ("/run/hitsave/ledger.yaml", "/config/ledger.yaml", "/config/status-web.yaml"):
+        if Path(cand).is_file():
+            return Path(cand)
+    return Path("/run/hitsave/ledger.yaml")
+
+
+CONFIG = yaml.safe_load(_config_path().read_text())
 DB = yaml.safe_load(Path(CONFIG["database"]["config_file"]).read_text())["postgres"]
 _server = CONFIG.get("server") or {}
 HOST = str(_server.get("host") or "0.0.0.0").strip() or "0.0.0.0"
 PORT = int(_server.get("port") or 8090)
 _LOGS = CONFIG.get("logs") or {}
 GENERATED_DIR = Path((_LOGS.get("generated_dir") or "/archiver/.generated").strip())
+# Only behind oauth2-proxy (no published port): trust its X-Forwarded-Email / X-Forwarded-User.
+TRUST_FORWARDED_USER = bool(_server.get("trust_forwarded_user"))
+
+
+def forwarded_user(headers) -> str:
+    """Signed-in user as passed by oauth2-proxy, or '' when not trusted / not present."""
+    if not TRUST_FORWARDED_USER:
+        return ""
+    for name in ("X-Forwarded-Email", "X-Forwarded-Preferred-Username", "X-Forwarded-User"):
+        val = (headers.get(name) or "").strip()
+        if val:
+            return val[:200]
+    return ""
+
+
+def audit(action: str, user: str, **fields: str) -> None:
+    """One line per state-changing action in the container log."""
+    parts = " ".join(f"{k}={v!r}" for k, v in fields.items())
+    print(f"{datetime.now().isoformat(timespec='seconds')} action={action} user={user or '-'} {parts}", flush=True)
+
+
+def _tag_note(form: dict[str, list[str]], field: str, user: str) -> None:
+    """Append '(by user)' to a free-text note that ends up in the package / catalog record."""
+    if not user:
+        return
+    val = (form.get(field) or [""])[0].strip()
+    if val and not val.endswith(f"(by {user})"):
+        form[field] = [f"{val} (by {user})"]
 
 
 def _omeka_link_bases(cfg: dict) -> tuple[str, str]:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from config_require import require_dict, require_str
 
-    omeka = require_dict(cfg, "omeka", where="status-web.yaml")
+    omeka = require_dict(cfg, "omeka", where="ledger.yaml")
     if omeka.get("public_admin_base") and omeka.get("public_site_base"):
         return (
-            require_str(omeka, "public_admin_base", where="status-web.yaml omeka").rstrip("/"),
-            require_str(omeka, "public_site_base", where="status-web.yaml omeka").rstrip("/"),
+            require_str(omeka, "public_admin_base", where="ledger.yaml omeka").rstrip("/"),
+            require_str(omeka, "public_site_base", where="ledger.yaml omeka").rstrip("/"),
         )
-    base = require_str(omeka, "public_url", where="status-web.yaml omeka").rstrip("/")
-    slug = require_str(omeka, "site_slug", where="status-web.yaml omeka").strip("/")
+    base = require_str(omeka, "public_url", where="ledger.yaml omeka").rstrip("/")
+    slug = require_str(omeka, "site_slug", where="ledger.yaml omeka").strip("/")
     return f"{base}/admin", f"{base}/s/{slug}"
 
 
@@ -408,7 +444,7 @@ error text, ingest kind, Wasabi prefixes, dump class/system/category and Omeka i
 </tbody></table></div>
 {pagination_html}"""
     return render_page_shell(
-        title="HitSave preservation ledger", active="ledger", inner=inner, status_config=CONFIG
+        title="Ledger", active="ledger", inner=inner, status_config=CONFIG
     )
 
 
@@ -497,7 +533,7 @@ def render_ops() -> bytes:
     else:
         note_parts.append(
             '<p class="muted">Configure <code>ops.windmill.workspace</code> and '
-            "<code>ops.windmill_ui_url</code> in status-web.yaml for API job history.</p>"
+            "<code>ops.windmill_ui_url</code> in ledger.yaml for API job history.</p>"
         )
     inner = f"""
 <p>Recent completed jobs from Windmill (when API token is mounted). Mutating runs stay in Windmill.</p>
@@ -536,8 +572,17 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self) -> None:
+        set_current_user(forwarded_user(self.headers))
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
+        if path == "/healthz":
+            body = b"ok\n"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if path in ("/", "/index.html"):
             qs = parse_qs(parsed.query)
             q = qs.get("q", [""])[0]
@@ -616,11 +661,15 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/")
         form = self._read_form()
+        user = forwarded_user(self.headers)
+        set_current_user(user)
         if path == "/correct":
+            _tag_note(form, "correction_summary", user)
             job_args, errors, values = validate_and_job_args(form, is_post=True)
             hint = ledger_hint_for_omeka(connect, values.get("omeka_ref", ""))
             result = None
             if not errors and job_args is not None:
+                audit("correct", user, omeka_ref=values.get("omeka_ref", ""))
                 result = run_correction(CONFIG.get("ops") or {}, job_args)
                 if result[0] != 0:
                     errors.append("Windmill correction job failed (see output below).")
@@ -639,10 +688,12 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         if path == "/quarantine":
+            _tag_note(form, "note", user)
             argv, errors, values = validate_quarantine_argv(form, is_post=True)
             hint = ledger_hint_for_omeka(connect, values.get("omeka_ref", ""))
             result = None
             if not errors and argv:
+                audit("quarantine", user, omeka_ref=values.get("omeka_ref", ""))
                 result = run_quarantine(argv)
                 if result[0] != 0:
                     errors.append("Quarantine script exited with an error (see output below).")
@@ -662,6 +713,7 @@ class Handler(BaseHTTPRequestHandler):
             is_public_raw = (form.get("is_public") or [""])[0].strip().lower()
             is_public = is_public_raw in ("true", "1", "yes", "on")
             if omeka_ref:
+                audit("publish" if is_public else "hide", user, omeka_ref=omeka_ref)
                 run_visibility(omeka_ref, is_public=is_public)
             self.send_response(303)
             back = (form.get("return_to") or [""])[0].strip()
@@ -680,4 +732,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    HTTPServer((HOST, PORT), Handler).serve_forever()
+    server = ThreadingHTTPServer((HOST, PORT), Handler)
+    server.daemon_threads = True
+    server.serve_forever()

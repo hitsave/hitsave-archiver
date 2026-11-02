@@ -91,7 +91,7 @@ for pair in "${pairs[@]}"; do
   fi
   if [[ "$status" == "quarantine" ]]; then
     # Virus or content-policy hit, or a manual quarantine: never re-ingest automatically.
-    echo "SKIP (ledger quarantine; see status-web Health): $slug"
+    echo "SKIP (ledger quarantine; see the ledger's Health page): $slug"
     continue
   fi
 

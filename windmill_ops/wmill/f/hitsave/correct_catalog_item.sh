@@ -26,7 +26,7 @@ args=(--omeka-ref "$omeka_ref")
 if [[ "${clear_moby_url:-false}" == "true" ]]; then
   args+=(--clear-moby-url)
 fi
-# Omit --description when empty so --clear-moby-url can restore press-kit text (status-web same rule).
+# Omit --description when empty so --clear-moby-url can restore press-kit text (the ledger app follows the same rule).
 if [[ -n "${description:-}" ]]; then
   args+=(--description "$description")
 fi

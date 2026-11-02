@@ -1,0 +1,13 @@
+# Keep operator-local and generated files out of every image built from this repo
+# (the ledger image bakes config/ in, so local private files must never reach it).
+.git
+.generated
+.ci
+data
+**/__pycache__
+config/status-web.yaml
+config/ledger.yaml
+config/preservation/batch-*.yaml
+config/preservation/batch-*.yml
+config/secrets/*
+!config/secrets/*.example

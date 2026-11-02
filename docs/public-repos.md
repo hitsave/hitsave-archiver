@@ -5,7 +5,7 @@
 | Repo | Visibility | Contents |
 |------|------------|----------|
 | [**hitsave-archiver**](https://github.com/hitsave/hitsave-archiver) | Public (Apache-2.0) | Ingest worker, BagIt scripts, Compose stack, schema, CI fixtures (Python/Postgres: [Chainguard](https://images.chainguard.dev/) `cgr.dev`; ClamAV: Docker Hub) |
-| [**hitsave-archiver-config**](https://github.com/hitsave/hitsave-archiver-config) | **Private** | Wasabi, Omeka API, MobyGames credentials; `preservation/database.yaml`; host paths; intake, status-web and Windmill config |
+| [**hitsave-archiver-config**](https://github.com/hitsave/hitsave-archiver-config) | **Private** | Wasabi, Omeka API, MobyGames credentials; `preservation/database.yaml`; host paths; intake, ledger and Windmill config |
 | [**hitsave-intake**](https://github.com/hitsave/hitsave-intake) | **Private** | Drive and Wasabi inbox polling, download, sidecar checksum verification; installs the shared `hitsave-dump-sidecars` package from this repo |
 | [**hitsave-omeka-test**](https://github.com/hitsave/hitsave-omeka-test) | Public (Apache-2.0) | Local Omeka S stack, theme/DIP QA, prod mirror scripts |
 | [**hitsave-archive-theme**](https://github.com/hitsave/hitsave-archive-theme) | Public (GPL-3.0-or-later) | Foundation overlay theme build |

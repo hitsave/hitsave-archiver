@@ -59,14 +59,14 @@ copy_example "$ROOT/config/secrets/omeka-api-credentials-local.yaml.example" \
   "$TARGET/secrets/omeka-api-credentials-local.yaml"
 copy_example "$ROOT/config/secrets/omeka-api-credentials-prod.yaml.example" \
   "$TARGET/secrets/omeka-api-credentials-prod.yaml"
-copy_example "$ROOT/config/secrets/windmill-status-web.token.example" \
-  "$TARGET/secrets/windmill-status-web.token"
+copy_example "$ROOT/config/secrets/windmill-ledger.token.example" \
+  "$TARGET/secrets/windmill-ledger.token"
 copy_example "$ROOT/config/preservation/database.yaml.example" \
   "$TARGET/preservation/database.yaml"
 copy_example "$ROOT/config/preservation/wasabi-redump-intake.yaml.example" \
   "$TARGET/preservation/wasabi-redump-intake.yaml"
 
-copy_example "$ROOT/config/status-web.yaml.example" \
-  "$TARGET/status-web.yaml"
+copy_example "$ROOT/config/ledger.yaml.example" \
+  "$TARGET/ledger.yaml"
 
 echo "Private config root: $TARGET"

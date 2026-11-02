@@ -2,7 +2,7 @@
 
 intake moves a package that fails sidecar verification (or download) to
 ``<HOST_INTAKE>/failed/<slug>/`` with an ``error.txt``. Those never get a ``game_ingest`` row,
-so the ledger alone can't show them. status-web mounts that folder read-only and lists entries
+so the ledger alone can't show them. the ledger app mounts that folder read-only and lists entries
 that are still open: a slug whose ``/data/intake/ready/<slug>`` source is already ``complete``
 in the ledger was preserved later and is left out.
 """
