@@ -10,13 +10,16 @@ copy. This streams each object of a sample of complete packages back from Wasabi
   * no stray payload objects (not in the manifest) and no untracked tag files.
 
 Packages are picked least-recently-checked first (by previous wasabi fixity_run rows),
-until --max-packages or the --max-gb read budget is reached. Results are recorded in
+until --max-packages or the --max-gb read budget is reached. With --min-interval-days N, a
+package whose last Wasabi check is newer than N days is not due and is skipped, so a full pass
+runs and then the job idles until packages come due again (never-checked packages are always due). Results are recorded in
 fixity_run with detail prefixed "wasabi:" unless --no-record. Exit 1 if any package fails.
 
 Usage (ingest-worker; scripts mounted so the image need not contain this file):
     docker compose run --rm -T --no-deps -v "$PWD/scripts:/app/scripts:ro" \\
       --entrypoint python ingest-worker /app/scripts/wasabi-fixity-check.py \\
-      [--max-packages 10] [--max-gb 50] [--kind dump] [--game-key KEY] [--no-record]
+      [--max-packages 10] [--max-gb 50] [--min-interval-days 90] [--kind dump] [--game-key KEY]
+      [--no-record]
 """
 from __future__ import annotations
 
@@ -115,6 +118,12 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--max-packages", type=int, default=10)
     ap.add_argument("--max-gb", type=float, default=50.0, help="Stop before reading more than this")
+    ap.add_argument(
+        "--min-interval-days",
+        type=int,
+        default=0,
+        help="Skip packages whose last Wasabi check is newer than this (0 = no minimum)",
+    )
     ap.add_argument("--kind", help="Only this ingest_kind (dump, press_material, …)")
     ap.add_argument("--game-key", action="append", help="Check these packages (repeatable)")
     ap.add_argument("--no-record", action="store_true", help="Do not write fixity_run rows")
@@ -139,6 +148,9 @@ def main() -> None:
     if args.game_key:
         where.append("g.game_key = ANY(%s)")
         params.append(args.game_key)
+    if args.min_interval_days > 0 and not args.game_key:
+        where.append("(lc.last_checked IS NULL OR lc.last_checked < now() - make_interval(days => %s))")
+        params.append(args.min_interval_days)
     rows = conn.execute(
         f"""
         SELECT g.id, g.game_key, g.ingest_kind, g.package_storage_prefix, g.inventory_json,
@@ -186,6 +198,7 @@ def main() -> None:
     conn.close()
     failed = [r for r in results if r["outcome"] == "fail"]
     print(json.dumps({
+        "packages_due": len(rows),
         "packages_checked": len(results),
         "failed": len(failed),
         "gb_read": round(spent / 1e9, 2),

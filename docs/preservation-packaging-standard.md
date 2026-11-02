@@ -12,7 +12,7 @@ Full OAIS mapping, pipeline, and Omeka access: **[oais-bagit-preservation-plan.m
 |-------|------|
 | Bag structure + manifests | `bagit-python` (`bag.validate()`) |
 | Ingest gate | `build-bagit-package.py` after `make_bag` |
-| Periodic fixity | `fixity-check.py` on local bag dirs + inventory spot-check |
+| Periodic fixity | `wasabi-fixity-check.py` on the Wasabi copy, every package at most every 90 days ([storage-retention.md](./storage-retention.md#fixity-schedule-wasabi-copy)); `fixity-check.py` for local bags |
 
 ## Wasabi
 
