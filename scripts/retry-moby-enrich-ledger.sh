@@ -9,7 +9,7 @@ STATUS_SQL=$(printf "'%s'," $STATUSES | sed "s/,$//")
 docker compose up -d postgres >/dev/null
 
 mapfile -t KEYS < <(
-  docker compose exec -T postgres psql -U hitsave -d hitsave_ledger -tAc \
+  docker compose run --rm -T psql -U hitsave -d hitsave_ledger -tAc \
     "SELECT game_key FROM game_ingest WHERE moby_status IN ($STATUS_SQL) ORDER BY game_key;" </dev/null
 )
 
@@ -35,5 +35,5 @@ echo "Applying Moby fields to Omeka…"
 docker compose run --rm -T --entrypoint python omeka-catalog \
   /app/scripts/apply-moby-metadata-omeka.py --all </dev/null
 
-docker compose exec -T postgres psql -U hitsave -d hitsave_ledger -c \
+docker compose run --rm -T psql -U hitsave -d hitsave_ledger -c \
   "SELECT moby_status, COUNT(*) FROM game_ingest GROUP BY moby_status ORDER BY COUNT(*) DESC;" </dev/null

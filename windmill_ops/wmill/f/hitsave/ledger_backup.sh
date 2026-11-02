@@ -9,9 +9,10 @@ source /run/hitsave/hitsave-bootstrap.sh
 dest="${HOST_LEDGER_BACKUPS:?set HOST_LEDGER_BACKUPS in host.env}"
 name="hitsave_ledger-$(date -u +%Y%m%dT%H%M%SZ).dump"
 
-# Runs in a one-off container from the postgres image (pg_dump matches the server version);
+# Runs in a one-off `psql` tools container (same image as the server, so pg_dump matches its
+# version) against host "postgres": the local ledger, or the remote one via the forwarder;
 # writes to a temp name and renames only after pg_dump succeeds.
-archiver_compose run --rm -T --no-deps -v "$dest:/backups" --entrypoint sh postgres -c "
+archiver_compose run --rm -T -v "$dest:/backups" --entrypoint sh psql -c "
   set -eu
   export PGPASSWORD=\"\$POSTGRES_PASSWORD\"
   pg_dump -h postgres -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -Fc -f /backups/.$name.partial

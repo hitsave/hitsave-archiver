@@ -28,7 +28,7 @@ new_prefix="/data/intake/ready"
 [[ "$(stat -c %d "$old_host")" == "$(stat -c %d "$(dirname "$new_host")")" ]] \
   || { echo "different filesystems; refusing (mv would copy)" >&2; exit 1; }
 
-psql_q() { remote_intake_archiver_compose exec -T postgres psql -U hitsave -d hitsave_ledger -v ON_ERROR_STOP=1 -tAc "$1"; }
+psql_q() { remote_intake_archiver_compose run --rm -T psql -U hitsave -d hitsave_ledger -v ON_ERROR_STOP=1 -tAc "$1"; }
 rows="$(psql_q "SELECT count(*) FROM game_ingest WHERE source_path LIKE '${old_prefix}/%'")"
 yamls="$(grep -l "^source_game_folder: ${old_prefix}/" "$old_host"/ready/*/game.ingest.yaml 2>/dev/null | wc -l)"
 echo "ledger rows to rewrite: $rows"

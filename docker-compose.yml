@@ -28,6 +28,21 @@ services:
       timeout: 5s
       retries: 15
 
+  # Ledger client: psql / pg_dump from the same image as the server, against host "postgres"
+  # (the local ledger, or the forwarder in docker-compose.remote-ledger.yml).
+  #   docker compose run --rm -T psql -tAc 'select count(*) from game_ingest'
+  psql:
+    image: cgr.dev/chainguard/postgres:latest@sha256:4c8ef6bcf82ab05f4cca769d44847809fc069b5113893f3dc68b95983189a874
+    profiles: ["tools"]
+    env_file:
+      - config/preservation/generated.env
+    environment:
+      PGHOST: postgres
+    entrypoint: ["sh", "-c", "export PGUSER=\"$$POSTGRES_USER\" PGPASSWORD=\"$$POSTGRES_PASSWORD\" PGDATABASE=\"$$POSTGRES_DB\"; exec psql \"$$@\"", "psql"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   clamav:
     image: clamav/clamav:stable
     restart: unless-stopped

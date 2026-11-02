@@ -35,7 +35,7 @@ echo "packages on Wasabi: ${#pairs[@]}"
 ledger_status_for_slug() {
   local slug="$1"
   local slug_sql="${slug//\'/\'\'}"
-  remote_intake_archiver_compose exec -T postgres psql -U hitsave -d hitsave_ledger -tAc \
+  remote_intake_archiver_compose run --rm -T psql -U hitsave -d hitsave_ledger -tAc \
     "SELECT COALESCE(status,'')
      FROM game_ingest
      WHERE ingest_kind = 'dump'

@@ -12,6 +12,8 @@ config/preservation/batch-*.yaml
 config/preservation/batch-*.yml
 !config/preservation/batch.yml.example
 config/status-web.yaml
+# Host-local compose settings (e.g. the remote-ledger COMPOSE_FILE on saturn)
+/.env
 config/ledger.yaml
 !config/ledger.yaml.example
 data/

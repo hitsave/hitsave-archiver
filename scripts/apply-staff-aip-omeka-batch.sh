@@ -9,7 +9,7 @@ GEN="config/preservation/generated/${BATCH_KEY}"
 PREFIX="${BATCH_KEY}"
 
 mapfile -t KEYS < <(
-  docker compose exec -T postgres psql -U hitsave -d hitsave_ledger -tAc \
+  docker compose run --rm -T psql -U hitsave -d hitsave_ledger -tAc \
     "SELECT game_key FROM game_ingest
      WHERE game_key LIKE '${PREFIX}%'
        AND status = 'complete'

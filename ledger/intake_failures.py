@@ -63,7 +63,15 @@ def open_failures(connect: Callable[[], Any], failed_dir: Path = FAILED_DIR) -> 
     return open_, len(failures) - len(open_)
 
 
-def render_intake_failures(failures: list[IntakeFailure], resolved: int) -> str:
+def render_intake_failures(
+    failures: list[IntakeFailure], resolved: int, *, failed_dir: Path = FAILED_DIR
+) -> str:
+    if not failed_dir.is_dir():
+        return (
+            '<p class="muted">Intake failures aren\'t available here: the intake <code>failed/</code> '
+            "folder isn't mounted on this host (intake runs elsewhere). Ask an admin, or check the "
+            "inbox sweep's job log on the Windmill runs page.</p>"
+        )
     intro = (
         "<p>Packages intake rejected before they reached the ledger, usually because a file "
         "didn't match the checksums in its sidecar, or the upload was incomplete. Intake tries "
