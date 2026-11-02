@@ -3,8 +3,8 @@
 # and the ingest-time ledger inventory (scripts/wasabi-fixity-check.py). Records fixity_run rows.
 # shellcheck shell=bash
 # arguments of the form X="$I" are parsed as parameters X of type string
-max_packages="${1:-10}"
-max_gb="${2:-50}"
+max_packages="${1:-300}"
+max_gb="${2:-35}"
 kind="${3:-}"
 # shellcheck disable=SC1091
 source /run/hitsave/hitsave-bootstrap.sh

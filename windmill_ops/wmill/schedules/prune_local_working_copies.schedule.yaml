@@ -1,5 +1,5 @@
 path: f/hitsave/prune_local_working_copies
-# Daily 04:30 UTC (after the Sunday 03:00 Wasabi fixity run). Ships as a DRY RUN
+# Daily 04:30 UTC (after the daily 03:00 Wasabi fixity run). Ships as a DRY RUN
 # (execute: "false"); set execute to "true" once a dry-run report has been reviewed.
 schedule: "0 30 4 * * *"
 timezone: UTC
