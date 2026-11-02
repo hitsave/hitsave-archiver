@@ -66,9 +66,7 @@ copy_example "$ROOT/config/preservation/database.yaml.example" \
 copy_example "$ROOT/config/preservation/wasabi-redump-intake.yaml.example" \
   "$TARGET/preservation/wasabi-redump-intake.yaml"
 
-if [[ ! -f "$ROOT/config/status-web.yaml" ]]; then
-  cp "$ROOT/config/status-web.yaml.example" "$ROOT/config/status-web.yaml"
-  echo "Created $ROOT/config/status-web.yaml from status-web.yaml.example"
-fi
+copy_example "$ROOT/config/status-web.yaml.example" \
+  "$TARGET/status-web.yaml"
 
 echo "Private config root: $TARGET"

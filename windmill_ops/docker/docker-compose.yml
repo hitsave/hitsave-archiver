@@ -64,7 +64,10 @@ services:
       - ${ARCHIVER_HOST_PATH:?set ARCHIVER_HOST_PATH in .env}:${ARCHIVER_HOST_PATH}:ro
       - ${HITSAVE_INTAKE_HOST:?set HITSAVE_INTAKE_HOST in .env}:/intake:ro
       - ${HITSAVE_PRIVATE_CONFIG_HOST:?set HITSAVE_PRIVATE_CONFIG_HOST in .env}/host.env:/run/hitsave/host.env:ro
-      - ./worker-paths.env:/run/hitsave/worker-paths.env:ro
+      - ${HITSAVE_PRIVATE_CONFIG_HOST:?set HITSAVE_PRIVATE_CONFIG_HOST in .env}/windmill/worker-paths.env:/run/hitsave/worker-paths.env:ro
+      # Same path as on the host: remote-intake resolves <private>/intake as a host path for
+      # docker compose bind mounts, and checks it exists from inside the job.
+      - ${HITSAVE_PRIVATE_CONFIG_HOST:?set HITSAVE_PRIVATE_CONFIG_HOST in .env}/intake:${HITSAVE_PRIVATE_CONFIG_HOST:?set HITSAVE_PRIVATE_CONFIG_HOST in .env}/intake:ro
       - ${ARCHIVER_HOST_PATH:?set ARCHIVER_HOST_PATH in .env}/windmill_ops/lib/hitsave-bootstrap.sh:/run/hitsave/hitsave-bootstrap.sh:ro
       - ${ARCHIVER_HOST_PATH:?set ARCHIVER_HOST_PATH in .env}/.generated/windmill:/run/hitsave/generated
       - ${HITSAVE_PRIVATE_CONFIG_HOST}/secrets:/config/private/secrets:ro

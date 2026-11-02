@@ -1,4 +1,4 @@
-# Copy to config/status-web.yaml (gitignored) — see docs/operator-config.md
+# Copy to hitsave-archiver-config/status-web.yaml (private repo) — see docs/operator-config.md
 server:
   # Listen on all interfaces (pair with compose 0.0.0.0:8090:8090 for LAN access).
   host: 0.0.0.0

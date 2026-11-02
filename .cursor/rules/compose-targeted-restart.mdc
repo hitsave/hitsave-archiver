@@ -20,7 +20,7 @@ docker compose up -d --no-deps <service>
 
 Examples: `status-web`, `ingest-worker`, `omeka-catalog`, profile services.
 
-- If only **bind-mounted** paths changed (e.g. `./scripts`, `./config/status-web.yaml`), **`docker compose restart --no-deps <service>`** may be enough — no rebuild.
+- If only **bind-mounted** paths changed (e.g. `./scripts`, `hitsave-archiver-config/status-web.yaml`), **`docker compose restart --no-deps <service>`** may be enough — no rebuild.
 - Use **`docker compose exec`** for read-only checks; no restart.
 
 ## Do not

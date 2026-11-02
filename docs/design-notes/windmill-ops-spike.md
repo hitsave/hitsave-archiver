@@ -10,8 +10,8 @@ Self-hosted [Windmill](https://www.windmill.dev/) beside the preservation stack 
 
 ## Operator setup
 
-1. `cp windmill_ops/docker/.env.example windmill_ops/docker/.env` — set **`ARCHIVER_HOST_PATH`**, **`HITSAVE_PRIVATE_CONFIG_HOST`**, **`HITSAVE_INTAKE_HOST`**, **`WMILL_TOKEN`**
-2. `cp windmill_ops/docker/worker-paths.env.example windmill_ops/docker/worker-paths.env` — same **`ARCHIVER_HOST_PATH`** (gitignored on disk; never commit)
+1. `./scripts/windmill-ops-up.sh` creates `hitsave-archiver-config/windmill/.env` from the example and symlinks it as `windmill_ops/docker/.env`; set **`ARCHIVER_HOST_PATH`**, **`HITSAVE_PRIVATE_CONFIG_HOST`**, **`HITSAVE_INTAKE_HOST`**, **`WMILL_TOKEN`**
+2. Edit `hitsave-archiver-config/windmill/worker-paths.env` (created alongside) — same **`ARCHIVER_HOST_PATH`**
 3. Archiver checkout: `./scripts/ensure-local-config.sh` (needs `config/preservation/generated.env`)
 4. `cd windmill_ops/docker && docker compose up -d`
 5. `./scripts/windmill-sync-push.sh`
