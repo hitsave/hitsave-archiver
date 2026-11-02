@@ -18,7 +18,7 @@ schema:
     max_gb:
       type: number
       description: Max GB read from Wasabi per run
-      default: 35
+      default: 150
     kind:
       type: string
       description: Optional ingest_kind filter (dump, press_material, …)
