@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Parse No-Intro / dumping.guide submission text sidecars.
 # System labels: DAT-o-MATIC dat names (e.g. Nintendo - Nintendo 64), https://datomatic.no-intro.org/
 from __future__ import annotations

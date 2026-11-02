@@ -24,6 +24,9 @@ WORKDIR /app
 
 COPY ingest-worker/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
+# Shared Redump/No-Intro sidecar parsers (hitsave-intake pins the same package by commit).
+COPY packages/hitsave-dump-sidecars /tmp/hitsave-dump-sidecars
+RUN pip install --no-cache-dir /tmp/hitsave-dump-sidecars && rm -rf /tmp/hitsave-dump-sidecars
 
 COPY scripts/batch-expand-preservation.py \
     scripts/batch_manifest.py \
@@ -49,8 +52,6 @@ COPY scripts/batch-expand-preservation.py \
     scripts/submission_sources.py \
     scripts/preservation_common.py \
     scripts/ingest_kind.py \
-    scripts/dump_redump.py \
-    scripts/dump_nointro.py \
     scripts/dump_switch.py \
     scripts/dump_classify.py \
     scripts/dump_catalog_omeka.py \

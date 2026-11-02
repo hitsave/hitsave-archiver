@@ -108,7 +108,7 @@ Migration **`schema/009_backfill_ingest_kind_dump.sql`**: `game_dump` / `disc_du
   - Ledger: `apply-dump-catalog-omeka.py <game.yaml> [handoff.yaml] [--item-id ID]` — Redump RDF from SIP + SHA-1 lookup, Moby from ledger, staff **`bibo:uri`** = ledger `aip_wasabi_prefix`.
   - Handoff YAML only: `apply-dump-catalog-omeka.py --manifest <handoff.yaml> [--item-id ID]` (via **`apply_handoff_dump_catalog()`**).
 - **`register-dip-omeka-api.py`** delegates to **`apply_dump_catalog()`** when **`ingest_kind: dump`**.
-- Redump sidecar parser SSOT: **`scripts/dump_redump.py`** (sync to hitsave-intake via **`scripts/sync-redump-parser-to-intake.sh`**).
+- Redump and No-Intro sidecar parsers: the shared package **[`packages/hitsave-dump-sidecars`](../packages/hitsave-dump-sidecars/README.md)**, installed in the ingest-worker image and pinned by commit in hitsave-intake.
 
 ## GDrive intake
 

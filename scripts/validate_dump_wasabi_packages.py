@@ -21,7 +21,7 @@ from preservation_common import (  # noqa: E402
     resolve_wasabi_bucket,
     wasabi_unpacked_prefix,
 )
-from dump_redump import DISC_IMAGE_SUFFIXES  # noqa: E402
+from hitsave_dump_sidecars.redump import DISC_IMAGE_SUFFIXES  # noqa: E402
 from upload_bag_wasabi import load_wasabi_settings, make_s3_client  # noqa: E402
 from yaml_config import load_yaml  # noqa: E402
 

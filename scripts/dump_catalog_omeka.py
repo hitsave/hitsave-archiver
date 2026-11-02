@@ -11,7 +11,7 @@ import requests
 
 from dump_classify import classify_dump_sip, find_submission_info_path
 from package_identity import sort_letter as catalog_sort_letter
-from dump_redump import (
+from hitsave_dump_sidecars.redump import (
     RedumpSubmission,
     parse_submission_info,
     pick_omeka_title_from_submission,
