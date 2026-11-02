@@ -19,6 +19,25 @@ as a step toward uploading to Wasabi. Never treat them as a second copy, and nev
 them from Wasabi just to fix drift: Wasabi is authoritative, and the local copy is deleted soon
 anyway. Backups go **from Wasabi** to a third party, never from `/tank`.
 
+## Fixity schedule (Wasabi copy)
+
+`scripts/wasabi-fixity-check.py`, scheduled as `f/hitsave/wasabi_fixity_check` (daily 03:00 UTC),
+streams every object of a package back from Wasabi and verifies its SHA-256 against the bag
+manifests and the ingest-time ledger inventory. Results are `fixity_run` rows (`wasabi: …`).
+
+- **Every package is checked at most once per 90 days** (`min_interval_days: 90`), up to 300
+  packages / 150 GB per night, least-recently-checked first. A full pass takes about 9 nights;
+  then nothing is due and the nightly run exits in seconds until packages come due again.
+- **New packages are checked on the first night after ingest** (never-checked is always due).
+- **Event-driven checks:** run a full pass (`min_interval_days: 0`) after any storage migration,
+  and verify the third-party backup copy when it is transferred.
+
+Why 90 days (decided 2026-11-02): APTrust checked its S3 and Wasabi copies every 90 days (its
+2025 policy moved hot copies to 180); the DPC suggests about six months for disk storage; the
+NDSA gives monthly, quarterly or yearly as examples and lists provider integrity checks and
+redundant copies as reasons to check less often. Wasabi runs its own replication and integrity
+checks, and our copy is also verified at ingest and again before local copies are pruned.
+
 ## Pruning local working copies
 
 `scripts/prune-local-working-copies.py`, scheduled in Windmill as

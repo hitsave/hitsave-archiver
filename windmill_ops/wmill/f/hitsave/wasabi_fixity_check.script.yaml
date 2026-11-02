@@ -23,4 +23,8 @@ schema:
       type: string
       description: Optional ingest_kind filter (dump, press_material, …)
       default: ''
+    min_interval_days:
+      type: integer
+      description: Skip packages checked on Wasabi within this many days (0 = no minimum)
+      default: 90
   required: []

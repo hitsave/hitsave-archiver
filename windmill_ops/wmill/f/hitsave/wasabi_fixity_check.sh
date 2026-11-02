@@ -6,10 +6,11 @@
 max_packages="${1:-300}"
 max_gb="${2:-150}"
 kind="${3:-}"
+min_interval_days="${4:-90}"
 # shellcheck disable=SC1091
 source /run/hitsave/hitsave-bootstrap.sh
 
-args=(--max-packages "$max_packages" --max-gb "$max_gb")
+args=(--max-packages "$max_packages" --max-gb "$max_gb" --min-interval-days "$min_interval_days")
 [[ -n "$kind" ]] && args+=(--kind "$kind")
 
 # Scripts mounted from the checkout so the job does not depend on the ingest-worker image contents.
