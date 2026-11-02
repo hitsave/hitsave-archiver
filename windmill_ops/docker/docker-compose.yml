@@ -29,6 +29,9 @@ services:
       MODE: server
     volumes:
       - windmill_worker_logs:/tmp/windmill/logs
+    networks:
+      - default
+      - preservation
 
   windmill_worker:
     build:
@@ -43,7 +46,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgres://postgres:windmill-spike-change-me@windmill_db:5432/windmill}
       MODE: worker
       WORKER_GROUP: default
-      FAVOR_UNSHARE_PID: "true"
+      # Bash script schema args must reach the job env; unshare PID mode drops them (Windmill + bash).
+      FAVOR_UNSHARE_PID: "false"
       HITSAVE_INTAKE_ROOT: /intake
       HITSAVE_INTAKE_HOST: ${HITSAVE_INTAKE_HOST}
       HITSAVE_WINDMILL_POLL_STAGING: "1"

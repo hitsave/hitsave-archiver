@@ -1,9 +1,12 @@
 summary: Correct Omeka catalog metadata for one item
 description: |
   Runs `scripts/correct-catalog-item.py` via the `omeka-catalog` compose service.
-  Pass Omeka item id or a public/admin URL. Supply at least one of title, moby_url,
-  description, developer, or publisher. Omeka is updated on every run; Wasabi bag
-  metadata uploads when title or moby_url changes (`execute` defaults to true; set false for Omeka-only).
+  Pass Omeka item id or a public/admin URL. Supply at least one field to change or clear.
+  Use `clear_moby_url` to drop a wrong Moby match: Moby URL, rights, release date, creator and
+  publisher (unless you pass `developer` / `publisher`), and description reset to press-kit text
+  from ledger inventory unless `description` is non-empty. Omeka is updated on every run; Wasabi
+  bag metadata uploads when title or Moby URL changes, or when Moby URL is cleared (`execute`
+  defaults to true).
 lock: '!inline f/hitsave/correct_catalog_item.script.lock'
 kind: script
 language: bash
@@ -22,15 +25,31 @@ schema:
     moby_url:
       type: string
       description: MobyGames game page URL (public bibo:uri)
+    clear_moby_url:
+      type: boolean
+      description: Remove Moby catalog; resets description to press-kit unless description is set; clears creator/publisher unless developer/publisher set; resets ledger by default
+      default: false
     description:
       type: string
-      description: Full dcterms:description (empty string clears)
+      description: Override dcterms:description only when non-empty; leave unset when clearing Moby to restore press-kit text
     developer:
       type: string
       description: dcterms:creator — one name or comma-separated list
+    clear_developer:
+      type: boolean
+      description: Clear all dcterms:creator values
+      default: false
     publisher:
       type: string
       description: dcterms:publisher — one name or comma-separated list
+    clear_publisher:
+      type: boolean
+      description: Clear all dcterms:publisher values
+      default: false
+    reset_ledger_moby:
+      type: boolean
+      description: When clear_moby_url, clear ledger moby_game_id / metadata_json (default true)
+      default: true
     former_title:
       type: string
       description: Previous title for bag catalog_notes (default current Omeka title)

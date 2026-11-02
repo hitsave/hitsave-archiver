@@ -14,6 +14,25 @@ from omeka_staff_metadata import is_wasabi_s3_uri
 from press_material_description import press_material_description
 
 
+def public_bibo_uri_rows_without_moby(item_body: dict | None) -> list[dict]:
+    """Keep non-Wasabi bibo:uri values except MobyGames catalog pages."""
+    rows: list[dict] = []
+    seen: set[str] = set()
+    if not item_body:
+        return rows
+    for row in item_body.get("bibo:uri") or []:
+        uri = str(row.get("@id") or "").strip()
+        if not uri or is_wasabi_s3_uri(uri):
+            continue
+        if "mobygames.com" in uri.casefold():
+            continue
+        if uri in seen:
+            continue
+        seen.add(uri)
+        rows.append(dict(row))
+    return rows
+
+
 def moby_bibo_uri_rows(
     item_body: dict | None,
     moby_url: str,
