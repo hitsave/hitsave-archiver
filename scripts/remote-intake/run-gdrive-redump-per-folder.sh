@@ -144,4 +144,5 @@ for pair in "${pairs[@]}"; do
   fi
 done
 
+remote_intake_sync_rejections
 echo "=== GDrive Redump per-folder pipeline finished $(date -Is) ==="

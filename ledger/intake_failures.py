@@ -47,9 +47,40 @@ def scan_failed_dir(failed_dir: Path = FAILED_DIR) -> list[IntakeFailure]:
     return out
 
 
+def ledger_rejections(connect: Callable[[], Any]) -> list[IntakeFailure] | None:
+    """Rows of the ledger table intake_rejection (mirror of failed/, synced by each intake sweep),
+    newest first; None when the table doesn't exist yet."""
+    with connect() as conn:
+        exists = conn.execute("SELECT to_regclass('intake_rejection') IS NOT NULL").fetchone()[0]
+        if not exists:
+            return None
+        rows = conn.execute(
+            "SELECT slug, failed_at, reason FROM intake_rejection ORDER BY failed_at DESC"
+        ).fetchall()
+    return [IntakeFailure(slug, failed_at, (reason or "")[:REASON_MAX]) for slug, failed_at, reason in rows]
+
+
+def load_failures(
+    connect: Callable[[], Any], failed_dir: Path = FAILED_DIR
+) -> tuple[list[IntakeFailure], int, bool]:
+    """(open failures, resolved count, available). Reads failed/ when it's mounted here, else the
+    ledger table; available is False when neither exists."""
+    if failed_dir.is_dir():
+        return (*open_failures(connect, failed_dir), True)
+    failures = ledger_rejections(connect)
+    if failures is None:
+        return [], 0, False
+    return (*_drop_resolved(connect, failures), True)
+
+
 def open_failures(connect: Callable[[], Any], failed_dir: Path = FAILED_DIR) -> tuple[list[IntakeFailure], int]:
     """(still-open failures, count resolved since: slug preserved later per the ledger)."""
-    failures = scan_failed_dir(failed_dir)
+    return _drop_resolved(connect, scan_failed_dir(failed_dir))
+
+
+def _drop_resolved(
+    connect: Callable[[], Any], failures: list[IntakeFailure]
+) -> tuple[list[IntakeFailure], int]:
     if not failures:
         return [], 0
     sources = [READY_SOURCE_PREFIX + f.slug for f in failures]
@@ -64,9 +95,15 @@ def open_failures(connect: Callable[[], Any], failed_dir: Path = FAILED_DIR) -> 
 
 
 def render_intake_failures(
-    failures: list[IntakeFailure], resolved: int, *, failed_dir: Path = FAILED_DIR
+    failures: list[IntakeFailure],
+    resolved: int,
+    *,
+    failed_dir: Path = FAILED_DIR,
+    available: bool | None = None,
 ) -> str:
-    if not failed_dir.is_dir():
+    if available is None:
+        available = failed_dir.is_dir()
+    if not available:
         return (
             '<p class="muted">Intake failures aren\'t available here: the intake <code>failed/</code> '
             "folder isn't mounted on this host (intake runs elsewhere). Ask an admin, or check the "
@@ -76,7 +113,8 @@ def render_intake_failures(
         "<p>Packages intake rejected before they reached the ledger, usually because a file "
         "didn't match the checksums in its sidecar, or the upload was incomplete. Intake tries "
         "again automatically once the package changes in the inbox (re-upload or fix the sidecar). "
-        "Details: <code>failed/&lt;package&gt;/error.txt</code> in the intake folder.</p>"
+        "The full error is in <code>failed/&lt;package&gt;/error.txt</code> in the intake folder; "
+        "ask an admin if the first line isn't enough.</p>"
     )
     note = f'<p class="muted">{resolved} older failure(s) not shown: those packages were preserved later.</p>' if resolved else ""
     if not failures:
