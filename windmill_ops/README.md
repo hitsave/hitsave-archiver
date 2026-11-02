@@ -1,14 +1,47 @@
 # Windmill ops (hitsave-archiver)
 
-Self-hosted [Windmill](https://www.windmill.dev/) for preservation **run**, **schedule**, and **monitor** — bash scripts in git (`windmill_ops/wmill/`) that call existing archiver scripts and `archiver_compose` (host **`ARCHIVER_HOST_PATH`**, not container `/archiver`).
+Self-hosted [Windmill](https://www.windmill.dev/) runs, schedules and logs the preservation jobs.
+Each job is a bash script in git (`windmill_ops/wmill/f/hitsave/`). The scripts call existing
+archiver scripts through `archiver_compose`, using the host path `ARCHIVER_HOST_PATH`, not the
+container path `/archiver`.
 
-## Start
+## Schedules
+
+| Schedule | When (UTC) | What it does |
+|---|---|---|
+| `remote_intake_sweep` | Every 30 min | Wasabi incoming, then Google Drive: stage, verify checksums, ingest, register in Omeka. Holds the remote-intake lock. |
+| `ledger_backup` | 02:30 | `pg_dump` of the ledger into `HOST_LEDGER_BACKUPS`, checked with `pg_restore --list`; keeps the newest 30. |
+| `wasabi_fixity_check` | 03:00 | Re-reads packages from Wasabi and verifies every SHA-256. Each package at most every 90 days, up to 300 packages / 150 GB a night ([storage-retention.md](../docs/storage-retention.md#fixity-schedule-wasabi-copy)). |
+| `prune_local_working_copies` | 04:30 | Deletes local bags and `ready/` payloads proven identical on Wasabi (`execute: true`). Holds the remote-intake lock. |
+
+The schedule definitions live in `wmill/schedules/*.schedule.yaml`. There is one Windmill worker
+and it runs one job at a time, so a long job delays the next scheduled one.
+
+## Scripts (`f/hitsave/`)
+
+| Script | Role |
+|---|---|
+| `remote_intake_sweep` | Scheduled sweep (above) |
+| `wasabi_redump_inbox_sweep`, `gdrive_redump_inbox_sweep` | One lane only (manual) |
+| `ledger_backup` | Scheduled ledger dump (above) |
+| `wasabi_fixity_check` | Scheduled Wasabi fixity (above). Run with `max_packages: 0` to only count what's due. |
+| `prune_local_working_copies` | Scheduled prune (above). Set `execute: 'false'` for a read-only report. |
+| `ledger_health_report` | Read-only ledger summary (`scripts/ledger_health_report.py`) |
+| `correct_catalog_item` | Catalog correction. status-web **`/correct`** submits this job. |
+| `quarantine_catalog_item` | Manual quarantine (`scripts/curation-quarantine-omeka.py`); status-web **`/quarantine`** offers the same form |
+| `batch_resume_omeka` | `run-batch-resume-omeka.sh` (long; manual) |
+
+Bash scripts receive their arguments **positionally**, in schema order (`x="$1"`). The worker runs
+with `FAVOR_UNSHARE_PID: "false"` because PID-namespace mode drops bash arguments.
+
+## Set up
 
 Both env files live in the private config repo, under `hitsave-archiver-config/windmill/`:
+
 - `.env`: compose variables (Windmill DB password, `WMILL_TOKEN`, host paths)
 - `worker-paths.env`: host paths for jobs; compose mounts it from there
 
-Compose only auto-loads `.env` from its own folder, so link it in:
+Compose only loads `.env` from its own folder, so link it in:
 
 ```bash
 PRIVATE=../hitsave-archiver-config   # relative to the hitsave-archiver checkout
@@ -17,43 +50,36 @@ ln -s "$(cd "$PRIVATE" && pwd)/windmill/.env" windmill_ops/docker/.env
 # Edit $PRIVATE/windmill/.env and worker-paths.env: ARCHIVER_HOST_PATH, HITSAVE_PRIVATE_CONFIG_HOST,
 # HITSAVE_INTAKE_HOST, WMILL_TOKEN
 
-cd windmill_ops/docker
-docker compose up -d
+mkdir -p .generated/windmill && chmod 1777 .generated/windmill   # job logs and the intake lock
+cd windmill_ops/docker && docker compose up -d
 ```
 
-UI: **http://127.0.0.1:8089** (or host LAN). Windmill uses its own **`windmill_db`**; preservation Postgres is unchanged.
+Start the preservation stack first: Windmill joins its `hitsave-preservation_default` network.
+After changing path env, recreate only the worker: `docker compose up -d --no-deps windmill_worker`.
 
-**Worker:** `windmill_worker` joins the preservation Docker network for ledger TCP and mounts the Docker socket for compose. After changing path env, recreate the worker: `docker compose up -d --no-deps windmill_worker`.
+**Paths seen from jobs.** Set `HITSAVE_PRIVATE_CONFIG_HOST` in `worker-paths.env` to the same
+path as in `.env`. The worker mounts `<private>/intake` at that same host path, so remote intake
+finds its config there. Never set `HITSAVE_PRIVATE_CONFIG=/config/private` on the worker: the
+host Docker daemon would create bogus `/config/private/...` paths.
 
-**Remote intake logs/poll JSON:** create **`hitsave-archiver/.generated/windmill`** on the host (`chmod 1777`) before the first sweep. Jobs write there via **`/run/hitsave/generated`** (see **`config/windmill-ops.yaml`**). Do not use repo **`.generated/`** root from Windmill — job UIDs cannot write there.
+## Deploy script changes
 
-**Docker compose from the worker:** set **`HITSAVE_PRIVATE_CONFIG_HOST`** in **`worker-paths.env`** (same path as **`HITSAVE_PRIVATE_CONFIG_HOST`** in **`.env`**). The worker mounts **`<private>/intake`** at that same host path so remote intake finds its config there. Never set **`HITSAVE_PRIVATE_CONFIG=/config/private`** on the worker — the host daemon would create bogus **`/config/private/...`** paths. If file bind mounts fail with “not a directory”, remove empty directories Docker created under **`/config`** on the host. (`hitsave-intake/config/preservation/` placeholders from older compose files can be deleted.)
-
-## Sync scripts from git
+Windmill keeps **its own copy** of every script and schedule. A change in git does nothing until
+you push it. Push only what changed:
 
 ```bash
-# WMILL_TOKEN in windmill_ops/docker/.env
-./scripts/windmill-sync-push.sh
+cd windmill_ops/docker && set -a && . ./.env && set +a
+A=(--base-url http://windmill_server:8000 --token "$WMILL_TOKEN" --workspace hitsave-archiver)
+docker compose --profile cli run --rm -T windmill_cli script push f/hitsave/<name>.sh "${A[@]}"
+docker compose --profile cli run --rm -T windmill_cli schedule push schedules/<name>.schedule.yaml f/hitsave/<name> "${A[@]}"
 ```
 
-Uses the **CLI container** (no host `npm`): `docker compose --profile cli run --rm windmill_cli sync push …` plus schedule push for **`remote_intake_sweep`**.
+`./scripts/windmill-sync-push.sh` pushes everything at once. Check a cron expression without
+deploying it with `POST :8089/api/schedules/preview` and a body of `{"schedule", "timezone"}`.
 
-## Scripts (`f/hitsave/`)
+## Config
 
-| Script | Role |
-|--------|------|
-| `ledger_health_report` | `python3 scripts/ledger_health_report.py` (read-only Postgres) |
-| `remote_intake_sweep` | Wasabi then Drive per-folder pipeline (scheduled) |
-| `wasabi_redump_inbox_sweep` / `gdrive_redump_inbox_sweep` | Single lane (manual) |
-| `batch_resume_omeka` | `run-batch-resume-omeka.sh` (long; manual) |
-| `correct_catalog_item` | `scripts/correct-catalog-item.py` (optional; status-web **`/correct`** is the default UI) |
-| `quarantine_catalog_item` | `scripts/curation-quarantine-omeka.py` (status-web **`/quarantine`**) |
+- Public paths and URLs: `config/windmill-ops.yaml`, `windmill_ops/docker/.env.example`, `worker-paths.env.example`.
+- Secrets and host paths: `hitsave-archiver-config` (`windmill/`, `secrets/`, `intake/`).
 
-**Schedule:** only **`remote_intake_sweep`** every **30 minutes**. Ops SSOT for intake state: **`game_ingest`** ledger + status-web **Health** (`:8090`).
-
-## Config SSOT
-
-- Paths: **`config/windmill-ops.yaml`**, **`windmill_ops/docker/.env.example`**, **`worker-paths.env.example`**
-- Secrets: **`hitsave-archiver-config`** (mounted at `/config/private` on the worker)
-
-Non-archiver automation (e.g. a future Discord bot) should live in other repos or Windmill folders — not under `f/hitsave/` here.
+Non-archiver automation belongs in other repos or Windmill folders, not under `f/hitsave/`.

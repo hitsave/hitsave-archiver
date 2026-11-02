@@ -14,7 +14,8 @@ Normative machine config: `config/preservation/packaging.yaml`, `config/preserva
 | **AIP / DIP** | One BagIt bag per package; payload under `data/` |
 | **Storage** | Unpacked bag on Wasabi (`press-material/{sort_letter}/{package_id}/` for press; see [dump-preservation.md](./dump-preservation.md) for dumps) |
 | **Access** | Omeka item + `omeka_dip_package` media; DipViewer reads `metadata/inventory.json` over S3 |
-| **Fixity** | `manifest-sha256.txt` in the bag; `fixity-check.py` runs `bagit.validate()` and spot-checks against `metadata/inventory.json` |
+| **Fixity** | `manifest-sha256.txt` in the bag; verified at upload (size + ETag per object), again before a local copy is pruned, and by `wasabi-fixity-check.py` on the Wasabi copy at most every 90 days ([storage-retention.md](./storage-retention.md)) |
+| **Integrity scan** | ClamAV before packaging; result recorded as PREMIS events under `metadata/premis/` |
 
 ---
 
@@ -54,7 +55,8 @@ Provenance is copied into each bag (`bag-info.txt`, `metadata/submission.json`) 
 | Bag build | `build-bagit-package.py` |
 | Wasabi | `upload-bag-wasabi.py` |
 | Omeka | `register-dip-omeka-api.py` |
-| Fixity | `fixity-check.py` |
+| Fixity (Wasabi copy) | `wasabi-fixity-check.py` (Windmill, daily, 90-day interval per package); `fixity-check.py` for a local bag |
+| Prune local copy | `prune-local-working-copies.py` (Windmill, daily) |
 | Catalog export | `export-preservation-catalog.py` |
 
 ---
@@ -70,7 +72,8 @@ Provenance is copied into each bag (`bag-info.txt`, `metadata/submission.json`) 
 ├── metadata/
 │   ├── submission.json
 │   ├── inventory.json
-│   └── hitsave/preview-manifest.json   (grid/browse thumbs for Omeka)
+│   ├── premis/virus-check-event.xml    (ClamAV result; rescans add more events)
+│   └── hitsave/                        (preview-manifest.json, browse images, thumbnails for Omeka)
 └── data/                           ← press files (relative paths preserved)
 ```
 
@@ -85,7 +88,7 @@ Provenance is copied into each bag (`bag-info.txt`, `metadata/submission.json`) 
 Press material (from `packaging.yaml` / `ingest.yaml`):
 
 ```text
-s3://hitsave-incoming/press-material/{sort_letter}/{package_id}/bagit.txt
+s3://hitsave-press-material/press-material/{sort_letter}/{package_id}/bagit.txt
 ```
 
 Dumps use prefixes from [dump-preservation.md](./dump-preservation.md) (`ingest-kinds.yaml`).
@@ -100,7 +103,7 @@ One **`omeka_dip_package`** media row per package. Media `data` includes:
 
 - `dip_storage`: `wasabi-s3`
 - `package_storage_prefix`: e.g. `press-material/F/my-game-01947c2a-…`
-- `dip_wasabi_uri` / `package_wasabi_uri`: `s3://hitsave-incoming/…/`
+- `dip_wasabi_uri` / `package_wasabi_uri`: `s3://hitsave-press-material/…/` (dumps: `s3://hitsave-dumps/…/`)
 
 No file upload into Omeka storage. Test stack: render `dip-s3.config.php` and use `docker-compose.s3-direct.yml` ([hitsave-omeka-test docs](https://github.com/hitsave/hitsave-omeka-test/blob/main/docs/dip-wasabi-s3-direct.md)).
 
@@ -110,7 +113,7 @@ Staff preservation URI: `omeka_staff_metadata.py` → `dcterms:relation` from le
 
 ## 7. Dumps
 
-Ingest kind **`dump`**: unpacked BagIt under `dumps/{System}/{Category}/{package_id}/` (or `dumps/Others/…`). Omeka catalog is metadata-only via `apply_dump_catalog_omeka.py`. Details: [dump-preservation.md](./dump-preservation.md).
+Ingest kind **`dump`**: unpacked BagIt under `dumps/{System}/{Category}/{sort_letter}/{package_id}/` (No-Intro: `dumps/No-Intro/{System}/…`; unclassified: `dumps/Others/…`). Omeka catalog is metadata-only via `apply_dump_catalog_omeka.py`. Details: [dump-preservation.md](./dump-preservation.md).
 
 ---
 
@@ -123,7 +126,7 @@ Example package fields:
 ```json
 "package": {
   "format": "bagit",
-  "wasabi_bucket": "hitsave-incoming",
+  "wasabi_bucket": "hitsave-press-material",
   "package_storage_prefix": "press-material/T/tekken-7-01947c2a-8b3d-7a1e-b2c4-9d8e1f2a3b4c"
 }
 ```

@@ -1,6 +1,13 @@
-# E2E preservation batch (multi-folder + test Omeka)
+# Press-material batches
 
-Use when **`hitsave-archiver`**, **`hitsave-archiver-config`**, and **`hitsave-omeka-test`** run on one machine (see [hitsave-omeka-test `docs/build-real-dip.md`](https://github.com/hitsave/hitsave-omeka-test/blob/main/docs/build-real-dip.md)).
+Press material is ingested in **operator-run batches** on the host that holds the press originals
+(`HOST_PRESS_MATERIAL`, mounted read-only at `/data/press-material`). There's no remote intake for
+press material and no Windmill schedule; an operator starts each batch.
+
+**Omeka target.** Compose mounts the private `hitsave-archiver-config/omeka-catalog.yaml`, which
+points at **production** (`archive.hitsave.org`). New items start **private**; publish them from
+status-web once checked. For a dry run against the local test stack, copy
+`omeka-catalog.test.yaml` over it first, and use [hitsave-omeka-test](https://github.com/hitsave/hitsave-omeka-test/blob/main/docs/build-real-dip.md).
 
 ## Host paths (private `host.env`, not in git)
 
@@ -33,9 +40,7 @@ python3 scripts/sync-preservation-config.py
 
 Single-game pilot (committed): `config/preservation/pilot-game.yaml`.
 
-## Full E2E: ingest + Omeka catalog registration
-
-Test Omeka must be running (`run-omeka-test.sh` in **hitsave-omeka-test**).
+## Run a batch: ingest + Omeka catalog registration
 
 ```bash
 cd hitsave-archiver
@@ -72,5 +77,6 @@ Log: `.generated/register-manifest-dips-omeka.log` (override with `HITSAVE_REGIS
 
 ## Verify
 
-- Ledger: `docker compose exec -T postgres psql -U hitsave -d hitsave_ledger -c 'SELECT game_key, status, omeka_item_id FROM game_ingest ORDER BY game_key LIMIT 20;'`
-- Omeka admin and public site URLs come from **`hitsave-omeka-test`** `config/omeka-test/settings.yaml` (`omeka.public_url`, `omeka.site_slug`).
+- **status-web** ledger and Health page: every game `complete` with an Omeka id, or listed in the attention queue with a reason ([archivist-guide.md](./archivist-guide.md)).
+- Ledger by hand: `docker compose exec -T postgres psql -U hitsave -d hitsave_ledger -c 'SELECT game_key, status, omeka_item_id FROM game_ingest ORDER BY updated_at DESC LIMIT 20;'`
+- Local bags under `$HOST_OUTPUT/bag/batch/<batch_key>/` are temporary; the prune job deletes them 14 days after upload once Wasabi is verified ([storage-retention.md](./storage-retention.md)).
