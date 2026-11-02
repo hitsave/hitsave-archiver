@@ -43,6 +43,9 @@ def render_nav(*, active: str, status_config: dict) -> str:
         ("logs", "/logs", "Batch logs"),
     ]
     nav_links: list[str] = []
+    if not Path(_generated_dir(status_config)).is_dir():
+        # Batch logs live on the host that runs the batches; hide the page where they aren't mounted.
+        links = [link for link in links if link[0] != "logs"]
     for key, href, label in links:
         if key == active:
             nav_links.append(f'<a href="{href}" class="active">{html.escape(label)}</a>')
@@ -98,7 +101,7 @@ def render_page_shell(*, title: str, active: str, inner: str, status_config: dic
 {inner}
 </main>
 <footer class="site-footer">
-<p>Batch logs: <code>{gen}</code> · MobyGames fields where shown: Data by MobyGames.com</p>
+<p>{f'Batch logs: <code>{gen}</code> · ' if Path(_generated_dir(status_config)).is_dir() else ''}MobyGames fields where shown: Data by MobyGames.com</p>
 </footer>
 </body></html>"""
     return doc.encode("utf-8")
