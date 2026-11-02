@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Parse Nintendo Switch No-Intro-style Submission.xml (datafile) sidecars."""
 from __future__ import annotations
 
