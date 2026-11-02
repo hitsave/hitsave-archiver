@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from dump_switch import (  # noqa: E402
+from hitsave_dump_sidecars.switch import (  # noqa: E402
     parse_switch_submission_xml,
     switch_submission_valid,
     switch_catalog_sha256,

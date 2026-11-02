@@ -17,7 +17,7 @@ from hitsave_dump_sidecars.redump import (
     pick_omeka_title_from_submission,
     redump_catalog_sha1,
 )
-from dump_switch import (
+from hitsave_dump_sidecars.switch import (
     parse_switch_submission_xml,
     resolve_switch_submission_path,
     switch_game_title,

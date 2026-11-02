@@ -4,6 +4,7 @@ Parsers for disc and cartridge dump sidecars:
 
 - `hitsave_dump_sidecars.redump`: Redump `submissionInfo.txt` (checksums, titles, disc image suffixes)
 - `hitsave_dump_sidecars.nointro`: No-Intro / dumping.guide sidecars
+- `hitsave_dump_sidecars.switch`: Nintendo Switch cart dumps (No-Intro `Submission.xml`)
 
 Pure standard library, no dependencies. It is the single copy used by both services:
 
