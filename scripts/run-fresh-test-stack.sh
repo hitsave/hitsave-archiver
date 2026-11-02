@@ -13,7 +13,7 @@ python3 scripts/sync-preservation-config.py
 bash scripts/batch-expand-preservation.sh "$BATCH"
 
 docker compose up -d postgres clamav ledger
-docker compose exec -T postgres psql -U hitsave -d hitsave_ledger < schema/002_moby_ledger.sql || true
+docker compose run --rm -T psql -U hitsave -d hitsave_ledger < schema/002_moby_ledger.sql || true
 
 if [[ ! -f "$OMEKA/docker-compose.yml" ]]; then
   echo "Missing Omeka test stack at $OMEKA (set HITSAVE_OMEKA_TEST_ROOT)" >&2

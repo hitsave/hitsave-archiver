@@ -1,0 +1,26 @@
+# Remote ledger: this host has no local Postgres; the ledger lives on another host
+# (luigi). The `postgres` service becomes a TCP forwarder under the same name, so
+# database.yaml (host: postgres), every depends_on and `docker compose run psql` keep working.
+#
+# Enable on a host by setting, in hitsave-archiver-config host.env (for the script helpers):
+#   export HITSAVE_LEDGER_REMOTE_HOST=hitsave-ts HITSAVE_LEDGER_REMOTE_PORT=5432
+# and, for plain `docker compose` in this directory, a gitignored .env next to this file:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.remote-ledger.yml
+#   HITSAVE_LEDGER_REMOTE_HOST=hitsave-ts
+#   HITSAVE_LEDGER_REMOTE_PORT=5432
+# On saturn, hitsave-ts (hitsave-archiver-config hosts/saturn/tailscale) forwards :5432 to luigi.
+services:
+  postgres:
+    image: alpine/socat:1.8.0.1
+    restart: unless-stopped
+    env_file: !reset []
+    volumes: !reset []
+    command:
+      - "TCP-LISTEN:5432,fork,reuseaddr"
+      - "TCP:${HITSAVE_LEDGER_REMOTE_HOST:?set HITSAVE_LEDGER_REMOTE_HOST}:${HITSAVE_LEDGER_REMOTE_PORT:-5432}"
+    healthcheck:
+      # The remote end must accept connections, not just this forwarder.
+      test: ["CMD-SHELL", "nc -z -w 3 ${HITSAVE_LEDGER_REMOTE_HOST} ${HITSAVE_LEDGER_REMOTE_PORT:-5432}"]
+      interval: 10s
+      timeout: 5s
+      retries: 6

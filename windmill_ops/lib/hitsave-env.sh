@@ -67,5 +67,10 @@ archiver_compose() {
     echo "ARCHIVER_HOST_PATH must be set to the host hitsave-archiver checkout (see worker-paths.env.example)" >&2
     exit 1
   fi
-  docker compose --project-directory "$ARCHIVER_HOST_PATH" "$@"
+  local -a files=()
+  # Remote ledger (no local Postgres on this host): see docker-compose.remote-ledger.yml.
+  if [[ -n "${HITSAVE_LEDGER_REMOTE_HOST:-}" ]]; then
+    files=(-f "$ARCHIVER_HOST_PATH/docker-compose.yml" -f "$ARCHIVER_HOST_PATH/docker-compose.remote-ledger.yml")
+  fi
+  docker compose --project-directory "$ARCHIVER_HOST_PATH" "${files[@]}" "$@"
 }

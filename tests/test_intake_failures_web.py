@@ -66,13 +66,18 @@ def test_preserved_later_is_hidden(tmp_path: Path) -> None:
     open_, resolved = open_failures(lambda: conn, tmp_path)
     assert [f.slug for f in open_] == ["redump-broken"]
     assert resolved == 1
-    page = render_intake_failures(open_, resolved)
+    page = render_intake_failures(open_, resolved, failed_dir=tmp_path)
     assert "redump-broken" in page and "MD5 mismatch" in page
     assert "redump-fixed" not in page and "1 older failure(s) not shown" in page
 
 
 def test_render_escapes_and_handles_empty(tmp_path: Path) -> None:
     _fail(tmp_path, "redump-x", "bad <script>alert(1)</script>", 1_000_000)
-    page = render_intake_failures(scan_failed_dir(tmp_path), 0)
+    page = render_intake_failures(scan_failed_dir(tmp_path), 0, failed_dir=tmp_path)
     assert "<script>" not in page and "&lt;script&gt;" in page
-    assert "No open intake failures" in render_intake_failures([], 0)
+    assert "No open intake failures" in render_intake_failures([], 0, failed_dir=tmp_path)
+
+
+def test_render_says_unavailable_when_folder_not_mounted(tmp_path: Path) -> None:
+    page = render_intake_failures([], 0, failed_dir=tmp_path / "not-mounted")
+    assert "aren't available here" in page and "No open intake failures" not in page

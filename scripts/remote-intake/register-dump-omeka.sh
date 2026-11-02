@@ -79,7 +79,7 @@ OMEKA_CATALOG_MOUNT=(-v "${PROD_CATALOG}:/config/omeka-catalog.yaml:ro")
 
 game_key_sql="${GAME_KEY//\'/\'\'}"
 slug_sql="${SLUG//\'/\'\'}"
-ledger_row="$(remote_intake_archiver_compose exec -T postgres psql -U hitsave -d hitsave_ledger -tAc \
+ledger_row="$(remote_intake_archiver_compose run --rm -T psql -U hitsave -d hitsave_ledger -tAc \
   "SELECT game_key || '|' || COALESCE(status,'') || '|' || COALESCE(source_path,'') || '|' || COALESCE(omeka_item_id::text,'')
    FROM game_ingest
    WHERE ingest_kind = 'dump'

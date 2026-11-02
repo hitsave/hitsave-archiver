@@ -178,7 +178,12 @@ remote_intake_archiver_compose() {
   dir="$(remote_intake_archiver_compose_dir)"
   compose_file="$dir/docker-compose.yml"
   priv="$(remote_intake_private_config_host)"
-  HITSAVE_PRIVATE_CONFIG="$priv" docker compose --project-directory "$dir" -f "$compose_file" "$@"
+  local -a files=(-f "$compose_file")
+  # Remote ledger (no local Postgres on this host): see docker-compose.remote-ledger.yml.
+  if [[ -n "${HITSAVE_LEDGER_REMOTE_HOST:-}" ]]; then
+    files+=(-f "$dir/docker-compose.remote-ledger.yml")
+  fi
+  HITSAVE_PRIVATE_CONFIG="$priv" docker compose --project-directory "$dir" "${files[@]}" "$@"
 }
 
 # The compose FILE is read by this process (inside the Windmill worker that is /intake, the

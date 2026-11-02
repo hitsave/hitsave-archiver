@@ -37,7 +37,7 @@ for cfg in "${CONFIGS[@]}"; do
 done
 
 echo "=== apply Moby metadata to Omeka (${SOURCE_SUBPATH}) ==="
-mapfile -t PKG_KEYS < <(docker compose exec -T postgres psql -U hitsave -d hitsave_ledger -tAc \
+mapfile -t PKG_KEYS < <(docker compose run --rm -T psql -U hitsave -d hitsave_ledger -tAc \
   "SELECT game_key FROM game_ingest WHERE source_path LIKE '${SQL_LIKE}' AND omeka_item_id IS NOT NULL AND metadata_json IS NOT NULL ORDER BY game_key;" </dev/null)
 if ((${#PKG_KEYS[@]} > 0)); then
   docker compose run --rm -T --entrypoint python omeka-catalog \
@@ -46,5 +46,5 @@ else
   echo "No Omeka rows with Moby metadata to patch for ${SOURCE_SUBPATH}."
 fi
 
-docker compose exec -T postgres psql -U hitsave -d hitsave_ledger -c \
+docker compose run --rm -T psql -U hitsave -d hitsave_ledger -c \
   "SELECT moby_status, COUNT(*) FROM game_ingest WHERE source_path LIKE '${SQL_LIKE}' GROUP BY moby_status ORDER BY COUNT(*) DESC;"

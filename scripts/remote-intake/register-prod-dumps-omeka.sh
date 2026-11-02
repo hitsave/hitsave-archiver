@@ -24,7 +24,7 @@ echo "=== prod Omeka dump reconcile (missing omeka_item_id) $(date -Is) ==="
 
 docker compose up -d postgres >/dev/null
 mapfile -t keys < <(
-  docker compose exec -T postgres psql -U hitsave -d hitsave_ledger -tAc \
+  docker compose run --rm -T psql -U hitsave -d hitsave_ledger -tAc \
     "SELECT game_key FROM game_ingest
      WHERE ingest_kind = 'dump' AND status = 'complete' AND omeka_item_id IS NULL
      ORDER BY game_key;" </dev/null

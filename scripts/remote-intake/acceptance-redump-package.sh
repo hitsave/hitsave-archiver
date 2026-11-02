@@ -32,7 +32,7 @@ else
 fi
 
 echo "=== ledger (ingest_kind=dump) ==="
-docker compose exec -T postgres psql -U hitsave -d hitsave_ledger -c \
+docker compose run --rm -T psql -U hitsave -d hitsave_ledger -c \
   "SELECT game_key, status, package_storage_prefix, omeka_item_id
    FROM game_ingest WHERE ingest_kind = 'dump' AND ${WHERE}
    ORDER BY updated_at DESC LIMIT 3;"
