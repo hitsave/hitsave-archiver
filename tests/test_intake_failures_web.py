@@ -71,6 +71,15 @@ def test_preserved_later_is_hidden(tmp_path: Path) -> None:
     assert "redump-fixed" not in page and "1 older failure(s) not shown" in page
 
 
+def test_doubled_lane_prefix_resolved_by_single_prefix(tmp_path: Path) -> None:
+    _fail(tmp_path, "redump-redump-disc-fwd1103", "no files downloaded", 1_000_000)
+    _fail(tmp_path, "redump-redump-other", "no files downloaded", 2_000_000)
+    conn = _Conn(["/data/intake/ready/redump-disc-fwd1103"])
+    open_, resolved = open_failures(lambda: conn, tmp_path)
+    assert [f.slug for f in open_] == ["redump-redump-other"]
+    assert resolved == 1
+
+
 def test_render_escapes_and_handles_empty(tmp_path: Path) -> None:
     _fail(tmp_path, "redump-x", "bad <script>alert(1)</script>", 1_000_000)
     page = render_intake_failures(scan_failed_dir(tmp_path), 0, failed_dir=tmp_path)

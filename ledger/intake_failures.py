@@ -78,19 +78,34 @@ def open_failures(connect: Callable[[], Any], failed_dir: Path = FAILED_DIR) -> 
     return _drop_resolved(connect, scan_failed_dir(failed_dir))
 
 
+def _ready_slug_candidates(slug: str) -> set[str]:
+    """Ready-folder names a failed slug may have been preserved under.
+
+    Early intake runs doubled the lane prefix (``redump-redump-<name>``); the same package was
+    then preserved as ``redump-<name>``, so either name resolves the failure.
+    """
+    names = {slug}
+    lane, sep, rest = slug.partition("-")
+    while sep and rest.startswith(lane + "-"):
+        names.add(rest)
+        rest = rest[len(lane) + 1:]
+    return names
+
+
 def _drop_resolved(
     connect: Callable[[], Any], failures: list[IntakeFailure]
 ) -> tuple[list[IntakeFailure], int]:
     if not failures:
         return [], 0
-    sources = [READY_SOURCE_PREFIX + f.slug for f in failures]
+    candidates = {f.slug: _ready_slug_candidates(f.slug) for f in failures}
+    sources = sorted({READY_SOURCE_PREFIX + c for cs in candidates.values() for c in cs})
     with connect() as conn:
         rows = conn.execute(
             "SELECT source_path FROM game_ingest WHERE status = 'complete' AND source_path = ANY(%s)",
             (sources,),
         ).fetchall()
     done = {r[0][len(READY_SOURCE_PREFIX):] for r in rows}
-    open_ = [f for f in failures if f.slug not in done]
+    open_ = [f for f in failures if not (candidates[f.slug] & done)]
     return open_, len(failures) - len(open_)
 
 
