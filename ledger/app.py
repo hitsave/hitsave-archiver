@@ -45,6 +45,7 @@ from pagination import (
 )
 from table_sort import parse_sort_params, sort_header_link
 from windmill_client import (
+    utc_display,
     fetch_completed_jobs,
     windmill_api_settings,
     windmill_job_ui_url,
@@ -523,12 +524,12 @@ def render_ops() -> bytes:
                 "<tr>"
                 f"<td>{path}</td>"
                 f"<td>{state}</td>"
-                f"<td>{html.escape(str(row.get('created_at') or ''))}</td>"
+                f"<td>{html.escape(utc_display(row.get('started_at')))}</td>"
                 f"<td><code>{html.escape(str(jid))}</code></td>"
                 "</tr>"
             )
         jobs_html = f"""
-<div class="table-wrap"><table><thead><tr><th>Script / flow</th><th>Success</th><th>Created</th><th>Job id</th></tr></thead><tbody>
+<div class="table-wrap"><table><thead><tr><th>Script / flow</th><th>Success</th><th>Started (UTC)</th><th>Job id</th></tr></thead><tbody>
 {''.join(trs) if trs else '<tr><td colspan="4">No completed jobs returned.</td></tr>'}
 </tbody></table></div>"""
     else:
