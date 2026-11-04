@@ -19,7 +19,7 @@ COLUMNS = (
     "game_key, source_path, status, dip_path, aip_bag_path, package_uuid, file_count, total_bytes, "
     "checksum_manifest_path, error_message, package_format, submission_source_id, inventory_json, "
     "sip_fingerprint, package_id, title_slug, sort_letter, ingest_kind, storage_layout, "
-    "package_storage_prefix, dump_class, dump_system, dump_category, block_reason, updated_at"
+    "package_storage_prefix, dump_class, dump_system, dump_category, block_reason, intake_source, updated_at"
 )
 
 
@@ -163,3 +163,14 @@ def test_quarantine_records_block_reason_and_later_writes_keep_it():
     ingest_folder.upsert_ledger(conn, game_key="pkg-1", source_path="/src/pkg", status="quarantine",
                                 error_message="again")
     assert conn.row("pkg-1")["block_reason"] == "virus_detected"
+
+
+def test_intake_source_recorded_and_never_erased():
+    conn = SqliteConn()
+    ingest_folder.upsert_ledger(
+        conn, game_key="pkg-1", source_path="/src/pkg", status="building_bagit", intake_source="drive:D1"
+    )
+    for status in ("uploading_package", "failed", "complete"):
+        ingest_folder.upsert_ledger(conn, game_key="pkg-1", source_path="/src/pkg", status=status)
+    assert conn.row("pkg-1")["intake_source"] == "drive:D1"
+

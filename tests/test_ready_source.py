@@ -63,3 +63,42 @@ def test_require_ready_root_fails_closed(tmp_path: Path) -> None:
     with pytest.raises(SystemExit):
         rs.require_ready_root(tmp_path / "not-mounted")
     assert rs.require_ready_root(tmp_path) == tmp_path
+
+
+# --- ledger first (game_ingest.intake_source) -------------------------------------------------
+
+def test_ledger_decides_without_ready_dir() -> None:
+    assert rs.check_source(None, drive_folder_id="abc", ledger_source="drive:abc")[0] == rs.MATCH
+    state, rec = rs.check_source(None, drive_folder_id="abc", ledger_source="wasabi:F/FWD0307")
+    assert state == rs.MISMATCH and rec == {"wasabi_prefix": "F/FWD0307"}
+
+
+def test_ledger_overrides_manifest(tmp_path: Path) -> None:
+    d = _ready(tmp_path, "redump-fwd0307", {"drive_folder_id": "abc"})
+    # ready/ says this package, the ledger says another one: the ledger wins.
+    assert rs.check_source(d, drive_folder_id="abc", ledger_source="drive:other")[0] == rs.MISMATCH
+
+
+def test_unusable_ledger_value_falls_back_to_manifest(tmp_path: Path) -> None:
+    d = _ready(tmp_path, "redump-fwd0307", {"drive_folder_id": "abc"})
+    for junk in ("", None, "garbage"):
+        assert rs.check_source(d, drive_folder_id="abc", ledger_source=junk)[0] == rs.MATCH
+
+
+def test_others_lane_manifest_is_read(tmp_path: Path) -> None:
+    d = tmp_path / "others-usb-1"
+    d.mkdir()
+    (d / rs.MANIFEST_NAME).write_text(yaml.safe_dump({"others": {"drive_folder_id": "o1"}}))
+    assert rs.check_source(d, drive_folder_id="o1")[0] == rs.MATCH
+    assert rs.check_source(d, drive_folder_id="o2")[0] == rs.MISMATCH
+
+
+def test_cli_ledger_source_needs_no_ready_root(tmp_path: Path, capsys) -> None:
+    missing = tmp_path / "no-ready-here"
+    args = ["check", "--slug", "redump-x", "--drive-folder-id", "abc", "--ready-root", str(missing)]
+    assert rs.main(args + ["--ledger-source", "drive:abc"]) == 0
+    assert capsys.readouterr().out.strip() == rs.MATCH
+    assert rs.main(args + ["--ledger-source", "drive:zzz"]) == 3
+    assert capsys.readouterr().out.strip() == "mismatch drive:zzz"
+    with pytest.raises(SystemExit):  # no ledger value: ready/ is required (fails closed)
+        rs.main(args)

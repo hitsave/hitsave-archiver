@@ -8,9 +8,14 @@ intake writes (hitsave-submission.yaml) records the real source: a Drive folder 
 or a Wasabi ``<source_prefix>/<package_folder>``. Compare against it before treating a
 slug as "already staged / already preserved".
 
+The ledger copy (game_ingest.intake_source, see scripts/intake_source.py) is authoritative: when
+the caller passes it with --ledger-source, it decides and ready/ isn't read at all, so the guard
+keeps working after ready/ is pruned, lost, or the intake moves to another host. Without it (no
+ledger row yet, or a row from before intake_source existed) the handoff manifest decides.
+
 CLI (used by run-*-redump-per-folder.sh):
     ready_source.py check --slug SLUG (--drive-folder-id ID | --wasabi-prefix PREFIX)
-        [--ready-root DIR]
+        [--ledger-source REF] [--ready-root DIR]
     prints one of: absent | match | mismatch <recorded> | unknown
     exit 0 absent/match, 3 mismatch, 4 unknown (manifest records no source)
 """
@@ -21,9 +26,15 @@ import os
 import sys
 from pathlib import Path
 
-import yaml
-
-MANIFEST_NAME = "hitsave-submission.yaml"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from intake_source import (  # noqa: E402
+    MANIFEST_NAME,
+    current_ref,
+    norm_prefix,
+    parse_ref,
+    recorded_source,
+    to_ref,
+)
 
 ABSENT = "absent"      # no ready/<slug> handoff at all
 MATCH = "match"        # handoff came from this same source
@@ -58,42 +69,43 @@ def require_ready_root(path: Path | None = None) -> Path:
     return root
 
 
-def _norm_prefix(value: str | None) -> str:
-    return str(value or "").strip().strip("/")
-
-
-def recorded_source(ready_dir: Path) -> dict | None:
-    """{'drive_folder_id': ...} / {'wasabi_prefix': ...} / {} (no source) / None (no manifest)."""
-    manifest = ready_dir / MANIFEST_NAME
-    if not manifest.is_file():
-        return None
-    data = yaml.safe_load(manifest.read_text(encoding="utf-8")) or {}
-    block = data.get("redump") or data.get("no_intro") or {}
-    fid = str(block.get("drive_folder_id") or "").strip()
-    if fid:
-        return {"drive_folder_id": fid}
-    prefix = _norm_prefix(block.get("wasabi_source_prefix"))
-    if prefix:
-        return {"wasabi_prefix": prefix}
-    return {}
+_norm_prefix = norm_prefix  # kept for callers/tests
 
 
 def describe(rec: dict | None) -> str:
-    if not rec:
-        return "(no source recorded)"
-    if "drive_folder_id" in rec:
-        return f"drive:{rec['drive_folder_id']}"
-    return f"wasabi:{rec['wasabi_prefix']}"
+    return to_ref(rec) or "(no source recorded)"
 
 
-def check_source(
-    ready_dir: Path,
+def check_ledger_source(
+    ledger_source: str | None,
     *,
     drive_folder_id: str | None = None,
     wasabi_prefix: str | None = None,
+) -> tuple[str, dict] | None:
+    """(MATCH|MISMATCH, recorded) from the ledger's intake_source; None when it can't decide."""
+    rec = parse_ref(ledger_source)
+    if rec is None:
+        return None
+    current = current_ref(drive_folder_id=drive_folder_id, wasabi_prefix=wasabi_prefix)
+    return (MATCH if to_ref(rec) == current else MISMATCH), rec
+
+
+def check_source(
+    ready_dir: Path | None,
+    *,
+    drive_folder_id: str | None = None,
+    wasabi_prefix: str | None = None,
+    ledger_source: str | None = None,
 ) -> tuple[str, dict | None]:
     if not drive_folder_id and not wasabi_prefix:
         raise ValueError("pass drive_folder_id or wasabi_prefix")
+    decided = check_ledger_source(
+        ledger_source, drive_folder_id=drive_folder_id, wasabi_prefix=wasabi_prefix
+    )
+    if decided is not None:
+        return decided
+    if ready_dir is None:
+        raise ValueError("no usable ledger source and no ready dir to check")
     rec = recorded_source(ready_dir)
     if rec is None:
         return ABSENT, None
@@ -115,14 +127,27 @@ def main(argv: list[str] | None = None) -> int:
     src.add_argument("--drive-folder-id")
     src.add_argument("--wasabi-prefix")
     chk.add_argument("--ready-root", type=Path)
+    chk.add_argument(
+        "--ledger-source",
+        default="",
+        help="game_ingest.intake_source for this slug (drive:<id> / wasabi:<prefix>); decides when set",
+    )
     args = parser.parse_args(argv)
 
-    ready_root = require_ready_root(args.ready_root)
-    state, rec = check_source(
-        ready_root / args.slug,
+    decided = check_ledger_source(
+        args.ledger_source,
         drive_folder_id=args.drive_folder_id,
         wasabi_prefix=args.wasabi_prefix,
     )
+    if decided is not None:
+        state, rec = decided
+    else:
+        ready_root = require_ready_root(args.ready_root)
+        state, rec = check_source(
+            ready_root / args.slug,
+            drive_folder_id=args.drive_folder_id,
+            wasabi_prefix=args.wasabi_prefix,
+        )
     if state == MISMATCH:
         print(f"{state} {describe(rec)}")
         return 3
