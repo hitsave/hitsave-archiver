@@ -6,9 +6,9 @@ lane) and leaves it in failed/<slug>/ with an error.txt. That folder only exists
 runs intake, so the ledger app (which may run elsewhere) reads this table instead.
 
 Run at the end of each intake sweep, in the ingest-worker image:
-  -v "$HOST_INTAKE/failed:/data/intake-failed:ro" ... python sync_intake_rejections.py
-The table then holds exactly the packages currently in failed/. If the folder isn't mounted, the
-script changes nothing (it never empties the table because of a missing mount).
+  -v "$HOST_INTAKE:/data/intake:ro" ... python sync_intake_rejections.py --failed-dir /data/intake/failed
+The table then holds exactly the packages currently in failed/. If failed/ isn't there, the script
+changes nothing (it never empties the table because of a missing folder or mount).
 """
 from __future__ import annotations
 
