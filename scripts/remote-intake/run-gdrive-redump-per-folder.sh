@@ -103,9 +103,11 @@ for pair in "${pairs[@]}"; do
     # intake waits until every file is unchanged for upload_stable_seconds and skips packages
     # unchanged since they last failed; both exit 3 ("not ready yet"), which is not a failure.
     rc=0
+    # --game-key: stage under the name the poll chose (type-based), so ready/<slug> matches.
     remote_intake_gdrive_compose run --rm -T --user 1000:1000 intake process \
       --folder-id "$fid" \
       --lane "$lane" \
+      --game-key "$slug" \
       --config-root /config || rc=$?
     if [[ $rc -eq 0 ]]; then
       echo "--- staged $slug ---"

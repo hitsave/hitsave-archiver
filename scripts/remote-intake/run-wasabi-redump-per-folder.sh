@@ -120,6 +120,7 @@ for pair in "${pairs[@]}"; do
       --source-prefix "$source_prefix" \
       --package-folder-name "$pkg_name" \
       --lane "$lane" \
+      --game-key "$slug" \
       --config-root /config || rc=$?
     if [[ $rc -eq 0 ]]; then
       echo "--- staged $slug ---"

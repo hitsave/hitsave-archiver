@@ -17,8 +17,8 @@ remote_intake_compose_intake run --rm -T --user 1000:1000 intake poll --once -v 
 
 python3 - <<'PY' "$POLL_JSON"
 import json, re, sys
-# Lane -> slug prefix (same as hitsave-intake intake.lanes). The lane folder decides the sidecar
-# rules, so there's no disc-image filter here any more.
+# intake names each package by its dump type (ready_slug: dvd-video-…, switch-…, others-…; see
+# hitsave-intake intake.naming). Older intake images don't report it: fall back to the lane prefix.
 PREFIX = {"redump": "redump", "no-intro": "nointro", "others": "others"}
 data = json.load(open(sys.argv[1], encoding="utf-8"))
 for pkg in data.get("packages") or []:
@@ -27,7 +27,11 @@ for pkg in data.get("packages") or []:
     lane = pkg.get("lane") or "redump"
     if not fid or name.strip().lower() == "processed" or lane not in PREFIX:
         continue
-    slug = re.sub(r"[^a-zA-Z0-9]+", "-", name.strip()).strip("-").lower()
-    slug = slug or "disc"
-    print(f"{fid}\t{lane}\t{PREFIX[lane]}-{slug}")
+    ready = str(pkg.get("ready_slug") or "").strip()
+    if not ready:
+        slug = re.sub(r"[^a-zA-Z0-9]+", "-", name.strip()).strip("-").lower() or "disc"
+        ready = f"{PREFIX[lane]}-{slug}"
+    if pkg.get("naming_note"):
+        print(f"WARN: {name}: {pkg['naming_note']}", file=sys.stderr)
+    print(f"{fid}\t{lane}\t{ready}")
 PY

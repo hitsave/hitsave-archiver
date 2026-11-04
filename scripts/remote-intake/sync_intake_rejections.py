@@ -22,6 +22,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from batch_ledger import pg_connect  # noqa: E402
 
 REASON_MAX = 300
+# Since type-based names (dvd-video-…, switch-…) intake writes the lane to failed/<slug>/.intake-lane;
+# older failures only have the lane in their slug prefix.
+LANE_FILE = ".intake-lane"
 LANE_PREFIXES = {"redump-": "redump", "nointro-": "no-intro", "others-": "others"}
 
 DDL = """
@@ -63,7 +66,12 @@ def scan(failed_dir: Path) -> list[Rejection]:
         except OSError:
             continue
         reason = (text.splitlines()[0] if text else "(no error.txt)")[:REASON_MAX]
-        out.append(Rejection(entry.name, lane_for_slug(entry.name), reason,
+        lane = None
+        try:
+            lane = (entry / LANE_FILE).read_text(encoding="utf-8").strip() or None
+        except OSError:
+            pass
+        out.append(Rejection(entry.name, lane or lane_for_slug(entry.name), reason,
                              datetime.fromtimestamp(st.st_mtime, timezone.utc)))
     return out
 
