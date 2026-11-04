@@ -70,3 +70,12 @@ def test_backfill_plan(tmp_path: Path) -> None:
         "redump-gone": None,
         "weird": None,
     }
+
+
+def test_local_source() -> None:
+    ref = "local:/tank/video/dumps/Switch/Hit Save/Submitted/Aka"
+    rec = src.parse_ref(ref)
+    assert rec == {"local_path": "/tank/video/dumps/Switch/Hit Save/Submitted/Aka"}
+    assert src.to_ref(rec) == ref
+    assert src.parse_ref("local:relative/path") is None
+    assert src.parse_ref("local:/") is None

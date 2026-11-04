@@ -130,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     chk.add_argument(
         "--ledger-source",
         default="",
-        help="game_ingest.intake_source for this slug (drive:<id> / wasabi:<prefix>); decides when set",
+        help="game_ingest.intake_source for this slug (drive:<id> / wasabi:<prefix> / local:<path>); decides when set",
     )
     args = parser.parse_args(argv)
 

@@ -7,6 +7,9 @@ the intake host's scratch disk, so ingest also copies the source into the ledger
 
     drive:<folder id>
     wasabi:<prefix/package folder>      (no leading/trailing slash)
+    local:<absolute path>               (ingested by hand from a folder on the intake host; the
+                                         sweep never produces this, so a swept package sharing
+                                         the slug is always a mismatch)
 
 The slug-collision guard (remote-intake/ready_source.py) compares against the ledger value first
 and only falls back to the handoff file when the ledger has none.
@@ -58,6 +61,8 @@ def to_ref(rec: dict | None) -> str | None:
         return f"drive:{str(rec['drive_folder_id']).strip()}"
     if rec.get("wasabi_prefix"):
         return f"wasabi:{norm_prefix(rec['wasabi_prefix'])}"
+    if rec.get("local_path"):
+        return f"local:{str(rec['local_path']).strip().rstrip('/')}"
     return None
 
 
@@ -71,6 +76,8 @@ def parse_ref(ref: str | None) -> dict | None:
         return {"drive_folder_id": value.strip()}
     if kind == "wasabi" and norm_prefix(value):
         return {"wasabi_prefix": norm_prefix(value)}
+    if kind == "local" and value.strip().startswith("/") and value.strip().rstrip("/"):
+        return {"local_path": value.strip().rstrip("/")}
     return None
 
 
