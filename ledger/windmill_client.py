@@ -94,11 +94,29 @@ def fetch_completed_jobs(
                 "path": script_path or row.get("flow_path") or "—",
                 "kind": kind,
                 "success": row.get("success"),
-                "created_at": row.get("created_at") or row.get("started_at") or "",
+                # When it ran. Windmill creates each scheduled job when the previous run starts,
+                # so created_at is one schedule interval early (30 min for the intake sweep).
+                "started_at": row.get("started_at") or row.get("created_at") or "",
                 "duration_ms": row.get("duration_ms"),
             }
         )
     return jobs, None
+
+
+def utc_display(value: Any) -> str:
+    """'2026-11-04T16:00:00.388421Z' -> '2026-11-04 16:00:00' (UTC); unparseable values as-is."""
+    from datetime import datetime, timezone
+
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return text
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc)
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
 
 
 def windmill_quick_links(ui_base: str, scripts: dict[str, str]) -> list[tuple[str, str]]:
