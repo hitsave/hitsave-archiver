@@ -50,6 +50,8 @@ COPY scripts/batch-expand-preservation.py \
     scripts/host_paths.py \
     scripts/read-host-path-config.py \
     scripts/submission_sources.py \
+    scripts/intake_source.py \
+    scripts/backfill-intake-source.py \
     scripts/preservation_common.py \
     scripts/ingest_kind.py \
     scripts/dump_classify.py \

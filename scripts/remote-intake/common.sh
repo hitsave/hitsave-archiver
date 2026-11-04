@@ -298,17 +298,36 @@ remote_intake_acquire_lock() {
   export HITSAVE_REMOTE_INTAKE_LOCK_HELD=1
 }
 
+# game_ingest.intake_source for a slug (drive:<id> / wasabi:<prefix>); prints nothing when there is
+# no such row, the row predates intake_source, or the ledger can't be reached (the guard then falls
+# back to ready/<slug>/hitsave-submission.yaml).
+remote_intake_ledger_source_for_slug() {
+  local slug_sql="${1//\'/\'\'}"
+  remote_intake_archiver_compose run --rm -T psql -U hitsave -d hitsave_ledger -tAc \
+    "SELECT intake_source
+     FROM game_ingest
+     WHERE ingest_kind = 'dump'
+       AND intake_source IS NOT NULL
+       AND (source_path LIKE '%/${slug_sql}' OR source_path LIKE '%/${slug_sql}/%')
+     ORDER BY (status = 'complete') DESC, game_key
+     LIMIT 1" </dev/null 2>/dev/null \
+    | tr -d '[:space:]' || true
+}
+
 # Slug-collision guard. ready/<slug> names drop the source root, so two different packages
 # can share a slug. Before treating ready/<slug> (or a ledger row matched by slug) as THIS
-# package, confirm its handoff manifest came from this source.
+# package, confirm it came from this source: the ledger's intake_source when it has one,
+# otherwise the handoff manifest in ready/<slug>/.
 #   remote_intake_ready_source_guard <ready_root> <slug> --drive-folder-id ID | --wasabi-prefix P
 # Returns 0 to proceed, 1 to skip this package (collision or check error; logged).
 remote_intake_ready_source_guard() {
   local ready_root="$1" slug="$2"
   shift 2
-  local out rc
+  local out rc ledger_ref
+  ledger_ref="$(remote_intake_ledger_source_for_slug "$slug")"
   out="$(python3 "$(remote_intake_scripts_dir)/ready_source.py" check \
-    --slug "$slug" --ready-root "$ready_root" "$@" 2>&1)" && rc=0 || rc=$?
+    --slug "$slug" --ready-root "$ready_root" ${ledger_ref:+--ledger-source "$ledger_ref"} "$@" 2>&1)" \
+    && rc=0 || rc=$?
   case "$rc" in
     0) return 0 ;;
     4)

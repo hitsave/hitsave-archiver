@@ -19,6 +19,7 @@ SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 from package_ledger import resolve_package_identity  # noqa: E402
 from dump_classify import classify_dump_sip  # noqa: E402
+from intake_source import recorded_source, to_ref  # noqa: E402
 from ingest_kind import moby_enrich_enabled, resolve_ingest_kind  # noqa: E402
 from preservation_common import (  # noqa: E402
     material_root_for_kind,
@@ -99,6 +100,7 @@ def upsert_ledger(
     dump_system: str | None = None,
     dump_category: str | None = None,
     block_reason: str | None = None,
+    intake_source: str | None = None,
 ) -> None:
     inv_param = json.dumps(inventory_json) if inventory_json is not None else None
     with conn.cursor() as cur:
@@ -110,10 +112,10 @@ def upsert_ledger(
                 package_format, submission_source_id, inventory_json,
                 sip_fingerprint, package_id, title_slug, sort_letter, ingest_kind,
                 storage_layout, package_storage_prefix, dump_class, dump_system, dump_category,
-                block_reason, updated_at
+                block_reason, intake_source, updated_at
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
             )
             ON CONFLICT (game_key) DO UPDATE SET
                 source_path = EXCLUDED.source_path,
@@ -145,6 +147,8 @@ def upsert_ledger(
                 dump_system = COALESCE(EXCLUDED.dump_system, game_ingest.dump_system),
                 dump_category = COALESCE(EXCLUDED.dump_category, game_ingest.dump_category),
                 block_reason = COALESCE(EXCLUDED.block_reason, game_ingest.block_reason),
+                -- Where the package came from (slug-collision guard); never erased by later writes.
+                intake_source = COALESCE(EXCLUDED.intake_source, game_ingest.intake_source),
                 updated_at = NOW()
             """,
             (
@@ -172,6 +176,7 @@ def upsert_ledger(
                 dump_system,
                 dump_category,
                 block_reason,
+                intake_source,
             ),
         )
     conn.commit()
@@ -331,7 +336,15 @@ def run_bagit_ingest(
 ) -> tuple[Path, dict | None, dict | None, str | None, str | None]:
     bag_dir = Path(game_cfg["bagit_bag_dir"]).resolve()
 
-    upsert_ledger(conn, game_key=game_key, source_path=str(source), status="building_bagit")
+    upsert_ledger(
+        conn,
+        game_key=game_key,
+        source_path=str(source),
+        status="building_bagit",
+        # Record where the package came from (Drive folder / Wasabi prefix) so the slug-collision
+        # guard can check the ledger instead of the intake host's ready/ folder.
+        intake_source=to_ref(recorded_source(source)),
+    )
     subprocess.run(
         [sys.executable, str(SCRIPTS / "build-bagit-package.py"), str(game_cfg_path)],
         check=True,
