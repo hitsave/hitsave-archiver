@@ -102,3 +102,9 @@ def test_cli_ledger_source_needs_no_ready_root(tmp_path: Path, capsys) -> None:
     assert capsys.readouterr().out.strip() == "mismatch drive:zzz"
     with pytest.raises(SystemExit):  # no ledger value: ready/ is required (fails closed)
         rs.main(args)
+
+
+def test_swept_package_never_matches_a_local_source() -> None:
+    ledger = "local:/tank/video/dumps/Switch/Hit Save/Submitted/Aka"
+    for kw in ({"drive_folder_id": "abc"}, {"wasabi_prefix": "Hit Save/Submitted/Aka"}):
+        assert rs.check_source(None, ledger_source=ledger, **kw)[0] == rs.MISMATCH
