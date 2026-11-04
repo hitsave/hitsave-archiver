@@ -311,7 +311,8 @@ remote_intake_ledger_source_for_slug() {
        AND (source_path LIKE '%/${slug_sql}' OR source_path LIKE '%/${slug_sql}/%')
      ORDER BY (status = 'complete') DESC, game_key
      LIMIT 1" </dev/null 2>/dev/null \
-    | tr -d '[:space:]' || true
+    | head -n 1 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' || true
+  # Trim only the ends: Wasabi sources contain spaces ("wasabi:Weekly Famitsu/E3_2002").
 }
 
 # Slug-collision guard. ready/<slug> names drop the source root, so two different packages
