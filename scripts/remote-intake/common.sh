@@ -178,15 +178,14 @@ remote_intake_private_config_host() {
 remote_intake_sync_rejections() {
   local dir
   dir="$(remote_intake_archiver_compose_dir)"
-  # Docker would create a missing bind source as an empty folder, which would empty the table.
-  if [[ ! -d "${HOST_INTAKE:?}/failed" ]]; then
-    echo "WARN: ${HOST_INTAKE}/failed missing; intake rejections not synced"
-    return 0
-  fi
+  # Mount intake's root, not failed/ itself: Docker would create a missing failed/ as an empty folder,
+  # which would empty the table. The script skips when failed/ is absent. (Don't test the host path
+  # here: under Windmill this runs in the worker container, which doesn't mount HOST_INTAKE.)
   remote_intake_archiver_compose run --rm -T --no-deps \
     -v "$dir/scripts:/app/scripts:ro" \
-    -v "${HOST_INTAKE:?}/failed:/data/intake-failed:ro" \
+    -v "${HOST_INTAKE:?}:/data/intake:ro" \
     --entrypoint python ingest-worker /app/scripts/remote-intake/sync_intake_rejections.py \
+    --failed-dir /data/intake/failed \
     || echo "WARN: could not sync intake rejections to the ledger"
 }
 
