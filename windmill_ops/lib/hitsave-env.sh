@@ -42,9 +42,11 @@ for _pair in HOST_INTAKE:HOST_GDRIVE_INTAKE HITSAVE_INTAKE_HOST:HITSAVE_GDRIVE_I
 done
 unset _pair _new _old
 export HITSAVE_INTAKE_ROOT="${HITSAVE_INTAKE_ROOT:-/intake}"
+# Intake config and secrets: no default here. scripts/remote-intake/common.sh resolves them
+# (<private config>/intake and intake/secrets, which the worker mounts at the same host path).
+# Defaulting to ${HITSAVE_INTAKE_HOST}/config made Windmill poll with the intake repo's old
+# redump-only gdrive.yaml after the config moved to the private repo (2026-11-02).
 if [[ -n "${HITSAVE_INTAKE_HOST:-}" ]]; then
-  export HITSAVE_INTAKE_CONFIG_DIR="${HITSAVE_INTAKE_CONFIG_DIR:-${HITSAVE_INTAKE_HOST}/config}"
-  export HITSAVE_INTAKE_SECRETS_DIR="${HITSAVE_INTAKE_SECRETS_DIR:-${HITSAVE_INTAKE_HOST}/secrets}"
   export HITSAVE_INTAKE_BUILD_CONTEXT="${HITSAVE_INTAKE_BUILD_CONTEXT:-${HITSAVE_INTAKE_HOST}}"
 fi
 # Windmill jobs use an unprivileged UID; repo .generated is often not writable. Compose mounts
