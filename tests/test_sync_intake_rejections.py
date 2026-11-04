@@ -73,3 +73,12 @@ def test_missing_folder_changes_nothing(tmp_path: Path, monkeypatch, capsys) -> 
     monkeypatch.setattr(sync_mod, "pg_connect", lambda: (_ for _ in ()).throw(AssertionError("no DB")))
     assert sync_mod.main() == 0
     assert "left unchanged" in capsys.readouterr().err
+
+
+def test_lane_file_wins_for_type_based_slugs(tmp_path: Path) -> None:
+    _fail(tmp_path, "dvd-video-famitsu-wave", "checksum mismatch", 1_000)
+    (tmp_path / "dvd-video-famitsu-wave" / sync_mod.LANE_FILE).write_text("redump\n")
+    _fail(tmp_path, "switch-aka", "bad xml", 1_000)  # no lane file, no lane prefix
+    _fail(tmp_path, "others-usb", "x", 1_000)        # old failure: lane from the prefix
+    got = {r.slug: r.lane for r in sync_mod.scan(tmp_path)}
+    assert got == {"dvd-video-famitsu-wave": "redump", "switch-aka": None, "others-usb": "others"}
