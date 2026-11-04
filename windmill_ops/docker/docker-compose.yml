@@ -38,6 +38,10 @@ services:
       context: .
       dockerfile: Dockerfile.hitsave-worker
     restart: unless-stopped
+    # Two workers: the nightly Wasabi fixity check runs ~2.5 h and used to hold the only worker, so
+    # intake sweeps queued behind it. Sweeps take the remote-intake lock, so they never overlap.
+    deploy:
+      replicas: 2
     privileged: true
     depends_on:
       windmill_db:
@@ -63,6 +67,9 @@ services:
       # Same path on host inside worker so `docker compose --project-directory $ARCHIVER_HOST_PATH` resolves.
       - ${ARCHIVER_HOST_PATH:?set ARCHIVER_HOST_PATH in .env}:${ARCHIVER_HOST_PATH}:ro
       - ${HITSAVE_INTAKE_HOST:?set HITSAVE_INTAKE_HOST in .env}:/intake:ro
+      # Intake data (ready/, failed/) at its host path, read-only: remote-intake checks that run in the
+      # worker itself (slug-collision guard, failed/ sync) read it there.
+      - ${HITSAVE_INTAKE_DATA_HOST:?set HITSAVE_INTAKE_DATA_HOST in .env}:${HITSAVE_INTAKE_DATA_HOST}:ro
       - ${HITSAVE_PRIVATE_CONFIG_HOST:?set HITSAVE_PRIVATE_CONFIG_HOST in .env}/host.env:/run/hitsave/host.env:ro
       - ${HITSAVE_PRIVATE_CONFIG_HOST:?set HITSAVE_PRIVATE_CONFIG_HOST in .env}/windmill/worker-paths.env:/run/hitsave/worker-paths.env:ro
       # Same path as on the host: remote-intake resolves <private>/intake as a host path for
