@@ -125,3 +125,15 @@ def test_small_images_still_gallery_without_scan_flag(tmp_path: Path) -> None:
     assert manifest is not None
     (info,) = manifest["files"].values()
     assert info["scan"] is False and manifest["display"]
+
+
+def test_refresh_skips_bags_with_non_payload_previews() -> None:
+    import importlib
+
+    pytest = importlib.import_module("pytest")
+    pytest.importorskip("psycopg")
+    from refresh_bag_previews_wasabi import foreign_preview_keys
+
+    assert foreign_preview_keys(None) == []
+    assert foreign_preview_keys({"grid": {"f6": "x", "f7": "y"}, "gallery_file_keys": ["f6", "f7"]}) == []
+    assert foreign_preview_keys({"grid": {"menu": "x"}, "gallery_file_keys": ["menu"]}) == ["menu"]
