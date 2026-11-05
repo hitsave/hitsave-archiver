@@ -89,3 +89,30 @@ def test_apply_to_local_bag_tag_only(tmp_path: Path) -> None:
     assert "abc  manifest-sha256.txt" in tag
     assert f"{_sha(b'JPG')}  metadata/hitsave/thumbnails/grid/menu.jpg" in tag
     assert not dvd.apply_to_local_bag({}, tmp_path / "missing")
+
+
+def test_menu_backfill_keeps_existing_scans() -> None:
+    from apply_dvd_menu_bag_previews import merge_menu_with_existing
+
+    menu = {"grid": {"menu": "metadata/hitsave/thumbnails/grid/menu.jpg"}, "gallery_file_keys": ["menu"],
+            "browse": {"medium": "metadata/hitsave/browse-medium.png"}, "dvd_menu_preview": True}
+    existing = {
+        "grid": {"f4": "metadata/hitsave/thumbnails/grid/f4.jpg", "menu": "old-menu.jpg"},
+        "display": {"f4": "metadata/hitsave/display/f4.jpg"},
+        "files": {"f4": {"path": "data/x/img124.tif", "size": 5, "scan": True}},
+        "gallery_file_keys": ["menu", "f4"],
+    }
+    merged = merge_menu_with_existing(menu, existing)
+    assert merged["gallery_file_keys"] == ["menu", "f4"]
+    assert merged["grid"] == {"menu": "metadata/hitsave/thumbnails/grid/menu.jpg",
+                              "f4": "metadata/hitsave/thumbnails/grid/f4.jpg"}
+    assert merged["display"] == existing["display"] and merged["files"] == existing["files"]
+    assert merged["browse"] == menu["browse"]
+
+
+def test_menu_backfill_without_payload_previews_is_menu_only() -> None:
+    from apply_dvd_menu_bag_previews import merge_menu_with_existing
+
+    menu = {"grid": {"menu": "m.jpg"}, "gallery_file_keys": ["menu"]}
+    assert merge_menu_with_existing(menu, None) is menu
+    assert merge_menu_with_existing(menu, {"grid": {"menu": "old.jpg"}, "gallery_file_keys": ["menu"]}) is menu

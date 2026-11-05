@@ -7,6 +7,14 @@ baseline) and bag-info.txt are never regenerated. The previous version ran
 bag.save(manifests=True) on the local copy, re-hashing the payload from local disk and
 uploading that manifest over Wasabi's, which would bless any local corruption and broke
 Wasabi bags whose tag files had been updated there (renames).
+
+Guard: a bag may already have payload previews (scans, from packaging or
+refresh_bag_previews_wasabi.py). The menu manifest is merged with them instead of replacing them:
+menu first, then the existing payload previews (grid/display/files keep pointing at their files on
+Wasabi, which are not re-uploaded). The menu is the browse image, as on every other DVD.
+
+Menu JPEGs come from the separate dvd-menu-preview tool (rendered from the ISO); intake has no
+equivalent, so this script stays the way to add DVD menu previews.
 """
 from __future__ import annotations
 
@@ -117,6 +125,41 @@ def upsert_manifest_lines(manifest_text: str, digests: dict[str, str]) -> str:
             lines.append(line)
     lines.extend(f"{digest}  {path}" for path, digest in sorted(remaining.items()))
     return "\n".join(lines) + "\n"
+
+
+_PAYLOAD_KEY = re.compile(r"f\d+")
+
+
+def merge_menu_with_existing(menu_manifest: dict, existing: dict | None) -> dict:
+    """Menu manifest + the existing manifest's payload previews (scans), menu first."""
+    if not existing:
+        return menu_manifest
+    payload_keys = [k for k in existing.get("gallery_file_keys") or list(existing.get("grid") or {})
+                    if _PAYLOAD_KEY.fullmatch(str(k)) and k in (existing.get("grid") or {})]
+    if not payload_keys:
+        return menu_manifest
+    merged = dict(menu_manifest)
+    merged["grid"] = {**menu_manifest.get("grid", {}), **{k: existing["grid"][k] for k in payload_keys}}
+    display = {k: v for k, v in (existing.get("display") or {}).items() if k in payload_keys}
+    if display:
+        merged["display"] = display
+    files = {k: v for k, v in (existing.get("files") or {}).items() if k in payload_keys}
+    if files:
+        merged["files"] = files
+    merged["gallery_file_keys"] = list(menu_manifest.get("gallery_file_keys") or []) + payload_keys
+    return merged
+
+
+def existing_wasabi_manifest(package_storage_prefix: str, *, ingest_config_path: Path) -> dict | None:
+    wasabi, _ = load_wasabi_settings(ingest_config_path)
+    creds = load_yaml(resolve_config_path(str(wasabi["credentials_file"]), ingest_config_path.parent.parent))
+    s3 = make_s3_client(wasabi, creds)
+    bucket = resolve_wasabi_bucket(wasabi, "dump")
+    key = f"{wasabi_unpacked_prefix(package_storage_prefix)}metadata/hitsave/preview-manifest.json"
+    try:
+        return json.loads(s3.get_object(Bucket=bucket, Key=key)["Body"].read())
+    except s3.exceptions.NoSuchKey:
+        return None
 
 
 def build_preview_files(menu_jpg: Path, package_id: str, work: Path) -> dict[str, Path]:
@@ -247,6 +290,17 @@ def main() -> None:
                     skipped.append((iso, str(exc)))
                     print(f"  FAIL previews: {exc}", flush=True)
                     continue
+                # Guard: keep payload previews (scans) the bag already has.
+                manifest_rel = "metadata/hitsave/preview-manifest.json"
+                menu_manifest = json.loads(files[manifest_rel].read_text(encoding="utf-8"))
+                merged = merge_menu_with_existing(
+                    menu_manifest,
+                    existing_wasabi_manifest(row.package_storage_prefix, ingest_config_path=ingest_config),
+                )
+                if merged is not menu_manifest:
+                    files[manifest_rel].write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
+                    kept = [k for k in merged["gallery_file_keys"] if k != "menu"]
+                    print(f"  kept existing payload previews {kept}", flush=True)
                 if cfg.get("upload_wasabi", True):
                     apply_to_wasabi(files, row.package_storage_prefix, ingest_config_path=ingest_config)
                 bag_dir = bag_root / row.game_key
