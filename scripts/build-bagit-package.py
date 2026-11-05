@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import mimetypes
+import os
 import shutil
 import sys
 from collections import Counter
@@ -33,7 +34,7 @@ from preservation_common import (  # noqa: E402
 )
 from ingest_kind import storage_profile_for_kind  # noqa: E402
 from submission_sources import resolve_submission_source  # noqa: E402
-from dip_package_previews import load_preview_config, write_hitsave_previews  # noqa: E402
+from dip_package_previews import add_dvd_menu_preview, load_preview_config, write_hitsave_previews  # noqa: E402
 
 INVENTORY_VERSION = 1
 
@@ -142,6 +143,18 @@ def build_inventory(rows: list[FileRow], payload_dir: str, excluded: list[dict] 
 def validate_bag(bag_dir: Path) -> None:
     bag = bagit.Bag(str(bag_dir))
     bag.validate()
+
+
+def dvd_menu_still(source: Path, dump_classification: DumpClassification | None) -> Path | None:
+    """Menu still the sweep's dvd-menu-preview step wrote for this staged package, if any.
+
+    <HITSAVE_DVD_MENU_DIR or /output/dvd-menu>/<ready slug>/menu_preview.jpg; DVD-Video dumps only.
+    """
+    if dump_classification is None or (dump_classification.dump_system or "") != "DVD-Video":
+        return None
+    root = Path(os.environ.get("HITSAVE_DVD_MENU_DIR", "/output/dvd-menu"))
+    still = root / source.name / "menu_preview.jpg"
+    return still if still.is_file() else None
 
 
 def build_bagit_package(
@@ -272,6 +285,17 @@ def build_bagit_package(
         metadata_dir=meta_dir,
         config=preview_cfg,
     )
+    menu_jpg = dvd_menu_still(source, dump_classification)
+    if menu_jpg is not None:
+        preview_manifest = add_dvd_menu_preview(
+            bag_dir,
+            menu_jpg=menu_jpg,
+            package_id=identity.package_id,
+            payload_manifest=preview_manifest,
+            metadata_dir=meta_dir,
+            config=preview_cfg,
+        )
+        print(f"  DVD menu preview: {menu_jpg}")
     if preview_manifest:
         print(f"  Packaged previews: {len(preview_manifest.get('grid', {}))} grid thumbs")
     bag = bagit.Bag(str(bag_dir))

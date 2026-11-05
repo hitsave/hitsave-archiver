@@ -73,6 +73,19 @@ services:
       clamav:
         condition: service_started
 
+  dvd-menu-preview:
+    # DVD-Video menu still per staged package (remote-intake sweep, before ingest). Own image so
+    # libdvdcss / the CSS descrambler stay out of ingest-worker. No network; reads ready/ only and
+    # writes <HOST_OUTPUT>/dvd-menu/<slug>/{menu_preview.jpg,result.json} for build-bagit-package.
+    image: hitsave/dvd-menu-preview:local
+    build:
+      context: ./dvd-menu-preview
+    profiles: ["tools"]
+    network_mode: none
+    volumes:
+      - ${HOST_INTAKE:-./data/intake}/ready:/data/intake/ready:ro
+      - ${HOST_OUTPUT:-./data/output}/dvd-menu:/output
+
   omeka-catalog:
     build:
       context: .

@@ -13,8 +13,9 @@ refresh_bag_previews_wasabi.py). The menu manifest is merged with them instead o
 menu first, then the existing payload previews (grid/display/files keep pointing at their files on
 Wasabi, which are not re-uploaded). The menu is the browse image, as on every other DVD.
 
-Menu JPEGs come from the separate dvd-menu-preview tool (rendered from the ISO); intake has no
-equivalent, so this script stays the way to add DVD menu previews.
+Menu JPEGs come from dvd-menu-preview (rendered from the ISO). New DVD-Video intakes get theirs
+during the sweep (dvd-menu-preview service + build-bagit-package.py); this script backfills bags
+packaged before that.
 """
 from __future__ import annotations
 
@@ -37,7 +38,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = REPO_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from dip_package_previews import load_preview_config, write_dvd_menu_packaged_previews  # noqa: E402
+from dip_package_previews import (  # noqa: E402
+    load_preview_config,
+    merge_menu_manifest,
+    write_dvd_menu_packaged_previews,
+)
 from preservation_common import resolve_wasabi_bucket, wasabi_unpacked_prefix  # noqa: E402
 from s3_etag import hash_file  # noqa: E402
 from config_require import require_bool  # noqa: E402
@@ -127,27 +132,8 @@ def upsert_manifest_lines(manifest_text: str, digests: dict[str, str]) -> str:
     return "\n".join(lines) + "\n"
 
 
-_PAYLOAD_KEY = re.compile(r"f\d+")
-
-
-def merge_menu_with_existing(menu_manifest: dict, existing: dict | None) -> dict:
-    """Menu manifest + the existing manifest's payload previews (scans), menu first."""
-    if not existing:
-        return menu_manifest
-    payload_keys = [k for k in existing.get("gallery_file_keys") or list(existing.get("grid") or {})
-                    if _PAYLOAD_KEY.fullmatch(str(k)) and k in (existing.get("grid") or {})]
-    if not payload_keys:
-        return menu_manifest
-    merged = dict(menu_manifest)
-    merged["grid"] = {**menu_manifest.get("grid", {}), **{k: existing["grid"][k] for k in payload_keys}}
-    display = {k: v for k, v in (existing.get("display") or {}).items() if k in payload_keys}
-    if display:
-        merged["display"] = display
-    files = {k: v for k, v in (existing.get("files") or {}).items() if k in payload_keys}
-    if files:
-        merged["files"] = files
-    merged["gallery_file_keys"] = list(menu_manifest.get("gallery_file_keys") or []) + payload_keys
-    return merged
+# Shared with packaging (build-bagit-package.py adds intake-time menus the same way).
+merge_menu_with_existing = merge_menu_manifest
 
 
 def existing_wasabi_manifest(package_storage_prefix: str, *, ingest_config_path: Path) -> dict | None:

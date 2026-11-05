@@ -1,0 +1,13 @@
+# DVD-Video menu stills (settings of the 2026-10 full backfill run).
+# Intake: extract_dvd_menu_preview.py --package <ready dir> --out <dir> (paths inside the container).
+# Batch: add sample_list_file / samples + output_root (+ report_path) and pass this file as the argument.
+dvd_menu_preview:
+  intake_root: /data/intake
+  submission_info_filename: "!submissionInfo.txt"
+  sample_times_sec: [2, 5, 8, 12, 18, 25]
+  min_accept_score: 400
+  frame_selection:
+    min_mean_luma: 12
+    min_menu_mean_luma: 50
+    mean_penalty: 0.05
+    prefer_static_menu: false
