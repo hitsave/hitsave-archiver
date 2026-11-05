@@ -23,6 +23,11 @@ dip_previews:
   # gallery_max_bytes cap (dump scans are often 100+ MB PNGs), listed on the item page.
   scan_dir_names:
     - Scans
+  # Files with these extensions are scans wherever they sit (Redump submissions put TIFF cover
+  # scans next to the ISO). Browsers can't show TIFF; the gallery uses their display JPEGs.
+  scan_extensions:
+    - tif
+    - tiff
   scan_max_bytes: 2147483648
 
   browse_canvas:

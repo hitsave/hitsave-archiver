@@ -49,6 +49,7 @@ def load_preview_config(path: Path | None = None) -> dict:
             "display_max_edge": 2400,
             "display_jpeg_quality": 85,
             "scan_dir_names": ["Scans"],
+            "scan_extensions": ["tif", "tiff"],
             "scan_max_bytes": 2147483648,
             "browse_canvas": {"medium": [640, 480], "square": [400, 400]},
             "gallery_mime_types": ["image/jpeg", "image/png", "image/gif", "image/webp"],
@@ -68,7 +69,11 @@ def _is_image(rec: IndexedPayloadFile, cfg: dict) -> bool:
 
 
 def is_scan(rec: IndexedPayloadFile, cfg: dict) -> bool:
-    """Image inside a scan folder (e.g. <game>/Scans/0001.png), at any depth."""
+    """Image inside a scan folder (e.g. <game>/Scans/0001.png, any depth), or a scan_extensions file
+    (TIFF) anywhere."""
+    ext = rec.path.suffix.lower().lstrip(".")
+    if ext and ext in {str(e).lower() for e in cfg.get("scan_extensions") or []}:
+        return True
     names = {str(n).casefold() for n in cfg.get("scan_dir_names") or []}
     folders = rec.relative_path.split("/")[:-1]
     return bool(names) and any(f.casefold() in names for f in folders) and _is_image(rec, cfg)
@@ -78,6 +83,7 @@ def _gallery_eligible(rec: IndexedPayloadFile, cfg: dict) -> bool:
     max_bytes = int(cfg.get("gallery_max_bytes", 52428800))
     if is_scan(rec, cfg):
         max_bytes = max(max_bytes, int(cfg.get("scan_max_bytes", 2147483648)))
+        return 0 < rec.size <= max_bytes
     if rec.size <= 0 or rec.size > max_bytes:
         return False
     mime = (rec.mime or "").lower()

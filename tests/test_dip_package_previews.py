@@ -75,6 +75,7 @@ def _scan_cfg(**over) -> dict:
         "display_max_edge": 200,
         "display_jpeg_quality": 80,
         "scan_dir_names": ["Scans"],
+        "scan_extensions": ["tif", "tiff"],
         "scan_max_bytes": 2147483648,
         "browse_canvas": {"medium": [64, 48], "square": [40, 40]},
         "gallery_mime_types": ["image/jpeg", "image/png"],
@@ -137,3 +138,17 @@ def test_refresh_skips_bags_with_non_payload_previews() -> None:
     assert foreign_preview_keys(None) == []
     assert foreign_preview_keys({"grid": {"f6": "x", "f7": "y"}, "gallery_file_keys": ["f6", "f7"]}) == []
     assert foreign_preview_keys({"grid": {"menu": "x"}, "gallery_file_keys": ["menu"]}) == ["menu"]
+
+
+def test_tiff_next_to_iso_is_a_scan(tmp_path: Path) -> None:
+    import os
+
+    path = tmp_path / "data" / "redump-x" / "img112.tif"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.frombytes("RGB", (900, 600), os.urandom(900 * 600 * 3)).save(path, "TIFF")
+    (tmp_path / "data" / "redump-x" / "disc.iso").write_bytes(b"x" * 10)
+    manifest = write_hitsave_previews(tmp_path, package_id="pkg", config=_scan_cfg())  # tif not a gallery type
+    assert manifest is not None
+    (key,) = manifest["gallery_file_keys"]
+    assert manifest["files"][key] == {"path": "data/redump-x/img112.tif", "size": path.stat().st_size, "scan": True}
+    assert Image.open(tmp_path / manifest["display"][key]).format == "JPEG"
