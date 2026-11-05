@@ -436,7 +436,28 @@ def build_redump_values(
     return values, title
 
 
-def dump_catalog_config(uploader_cfg: dict[str, Any]) -> dict[str, Any]:
+# Keys a dump_catalog.by_dump_class / by_dump_system block may override (e.g. DVD-Video coverdiscs
+# are Moving Images in Famitsu Wave while game discs and cartridges are Games in Video Games).
+DUMP_CLASS_OVERRIDE_KEYS = ("item_set_title", "item_set_id", "resource_template_label")
+
+
+def dump_catalog_config(
+    uploader_cfg: dict[str, Any], dump_class: str | None = None, dump_system: str | None = None
+) -> dict[str, Any]:
+    """omeka-catalog.yaml dump_catalog with per-type overrides on top: by_dump_class.<dump_class>,
+    then by_dump_system.<dump_system> (the system wins; system names match case-insensitively).
+    dump_class alone is too coarse: "redump" covers DVD-Video coverdiscs and PS4 game discs alike.
+
+      dump_catalog:
+        item_set_title: Video Games         # defaults: games
+        item_set_id: 572
+        resource_template_label: Game
+        by_dump_system:
+          DVD-Video:
+            item_set_title: Famitsu Wave
+            item_set_id: 511
+            resource_template_label: Moving Image
+    """
     from config_require import require_bool, require_key, require_str
 
     dump = uploader_cfg.get("dump_catalog")
@@ -461,4 +482,27 @@ def dump_catalog_config(uploader_cfg: dict[str, Any]) -> dict[str, Any]:
         "disc_url": require_str(dump, "disc_url", where=where),
         "lookup_timeout_seconds": int(require_key(dump, "lookup_timeout_seconds", where=where)),
         "user_agent": require_str(dump, "user_agent", where=where),
-    }
+    } | _type_overrides(dump, "by_dump_class", dump_class) | _type_overrides(dump, "by_dump_system", dump_system)
+
+
+def _type_overrides(dump: dict[str, Any], section: str, value: str | None) -> dict[str, Any]:
+    table = dump.get(section) or {}
+    if not isinstance(table, dict):
+        raise ValueError(f"omeka-catalog.yaml dump_catalog.{section} must be a mapping")
+    want = str(value or "").strip().casefold()
+    block = next((b for k, b in table.items() if want and str(k).strip().casefold() == want), None)
+    if not block:
+        return {}
+    if not isinstance(block, dict):
+        raise ValueError(f"omeka-catalog.yaml dump_catalog.{section}.{value} must be a mapping")
+    unknown = set(block) - set(DUMP_CLASS_OVERRIDE_KEYS)
+    if unknown:
+        raise ValueError(
+            f"omeka-catalog.yaml dump_catalog.{section}.{value}: unsupported keys {sorted(unknown)}"
+        )
+    out = {k: block[k] for k in DUMP_CLASS_OVERRIDE_KEYS if k in block}
+    if "item_set_title" in out and "item_set_id" not in out:
+        out["item_set_id"] = None  # resolve the overriding title, not the default set's id
+    if out.get("item_set_id") is not None:
+        out["item_set_id"] = int(out["item_set_id"])
+    return out
