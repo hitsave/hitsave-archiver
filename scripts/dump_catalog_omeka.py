@@ -436,7 +436,23 @@ def build_redump_values(
     return values, title
 
 
-def dump_catalog_config(uploader_cfg: dict[str, Any]) -> dict[str, Any]:
+# Keys a dump_catalog.by_dump_class.<class> block may override (e.g. Switch dumps are games, not the
+# Famitsu Wave coverdiscs the defaults describe).
+DUMP_CLASS_OVERRIDE_KEYS = ("item_set_title", "item_set_id", "resource_template_label")
+
+
+def dump_catalog_config(uploader_cfg: dict[str, Any], dump_class: str | None = None) -> dict[str, Any]:
+    """omeka-catalog.yaml dump_catalog, with dump_catalog.by_dump_class.<dump_class> applied on top:
+
+      dump_catalog:
+        item_set_title: Famitsu Wave        # defaults (redump coverdiscs)
+        resource_template_label: Moving Image
+        by_dump_class:
+          switch:
+            item_set_title: Video Games
+            item_set_id: 572
+            resource_template_label: Game
+    """
     from config_require import require_bool, require_key, require_str
 
     dump = uploader_cfg.get("dump_catalog")
@@ -461,4 +477,26 @@ def dump_catalog_config(uploader_cfg: dict[str, Any]) -> dict[str, Any]:
         "disc_url": require_str(dump, "disc_url", where=where),
         "lookup_timeout_seconds": int(require_key(dump, "lookup_timeout_seconds", where=where)),
         "user_agent": require_str(dump, "user_agent", where=where),
-    }
+    } | _dump_class_overrides(dump, dump_class)
+
+
+def _dump_class_overrides(dump: dict[str, Any], dump_class: str | None) -> dict[str, Any]:
+    by_class = dump.get("by_dump_class") or {}
+    if not isinstance(by_class, dict):
+        raise ValueError("omeka-catalog.yaml dump_catalog.by_dump_class must be a mapping")
+    block = by_class.get(str(dump_class or "").strip()) if dump_class else None
+    if not block:
+        return {}
+    if not isinstance(block, dict):
+        raise ValueError(f"omeka-catalog.yaml dump_catalog.by_dump_class.{dump_class} must be a mapping")
+    unknown = set(block) - set(DUMP_CLASS_OVERRIDE_KEYS)
+    if unknown:
+        raise ValueError(
+            f"omeka-catalog.yaml dump_catalog.by_dump_class.{dump_class}: unsupported keys {sorted(unknown)}"
+        )
+    out = {k: block[k] for k in DUMP_CLASS_OVERRIDE_KEYS if k in block}
+    if "item_set_title" in out and "item_set_id" not in out:
+        out["item_set_id"] = None  # resolve the overriding title, not the default set's id
+    if out.get("item_set_id") is not None:
+        out["item_set_id"] = int(out["item_set_id"])
+    return out
