@@ -133,6 +133,7 @@ for pair in "${pairs[@]}"; do
     echo "--- already staged; ingest pending ---"
   fi
 
+  remote_intake_dvd_menu_preview "$slug"
   echo "--- ingest (BagIt manifest + Wasabi; separate from Drive fixity) $slug ---"
   if remote_intake_archiver_compose run --rm -T ingest-worker "/data/intake/ready/$slug/game.ingest.yaml"; then
     echo "=== done ingest $slug $(date -Is) ==="

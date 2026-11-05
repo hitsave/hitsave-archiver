@@ -46,3 +46,14 @@ source /path/to/hitsave-archiver-config/host.env
 cd /path/to/hitsave-archiver
 ./scripts/remote-intake/run-gdrive-redump-per-folder.sh
 ```
+
+## DVD menu previews
+
+Before each ingest the sweep runs `remote_intake_dvd_menu_preview <slug>` (common.sh): the
+`dvd-menu-preview` compose service (image built from the private `hitsave/dvd-menu-preview`
+checkout, `HITSAVE_DVD_MENU_PREVIEW_SRC`, default `../hitsave-dvd-menu-preview`; no network;
+libdvdcss and the CSS descrambler stay out of this public repo and ingest-worker) checks `!submissionInfo.txt` for `System: DVD-Video`, renders the menu
+from the ISO and writes `<HOST_OUTPUT>/dvd-menu/<slug>/{menu_preview.jpg,result.json}`.
+`build-bagit-package.py` packs that still as the `menu` preview (first slide, browse image) in
+front of the payload previews (scans). Failures only mean no menu slide; ingest continues.
+Bags packaged before this: `scripts/apply_dvd_menu_bag_previews.py` (batch backfill).
