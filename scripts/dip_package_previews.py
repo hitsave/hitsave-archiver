@@ -46,6 +46,10 @@ def load_preview_config(path: Path | None = None) -> dict:
             "collage_max_images": 8,
             "grid_thumbnail_max_edge": 640,
             "grid_jpeg_quality": 88,
+            "display_max_edge": 2400,
+            "display_jpeg_quality": 85,
+            "scan_dir_names": ["Scans"],
+            "scan_max_bytes": 2147483648,
             "browse_canvas": {"medium": [640, 480], "square": [400, 400]},
             "gallery_mime_types": ["image/jpeg", "image/png", "image/gif", "image/webp"],
             "gallery_extensions": ["jpg", "jpeg", "png", "gif", "webp"],
@@ -54,8 +58,26 @@ def load_preview_config(path: Path | None = None) -> dict:
     return raw.get("dip_previews") or {}
 
 
+def _is_image(rec: IndexedPayloadFile, cfg: dict) -> bool:
+    mime = (rec.mime or "").lower()
+    allowed_mimes = {m.lower() for m in cfg.get("gallery_mime_types") or []}
+    if mime and mime in allowed_mimes:
+        return True
+    ext = rec.path.suffix.lower().lstrip(".")
+    return ext in {e.lower() for e in cfg.get("gallery_extensions") or []}
+
+
+def is_scan(rec: IndexedPayloadFile, cfg: dict) -> bool:
+    """Image inside a scan folder (e.g. <game>/Scans/0001.png), at any depth."""
+    names = {str(n).casefold() for n in cfg.get("scan_dir_names") or []}
+    folders = rec.relative_path.split("/")[:-1]
+    return bool(names) and any(f.casefold() in names for f in folders) and _is_image(rec, cfg)
+
+
 def _gallery_eligible(rec: IndexedPayloadFile, cfg: dict) -> bool:
     max_bytes = int(cfg.get("gallery_max_bytes", 52428800))
+    if is_scan(rec, cfg):
+        max_bytes = max(max_bytes, int(cfg.get("scan_max_bytes", 2147483648)))
     if rec.size <= 0 or rec.size > max_bytes:
         return False
     mime = (rec.mime or "").lower()
@@ -198,24 +220,56 @@ def _layout_row(canvas: Image.Image, images: list[Image.Image], center_y: int, c
 
 
 def _write_grid_thumb(src: Path, dest: Path, max_edge: int, quality: int) -> bool:
-    dest.parent.mkdir(parents=True, exist_ok=True)
+    return _write_derivatives(src, dest, max_edge, quality)[0]
+
+
+def _write_derivatives(
+    src: Path,
+    grid_dest: Path,
+    grid_edge: int,
+    grid_quality: int,
+    display_dest: Path | None = None,
+    display_edge: int = 2400,
+    display_quality: int = 85,
+) -> tuple[bool, bool]:
+    """Grid thumbnail and (optionally) a web-size display JPEG from ONE decode of src.
+
+    Scans can be 100+ MB PNGs: decode once, shrink to the display size, and make the grid thumb
+    from that, instead of decoding the original twice. Returns (grid_ok, display_ok).
+    """
+    grid_dest.parent.mkdir(parents=True, exist_ok=True)
+    made: list[Path] = []
     try:
         with Image.open(src) as im:
             im.load()
             rgb = im.convert("RGB")
-        thumb = ImageOps.contain(rgb, (max_edge, max_edge), method=Image.Resampling.LANCZOS)
         try:
-            thumb.save(dest, "JPEG", quality=quality, optimize=True)
+            display = ImageOps.contain(rgb, (display_edge, display_edge), method=Image.Resampling.LANCZOS) \
+                if display_dest is not None else rgb
         finally:
-            rgb.close()
-            thumb.close()
+            if display_dest is not None:
+                rgb.close()
+        try:
+            if display_dest is not None:
+                display_dest.parent.mkdir(parents=True, exist_ok=True)
+                display.save(display_dest, "JPEG", quality=display_quality, optimize=True, progressive=True)
+                made.append(display_dest)
+            thumb = ImageOps.contain(display, (grid_edge, grid_edge), method=Image.Resampling.LANCZOS)
+            try:
+                thumb.save(grid_dest, "JPEG", quality=grid_quality, optimize=True)
+                made.append(grid_dest)
+            finally:
+                thumb.close()
+        finally:
+            display.close()
     except (OSError, ValueError, UnidentifiedImageError) as e:
         _preview_image_error(src, e)
-        if dest.is_file():
-            dest.unlink()
-        return False
+        for path in (grid_dest, display_dest):
+            if path is not None and path.is_file():
+                path.unlink()
+        return False, False
 
-    return True
+    return grid_dest in made, display_dest is not None and display_dest in made
 
 
 def write_hitsave_previews(
@@ -243,17 +297,30 @@ def write_hitsave_previews(
         "package_id": package_id,
         "browse": {},
         "grid": {},
+        "display": {},
+        # key -> payload file (bag-relative path, bytes, scan flag): gallery labels + scan listing.
+        "files": {
+            f.key: {"path": f"{payload_dir}/{f.relative_path}", "size": f.size, "scan": is_scan(f, cfg)}
+            for f in gallery
+        },
         "gallery_file_keys": [f.key for f in gallery],
     }
 
-    grid_dir = meta_hitsave / "thumbnails" / "grid"
     max_edge = int(cfg.get("grid_thumbnail_max_edge", 640))
     quality = int(cfg.get("grid_jpeg_quality", 88))
+    display_edge = int(cfg.get("display_max_edge", 2400))
+    display_quality = int(cfg.get("display_jpeg_quality", 85))
     for gf in gallery:
         rel_inner = f"{metadata_dir}/hitsave/thumbnails/grid/{gf.key}.jpg"
-        dest = bag_dir / rel_inner
-        if _write_grid_thumb(gf.path, dest, max_edge, quality):
-            manifest["grid"][gf.key] = rel_inner.replace("\\", "/")
+        rel_display = f"{metadata_dir}/hitsave/display/{gf.key}.jpg"
+        grid_ok, display_ok = _write_derivatives(
+            gf.path, bag_dir / rel_inner, max_edge, quality,
+            bag_dir / rel_display, display_edge, display_quality,
+        )
+        if grid_ok:
+            manifest["grid"][gf.key] = rel_inner
+        if display_ok:
+            manifest["display"][gf.key] = rel_display
 
     pick_n = _pick_collage_count(len(gallery), package_id, cfg)
     picked = _seed_pick(gallery, pick_n, package_id, "collage-pick")
