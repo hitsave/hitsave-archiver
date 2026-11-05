@@ -56,6 +56,19 @@ def _redump_languages(fields: dict[str, str]) -> str | None:
     return raw
 
 
+def switch_catalog_title(source_dir: Path, sw: Any, omeka_title: str) -> str:
+    """Switch catalog title. Game-title tree (<game>/<version>/… Submission.xml): the package's title
+    (omeka_item_title, i.e. the contributor's folder name); never source_dir's name, because the
+    intake ready/ folder is named after the package slug (switch-<game>). Submission at the package
+    root: the XML game name."""
+    from hitsave_dump_sidecars.switch import find_switch_submission_path
+
+    title = (omeka_title or "").strip()
+    if find_switch_submission_path(source_dir) is not None:
+        return (sw.game_name or "").strip() or title
+    return title or switch_game_title(source_dir, sw)
+
+
 def _catalog_alternates(title: str, foreign: str | None, alternates: list[str]) -> list[str]:
     main = (title or "").strip()
     seen = {main.casefold()} if main else set()
@@ -129,7 +142,7 @@ def manifest_from_sip_and_handoff(
                 switch_block.get("version") or switch_version_label(source_dir, sw_path)
             )
             game_title = str(
-                switch_block.get("game_title") or switch_game_title(source_dir, sw)
+                switch_block.get("game_title") or switch_catalog_title(source_dir, sw, omeka_title)
             )
             switch_block["parsed"] = {
                 "game_name": sw.game_name,
