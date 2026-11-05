@@ -70,6 +70,9 @@ services:
       # Intake data (ready/, failed/) at its host path, read-only: remote-intake checks that run in the
       # worker itself (slug-collision guard, failed/ sync) read it there.
       - ${HITSAVE_INTAKE_DATA_HOST:?set HITSAVE_INTAKE_DATA_HOST in .env}:${HITSAVE_INTAKE_DATA_HOST}:ro
+      # Omeka registration configs, writable at their host path: register-dump-omeka.sh writes
+      # <output>/omeka-register/<game_key>.yaml in the worker and mounts the folder into omeka-catalog.
+      - ${HITSAVE_OUTPUT_HOST:?set HITSAVE_OUTPUT_HOST in .env}/omeka-register:${HITSAVE_OUTPUT_HOST}/omeka-register
       - ${HITSAVE_PRIVATE_CONFIG_HOST:?set HITSAVE_PRIVATE_CONFIG_HOST in .env}/host.env:/run/hitsave/host.env:ro
       - ${HITSAVE_PRIVATE_CONFIG_HOST:?set HITSAVE_PRIVATE_CONFIG_HOST in .env}/windmill/worker-paths.env:/run/hitsave/worker-paths.env:ro
       # The whole private config, read-only at its host path: remote-intake scripts run in the worker and
