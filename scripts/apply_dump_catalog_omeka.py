@@ -119,7 +119,9 @@ def apply_handoff_dump_catalog(
     root = config_root or CONFIG_ROOT
     uploader_cfg = load_omeka_catalog_config(root)
     api_cfg = require_omeka_api_config(uploader_cfg)
-    dump_cfg = dump_catalog_config(uploader_cfg, manifest.get("dump_class"), manifest.get("dump_system"))
+    dump_cfg = dump_catalog_config(
+        uploader_cfg, manifest.get("dump_class"), manifest.get("dump_system"), manifest.get("dump_category")
+    )
     creds = load_yaml(root / api_cfg["credentials_file"])
 
     base = api_cfg["base_url"].rstrip("/")
@@ -277,8 +279,11 @@ def apply_dump_catalog(
         handoff=handoff,
         sort_letter=ledger_sort_letter,
     )
-    # Item set / resource template can differ per dump type (by_dump_class / by_dump_system).
-    dump_cfg = dump_catalog_config(uploader_cfg, manifest.get("dump_class"), manifest.get("dump_system"))
+    # Item set / resource template can differ per dump type (by_dump_class / by_dump_system /
+    # by_system_category).
+    dump_cfg = dump_catalog_config(
+        uploader_cfg, manifest.get("dump_class"), manifest.get("dump_system"), manifest.get("dump_category")
+    )
 
     api_cfg = require_omeka_api_config(uploader_cfg)
     cred_path = CONFIG_ROOT / api_cfg["credentials_file"]
