@@ -152,3 +152,21 @@ def test_tiff_next_to_iso_is_a_scan(tmp_path: Path) -> None:
     (key,) = manifest["gallery_file_keys"]
     assert manifest["files"][key] == {"path": "data/redump-x/img112.tif", "size": path.stat().st_size, "scan": True}
     assert Image.open(tmp_path / manifest["display"][key]).format == "JPEG"
+
+
+def test_refresh_merges_menu_previews_with_scans() -> None:
+    import importlib
+
+    importlib.import_module("pytest").importorskip("psycopg")
+    from refresh_bag_previews_wasabi import merge_foreign_previews
+
+    old = {"grid": {"menu": "metadata/hitsave/thumbnails/grid/menu.jpg"}, "gallery_file_keys": ["menu"],
+           "browse": {"medium": "metadata/hitsave/browse-medium.png"}}
+    new = {"grid": {"f4": "g4", "f5": "g5"}, "display": {"f4": "d4", "f5": "d5"},
+           "files": {"f4": {"path": "data/x/img124.tif", "size": 1, "scan": True}},
+           "gallery_file_keys": ["f4", "f5"], "browse": {"medium": "new-collage.png"}}
+    merged = merge_foreign_previews(old, new, ["menu"])
+    assert merged["gallery_file_keys"] == ["menu", "f4", "f5"]
+    assert merged["grid"]["menu"] == "metadata/hitsave/thumbnails/grid/menu.jpg" and merged["grid"]["f4"] == "g4"
+    assert merged["display"] == {"f4": "d4", "f5": "d5"}
+    assert merged["browse"] == old["browse"] and merged["files"] == new["files"]

@@ -5,6 +5,10 @@ For bags packaged before display JPEGs / uncapped scans existed. Tag-only update
 apply_dvd_menu_bag_previews.py: uploads the preview files (verified) and changes ONLY their lines
 in tagmanifest-sha256.txt. Payload, manifest-sha256.txt and bag-info.txt are never touched.
 
+Bags whose manifest has previews not derived from payload (DVD "menu" extracted from the ISO)
+keep them: the rebuilt payload previews (scans) are merged in after them, and the existing browse
+collages stay as they are (not regenerated or uploaded).
+
 Only gallery-eligible images are downloaded. Every other payload file becomes a sparse
 placeholder of its real size, so the preview keys (f<N>, position in the sorted payload listing)
 match the keys the bag was packaged with and the viewer's index.
@@ -103,11 +107,25 @@ def existing_manifest(s3, bucket: str, root: str) -> dict | None:
 
 def foreign_preview_keys(manifest: dict | None) -> list[str]:
     """Preview keys not derived from payload images (e.g. DVD "menu" from the ISO): a rebuild from
-    payload would drop them, so such bags are skipped."""
+    payload alone would drop them, so they are merged back in (merge_foreign_previews)."""
     if not manifest:
         return []
     keys = set(manifest.get("grid") or {}) | set(manifest.get("gallery_file_keys") or [])
     return sorted(k for k in keys if not re.fullmatch(r"f\d+", str(k)))
+
+
+def merge_foreign_previews(old: dict, new: dict, foreign: list[str]) -> dict:
+    """New payload manifest + the old manifest's foreign previews (first in the gallery) and browse."""
+    merged = dict(new)
+    merged["grid"] = {**{k: old["grid"][k] for k in foreign if k in (old.get("grid") or {})}, **new.get("grid", {})}
+    old_display = old.get("display") or {}
+    merged["display"] = {**{k: old_display[k] for k in foreign if k in old_display}, **new.get("display", {})}
+    merged["gallery_file_keys"] = [k for k in foreign if k in merged["grid"]] + [
+        k for k in new.get("gallery_file_keys", []) if k not in foreign
+    ]
+    if old.get("browse"):
+        merged["browse"] = old["browse"]
+    return merged
 
 
 def stage_bag(s3, bucket: str, root: str, objects: dict[str, int], work: Path, cfg: dict) -> int:
@@ -151,10 +169,8 @@ def main() -> None:
         prefix, media_id = rows[key]
         root = wasabi_unpacked_prefix(prefix)
         package_id = prefix.rstrip("/").rsplit("/", 1)[-1]
-        foreign = foreign_preview_keys(existing_manifest(s3, bucket, root))
-        if foreign:
-            results.append({"game_key": key, "skipped": f"manifest has non-payload previews {foreign}"})
-            continue
+        old_manifest = existing_manifest(s3, bucket, root)
+        foreign = foreign_preview_keys(old_manifest)
         with tempfile.TemporaryDirectory(prefix="bag-previews-") as tmp:
             work = Path(tmp)
             objects = payload_objects(s3, bucket, root)
@@ -164,6 +180,13 @@ def main() -> None:
                 results.append({"game_key": key, "skipped": "no gallery images"})
                 continue
             hitsave = work / "metadata" / "hitsave"
+            if foreign:
+                # Keep the ISO-derived previews and their browse collages; add the payload scans.
+                manifest = merge_foreign_previews(old_manifest or {}, manifest, foreign)
+                for collage in hitsave.glob("browse-*.png"):
+                    collage.unlink()
+                manifest_path = work / str(cfg.get("manifest_inner_path") or "metadata/hitsave/preview-manifest.json")
+                manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
             files = {p.relative_to(work).as_posix(): p for p in sorted(hitsave.rglob("*")) if p.is_file()}
             summary = {
                 "game_key": key,
@@ -172,6 +195,7 @@ def main() -> None:
                 "display": len(manifest["display"]),
                 "downloaded_bytes": fetched,
                 "files": len(files),
+                "kept_previews": foreign,
             }
             if execute:
                 apply_to_wasabi(files, prefix, ingest_config_path=ingest_path, s3=s3)
