@@ -15,6 +15,16 @@ dip_previews:
   grid_thumbnail_max_edge: 640
   grid_jpeg_quality: 88
 
+  # Web-size display JPEG per gallery image (the lightbox shows this, never the original).
+  display_max_edge: 2400
+  display_jpeg_quality: 85
+
+  # Images under these folder names (case-insensitive) are scans: always in the gallery, no
+  # gallery_max_bytes cap (dump scans are often 100+ MB PNGs), listed on the item page.
+  scan_dir_names:
+    - Scans
+  scan_max_bytes: 2147483648
+
   browse_canvas:
     medium: [640, 480]
     square: [400, 400]
