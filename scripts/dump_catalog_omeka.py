@@ -504,11 +504,16 @@ DUMP_CLASS_OVERRIDE_KEYS = ("item_set_title", "item_set_id", "resource_template_
 
 
 def dump_catalog_config(
-    uploader_cfg: dict[str, Any], dump_class: str | None = None, dump_system: str | None = None
+    uploader_cfg: dict[str, Any],
+    dump_class: str | None = None,
+    dump_system: str | None = None,
+    dump_category: str | None = None,
 ) -> dict[str, Any]:
     """omeka-catalog.yaml dump_catalog with per-type overrides on top: by_dump_class.<dump_class>,
     then by_dump_system.<dump_system> (the system wins; system names match case-insensitively).
     dump_class alone is too coarse: "redump" covers DVD-Video coverdiscs and PS4 game discs alike.
+    by_system_category."<System>/<Category>" (Redump Category, e.g. "Sony PlayStation/Coverdiscs")
+    is the most specific and wins over both.
 
       dump_catalog:
         item_set_title: Video Games         # defaults: games
@@ -547,7 +552,17 @@ def dump_catalog_config(
         # Game template custom vocabularies (Platform, Media Format); unset = literal format values.
         "platform_custom_vocab_id": _opt_int(dump.get("platform_custom_vocab_id")),
         "media_format_custom_vocab_id": _opt_int(dump.get("media_format_custom_vocab_id")),
-    } | _type_overrides(dump, "by_dump_class", dump_class) | _type_overrides(dump, "by_dump_system", dump_system)
+    } | (
+        _type_overrides(dump, "by_dump_class", dump_class)
+        | _type_overrides(dump, "by_dump_system", dump_system)
+        | _type_overrides(dump, "by_system_category", _system_category(dump_system, dump_category))
+    )
+
+
+def _system_category(dump_system: str | None, dump_category: str | None) -> str | None:
+    if not dump_system or not dump_category:
+        return None
+    return f"{str(dump_system).strip()}/{str(dump_category).strip()}"
 
 
 def _opt_int(value: Any) -> int | None:

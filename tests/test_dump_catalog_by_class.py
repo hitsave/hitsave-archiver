@@ -78,3 +78,15 @@ def test_vocab_ids_pass_through() -> None:
     assert (c["platform_custom_vocab_id"], c["media_format_custom_vocab_id"]) == (4, 5)
     c = dump_catalog_config({"dump_catalog": GAMES_DEFAULT}, "switch")
     assert c["platform_custom_vocab_id"] is None and c["media_format_custom_vocab_id"] is None
+
+
+def test_system_category_is_most_specific() -> None:
+    d = {**GAMES_DEFAULT, "by_system_category": {
+        "Sony PlayStation/Coverdiscs": {"item_set_title": "Famitsu Wave", "item_set_id": 511}}}
+    cfg = {"dump_catalog": d}
+    c = dump_catalog_config(cfg, "redump", "Sony PlayStation", "Coverdiscs")
+    assert (c["item_set_id"], c["resource_template_label"]) == (511, "Game")   # set only; still Game
+    c = dump_catalog_config(cfg, "redump", "sony playstation", "coverdiscs")   # case-insensitive
+    assert c["item_set_id"] == 511
+    assert dump_catalog_config(cfg, "redump", "Sony PlayStation", "Games")["item_set_id"] == 572
+    assert dump_catalog_config(cfg, "redump", "Sony PlayStation")["item_set_id"] == 572
