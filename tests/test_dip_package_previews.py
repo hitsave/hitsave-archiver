@@ -1,6 +1,7 @@
 """Preview generation tolerates unreadable payload images."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from PIL import Image
@@ -170,3 +171,40 @@ def test_refresh_merges_menu_previews_with_scans() -> None:
     assert merged["grid"]["menu"] == "metadata/hitsave/thumbnails/grid/menu.jpg" and merged["grid"]["f4"] == "g4"
     assert merged["display"] == {"f4": "d4", "f5": "d5"}
     assert merged["browse"] == old["browse"] and merged["files"] == new["files"]
+
+
+def test_display_never_upscales_small_images(tmp_path: Path) -> None:
+    _noisy_png(tmp_path / "data" / "g" / "Scans" / "small.png", (150, 100))
+    manifest = write_hitsave_previews(tmp_path, package_id="pkg", config=_scan_cfg())
+    (key,) = manifest["gallery_file_keys"]
+    assert Image.open(tmp_path / manifest["display"][key]).size == (150, 100)   # display edge 200
+    assert Image.open(tmp_path / manifest["grid"][key]).size == (64, 43)
+
+
+def test_dvd_menu_goes_first_and_keeps_scans(tmp_path: Path) -> None:
+    from dip_package_previews import add_dvd_menu_preview
+
+    _noisy_png(tmp_path / "data" / "dvd" / "img124.tif", (300, 200))
+    (tmp_path / "data" / "dvd" / "disc.iso").write_bytes(b"x")
+    payload = write_hitsave_previews(tmp_path, package_id="pkg", config=_scan_cfg())
+    menu = tmp_path / "menu_preview.jpg"
+    Image.new("RGB", (720, 480), (10, 20, 30)).save(menu, "JPEG")
+    merged = add_dvd_menu_preview(tmp_path, menu_jpg=menu, package_id="pkg", payload_manifest=payload,
+                                  config=_scan_cfg())
+    scan_key = payload["gallery_file_keys"][0]
+    assert merged["gallery_file_keys"] == ["menu", scan_key]
+    assert merged["display"]["menu"] == "metadata/hitsave/display/menu.jpg"
+    assert merged["files"][scan_key]["scan"] is True
+    assert merged["browse"]["medium"] == "metadata/hitsave/browse-medium.png"
+    on_disk = json.loads((tmp_path / "metadata/hitsave/preview-manifest.json").read_text())
+    assert on_disk == merged
+
+
+def test_dvd_menu_without_payload_previews(tmp_path: Path) -> None:
+    from dip_package_previews import add_dvd_menu_preview
+
+    menu = tmp_path / "menu_preview.jpg"
+    Image.new("RGB", (720, 480)).save(menu, "JPEG")
+    merged = add_dvd_menu_preview(tmp_path, menu_jpg=menu, package_id="pkg", payload_manifest=None,
+                                  config=_scan_cfg())
+    assert merged["gallery_file_keys"] == ["menu"] and "files" not in merged

@@ -355,3 +355,14 @@ remote_intake_ready_source_guard() {
 remote_intake_scripts_dir() {
   cd "$(dirname "${BASH_SOURCE[0]}")" && pwd
 }
+
+# DVD-Video menu still for a staged package (dvd-menu-preview service, before ingest). The
+# container decides (System: DVD-Video in !submissionInfo.txt, one .iso) and writes
+# <HOST_OUTPUT>/dvd-menu/<slug>/; build-bagit-package.py packs the JPEG as the menu preview. Never
+# fails the sweep: a missing menu only means no menu slide.
+remote_intake_dvd_menu_preview() {
+  local slug="$1"
+  remote_intake_archiver_compose run --rm -T dvd-menu-preview \
+    --package "/data/intake/ready/$slug" --out "/output/$slug" \
+    || echo "WARN dvd-menu-preview failed for $slug; ingest continues without a menu preview" >&2
+}

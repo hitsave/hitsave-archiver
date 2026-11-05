@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import random
+import re
+import shutil
 import sys
 import zlib
 from dataclasses import dataclass
@@ -229,6 +231,13 @@ def _write_grid_thumb(src: Path, dest: Path, max_edge: int, quality: int) -> boo
     return _write_derivatives(src, dest, max_edge, quality)[0]
 
 
+def _shrink(img: Image.Image, max_edge: int) -> Image.Image:
+    """Fit within max_edge, never enlarging (ImageOps.contain alone upscales small images)."""
+    if max(img.size) <= max_edge:
+        return img
+    return ImageOps.contain(img, (max_edge, max_edge), method=Image.Resampling.LANCZOS)
+
+
 def _write_derivatives(
     src: Path,
     grid_dest: Path,
@@ -250,22 +259,22 @@ def _write_derivatives(
             im.load()
             rgb = im.convert("RGB")
         try:
-            display = ImageOps.contain(rgb, (display_edge, display_edge), method=Image.Resampling.LANCZOS) \
-                if display_dest is not None else rgb
+            display = _shrink(rgb, display_edge) if display_dest is not None else rgb
         finally:
-            if display_dest is not None:
+            if display_dest is not None and display is not rgb:
                 rgb.close()
         try:
             if display_dest is not None:
                 display_dest.parent.mkdir(parents=True, exist_ok=True)
                 display.save(display_dest, "JPEG", quality=display_quality, optimize=True, progressive=True)
                 made.append(display_dest)
-            thumb = ImageOps.contain(display, (grid_edge, grid_edge), method=Image.Resampling.LANCZOS)
+            thumb = _shrink(display, grid_edge)
             try:
                 thumb.save(grid_dest, "JPEG", quality=grid_quality, optimize=True)
                 made.append(grid_dest)
             finally:
-                thumb.close()
+                if thumb is not display:
+                    thumb.close()
         finally:
             display.close()
     except (OSError, ValueError, UnidentifiedImageError) as e:
@@ -422,3 +431,58 @@ def write_dvd_menu_packaged_previews(
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     return manifest
+
+
+_PAYLOAD_KEY = re.compile(r"f\d+")
+
+
+def merge_menu_manifest(menu_manifest: dict, existing: dict | None) -> dict:
+    """Menu manifest + an existing manifest's payload previews (f<N>: scans etc.), menu first.
+
+    The menu stays the browse image, as on every DVD; payload grid/display/files entries are kept
+    as they are (their files already exist in the bag).
+    """
+    if not existing:
+        return menu_manifest
+    grid = existing.get("grid") or {}
+    payload_keys = [
+        k for k in (existing.get("gallery_file_keys") or list(grid))
+        if _PAYLOAD_KEY.fullmatch(str(k)) and k in grid
+    ]
+    if not payload_keys:
+        return menu_manifest
+    merged = dict(menu_manifest)
+    merged["grid"] = {**menu_manifest.get("grid", {}), **{k: grid[k] for k in payload_keys}}
+    display = {**(menu_manifest.get("display") or {}),
+               **{k: v for k, v in (existing.get("display") or {}).items() if k in payload_keys}}
+    if display:
+        merged["display"] = display
+    files = {k: v for k, v in (existing.get("files") or {}).items() if k in payload_keys}
+    if files:
+        merged["files"] = files
+    merged["gallery_file_keys"] = list(menu_manifest.get("gallery_file_keys") or []) + payload_keys
+    return merged
+
+
+def add_dvd_menu_preview(
+    bag_dir: Path,
+    *,
+    menu_jpg: Path,
+    package_id: str,
+    payload_manifest: dict | None,
+    metadata_dir: str = "metadata",
+    config: dict | None = None,
+) -> dict:
+    """Pack a DVD menu still (dvd-menu-preview) in front of the payload previews; returns the manifest."""
+    cfg = config or load_preview_config()
+    menu = write_dvd_menu_packaged_previews(
+        bag_dir, menu_jpg=menu_jpg, package_id=package_id, metadata_dir=metadata_dir, config=cfg
+    )
+    display_rel = f"{metadata_dir}/hitsave/display/menu.jpg"
+    (bag_dir / display_rel).parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(menu_jpg, bag_dir / display_rel)  # menu stills are already web size (720x480)
+    menu["display"] = {"menu": display_rel}
+    merged = merge_menu_manifest(menu, payload_manifest)
+    manifest_path = bag_dir / str(cfg.get("manifest_inner_path") or "metadata/hitsave/preview-manifest.json")
+    manifest_path.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
+    return merged
