@@ -85,6 +85,50 @@ def _catalog_alternates(title: str, foreign: str | None, alternates: list[str]) 
     return out
 
 
+def _storage_uri_row(api: Any, pid: int, uri: str, wasabi_ingest_cfg: dict | None, *, is_public: bool) -> dict:
+    """bibo:uri row: s3:// becomes the https Wasabi URL, labelled with the readable path."""
+    from dump_platforms import storage_link
+
+    url, label = storage_link(uri, (wasabi_ingest_cfg or {}).get("endpoint")) or (uri, uri)
+    row = api.uri_value(pid, url, is_public=is_public)
+    if label and label != url:
+        row["o:label"] = label
+    return row
+
+
+def _append_platform_media(
+    values: dict[str, list],
+    session: requests.Session,
+    base: str,
+    creds: dict,
+    api: Any,
+    cfg: dict | None,
+    system: str | None,
+    media_type: str | None,
+    *,
+    fallback_literal: Any = None,
+) -> bool:
+    """Game template Platform (dcterms:relation) and Media Format (dcterms:format) from the custom
+    vocabularies. False when the system is unmapped or the vocab ids aren't configured; the caller
+    then keeps its literal values (fallback_literal("dcterms:format", system) when given)."""
+    from dump_platforms import custom_vocab_value, platform_media
+
+    cfg = cfg or {}
+    platform, media = platform_media(system, media_type)
+    pv, mv = cfg.get("platform_custom_vocab_id"), cfg.get("media_format_custom_vocab_id")
+    if (platform is None and media is None) or not pv or not mv:
+        if fallback_literal is not None:
+            fallback_literal("dcterms:format", system)
+        return False
+    if platform:
+        pid = api.resolve_property_id(session, base, creds, "dcterms:relation")
+        values.setdefault("dcterms:relation", []).append(custom_vocab_value(pid, pv, platform))
+    if media:
+        pid = api.resolve_property_id(session, base, creds, "dcterms:format")
+        values.setdefault("dcterms:format", []).append(custom_vocab_value(pid, mv, media))
+    return True
+
+
 def staff_storage_uri(
     *,
     manifest: dict[str, Any] | None = None,
@@ -237,6 +281,7 @@ def build_switch_values(
     ledger_aip_wasabi_prefix: str | None = None,
     ledger_package_storage_prefix: str | None = None,
     wasabi_ingest_cfg: dict | None = None,
+    cfg: dict | None = None,
 ) -> tuple[dict[str, list], str]:
     parsed = (manifest.get("switch") or {}).get("parsed") or {}
     game_title = str(parsed.get("game_title") or parsed.get("game_name") or "").strip()
@@ -258,7 +303,8 @@ def build_switch_values(
     append_literal("dcterms:title", game_title)
     if version:
         append_literal("dcterms:description", f"Version {version}")
-    append_literal("dcterms:format", "Nintendo Switch")
+    _append_platform_media(values, session, base, creds, api, cfg, "Nintendo Switch", None,
+                           fallback_literal=append_literal)
     append_literal("dcterms:type", parsed.get("categories") or "Games")
     append_literal("dcterms:coverage", parsed.get("region"))
     gameid1 = parsed.get("gameid1")
@@ -284,7 +330,7 @@ def build_switch_values(
     )
     if staff_uri:
         bibo_pid = api.resolve_property_id(session, base, creds, "bibo:uri")
-        values["bibo:uri"] = [api.uri_value(bibo_pid, staff_uri, is_public=False)]
+        values["bibo:uri"] = [_storage_uri_row(api, bibo_pid, staff_uri, wasabi_ingest_cfg, is_public=False)]
 
     values.setdefault("dcterms:description", [])
     values.setdefault("dcterms:source", [])
@@ -318,6 +364,7 @@ def build_dump_catalog_values(
             ledger_aip_wasabi_prefix=ledger_aip_wasabi_prefix,
             ledger_package_storage_prefix=ledger_package_storage_prefix,
             wasabi_ingest_cfg=wasabi_ingest_cfg,
+            cfg=redump_cfg,
         )
     return build_redump_values(
         session,
@@ -411,11 +458,12 @@ def build_redump_values(
         id_rows.append(api.literal_value(pid, serial))
         values["dcterms:identifier"] = id_rows
 
-    for field in ("System", "Media Type"):
-        append_literal(
-            "dcterms:format",
-            _omeka_format_from_redump(field, _redump_field(fields, field)),
-        )
+    system = _redump_field(fields, "System")
+    media_type = _redump_field(fields, "Media Type")
+    if not _append_platform_media(values, session, base, creds, api, cfg, system, media_type):
+        # DVD-Video / Audio CD coverdiscs (and unmapped systems): literal format values as before.
+        for field, raw in (("System", system), ("Media Type", media_type)):
+            append_literal("dcterms:format", _omeka_format_from_redump(field, raw))
     append_literal("dcterms:type", _redump_field(fields, "Category"))
     append_literal("dcterms:coverage", _redump_field(fields, "Region"))
     append_literal("dcterms:language", _redump_languages(fields))
@@ -433,13 +481,14 @@ def build_redump_values(
         bibo_pid = api.resolve_property_id(session, base, creds, "bibo:uri")
         storage_public = bool(cfg.get("storage_uri_is_public", False))
         values["bibo:uri"] = [
-            api.uri_value(bibo_pid, staff_uri, is_public=storage_public)
+            _storage_uri_row(api, bibo_pid, staff_uri, wasabi_ingest_cfg, is_public=storage_public)
         ]
 
     if disc_id is not None:
         redump_url = redump_disc_page_url(disc_id, cfg)
         relation_pid = api.resolve_property_id(session, base, creds, "dcterms:relation")
-        values["dcterms:relation"] = [api.uri_value(relation_pid, redump_url)]
+        # Appended: dcterms:relation may already hold the Platform vocab value.
+        values.setdefault("dcterms:relation", []).append(api.uri_value(relation_pid, redump_url))
 
     if description:
         append_literal("dcterms:description", description)
@@ -495,7 +544,14 @@ def dump_catalog_config(
         "disc_url": require_str(dump, "disc_url", where=where),
         "lookup_timeout_seconds": int(require_key(dump, "lookup_timeout_seconds", where=where)),
         "user_agent": require_str(dump, "user_agent", where=where),
+        # Game template custom vocabularies (Platform, Media Format); unset = literal format values.
+        "platform_custom_vocab_id": _opt_int(dump.get("platform_custom_vocab_id")),
+        "media_format_custom_vocab_id": _opt_int(dump.get("media_format_custom_vocab_id")),
     } | _type_overrides(dump, "by_dump_class", dump_class) | _type_overrides(dump, "by_dump_system", dump_system)
+
+
+def _opt_int(value: Any) -> int | None:
+    return int(value) if value not in (None, "") else None
 
 
 def _type_overrides(dump: dict[str, Any], section: str, value: str | None) -> dict[str, Any]:

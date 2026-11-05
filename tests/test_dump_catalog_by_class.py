@@ -70,3 +70,11 @@ def test_system_beats_class() -> None:
     d = {**GAMES_DEFAULT, "by_dump_class": {"redump": {"item_set_title": "Software", "item_set_id": 1107}}}
     assert dump_catalog_config({"dump_catalog": d}, "redump", "DVD-Video")["item_set_id"] == 511
     assert dump_catalog_config({"dump_catalog": d}, "redump", "Sony PlayStation 4")["item_set_id"] == 1107
+
+
+def test_vocab_ids_pass_through() -> None:
+    d = dict(GAMES_DEFAULT, platform_custom_vocab_id=4, media_format_custom_vocab_id="5")
+    c = dump_catalog_config({"dump_catalog": d}, "switch")
+    assert (c["platform_custom_vocab_id"], c["media_format_custom_vocab_id"]) == (4, 5)
+    c = dump_catalog_config({"dump_catalog": GAMES_DEFAULT}, "switch")
+    assert c["platform_custom_vocab_id"] is None and c["media_format_custom_vocab_id"] is None
