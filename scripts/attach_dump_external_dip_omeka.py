@@ -44,6 +44,25 @@ def _external_dip_helpers():
     return mod
 
 
+def _item_is_public(session, base: str, creds: dict, item_id: int, *, api_url) -> bool | None:
+    resp = session.get(api_url(base, f"items/{item_id}", creds),
+                       headers={"Accept": "application/ld+json"}, timeout=120)
+    if not resp.ok:
+        return None
+    return bool(resp.json().get("o:is_public"))
+
+
+def _set_media_visibility(session, base: str, creds: dict, media_id: int, is_public: bool, *, api_url) -> None:
+    url = api_url(base, f"media/{media_id}", creds)
+    resp = session.get(url, headers={"Accept": "application/ld+json"}, timeout=120)
+    resp.raise_for_status()
+    if bool(resp.json().get("o:is_public")) == is_public:
+        return
+    patch = session.patch(url, json={"o:is_public": is_public}, timeout=120)
+    if not patch.ok:
+        raise RuntimeError(f"PATCH media {media_id} visibility failed ({patch.status_code}): {patch.text[:500]}")
+
+
 def attach_dump_dip(game_key: str) -> dict:
     ingest_cfg = load_yaml(CONFIG_ROOT / "preservation/ingest.yaml")
     catalog_cfg = load_omeka_catalog_config(CONFIG_ROOT)
@@ -59,7 +78,6 @@ def attach_dump_dip(game_key: str) -> dict:
     api = load_register_dip_omeka_api()
     ext = _external_dip_helpers()
     dip_ingester = dip_cfg["dip_ingester"]
-    is_public = api_cfg["default_is_public"]
     base = api_cfg["base_url"].rstrip("/")
     session = requests.Session()
 
@@ -104,6 +122,12 @@ def attach_dump_dip(game_key: str) -> dict:
     except DipNotAvailableError as exc:
         return {"game_key": game_key, "skipped": True, "reason": str(exc)}
 
+    # The gallery (Scans/ and other packaged previews) follows the item's visibility: a private
+    # media on a public dump item renders nothing (api default_is_public is false).
+    is_public = _item_is_public(session, base, creds, item_id, api_url=api.api_url)
+    if is_public is None:
+        is_public = bool(api_cfg["default_is_public"])
+
     dip_media_id = find_dip_media_id_on_item(
         session,
         base,
@@ -130,6 +154,7 @@ def attach_dump_dip(game_key: str) -> dict:
         )
         media_id = dip_media_id
         action = "patched"
+        _set_media_visibility(session, base, creds, media_id, is_public, api_url=api.api_url)
     else:
         media_id = attach_external_dip_media(
             session,
@@ -164,6 +189,7 @@ def attach_dump_dip(game_key: str) -> dict:
         "omeka_item_id": item_id,
         "omeka_media_id": media_id,
         "action": action,
+        "media_is_public": is_public,
         "package_storage_prefix": package_storage_prefix,
     }
 

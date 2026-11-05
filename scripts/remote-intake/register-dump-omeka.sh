@@ -149,4 +149,9 @@ remote_intake_archiver_compose run --rm -T --entrypoint python "${OMEKA_CATALOG_
   /app/scripts/apply_dump_catalog_omeka.py \
   "/output/omeka-register/${GAME_KEY}.yaml" \
   "$handoff_container"
+# Bag gallery media (Scans/ and other packaged previews) on the item page; idempotent (patches an
+# existing omeka_dip_package media). A failure here leaves the catalog item in place.
+remote_intake_archiver_compose run --rm -T --entrypoint python "${OMEKA_CATALOG_MOUNT[@]}" omeka-catalog \
+  /app/scripts/attach_dump_external_dip_omeka.py "$GAME_KEY" \
+  || echo "WARN gallery attach failed for $GAME_KEY (rerun: attach_dump_external_dip_omeka.py $GAME_KEY)" >&2
 echo "=== omeka done $GAME_KEY $(date -Is) ==="
