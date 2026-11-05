@@ -47,3 +47,26 @@ def test_title_only_override_drops_default_id() -> None:
 def test_unknown_override_key_rejected() -> None:
     with pytest.raises(ValueError, match="unsupported"):
         dump_catalog_config(_cfg({"switch": {"is_public": False}}), "switch")
+
+
+GAMES_DEFAULT = {**BASE, "item_set_title": "Video Games", "item_set_id": 572, "resource_template_label": "Game",
+                 "by_dump_system": {"DVD-Video": {"item_set_title": "Famitsu Wave", "item_set_id": 511,
+                                                  "resource_template_label": "Moving Image"}}}
+
+
+@pytest.mark.parametrize("cls,system,expected", [
+    ("redump", "DVD-Video", ("Famitsu Wave", 511, "Moving Image")),     # coverdiscs
+    ("redump", "dvd-video", ("Famitsu Wave", 511, "Moving Image")),     # case-insensitive
+    ("redump", "Sony PlayStation 4", ("Video Games", 572, "Game")),     # a PS4 redump is a game
+    ("switch", "Nintendo Switch", ("Video Games", 572, "Game")),
+    ("no-intro", "Nintendo - Game Boy", ("Video Games", 572, "Game")),
+])
+def test_system_overrides(cls, system, expected) -> None:
+    c = dump_catalog_config({"dump_catalog": GAMES_DEFAULT}, cls, system)
+    assert (c["item_set_title"], c["item_set_id"], c["resource_template_label"]) == expected
+
+
+def test_system_beats_class() -> None:
+    d = {**GAMES_DEFAULT, "by_dump_class": {"redump": {"item_set_title": "Software", "item_set_id": 1107}}}
+    assert dump_catalog_config({"dump_catalog": d}, "redump", "DVD-Video")["item_set_id"] == 511
+    assert dump_catalog_config({"dump_catalog": d}, "redump", "Sony PlayStation 4")["item_set_id"] == 1107
