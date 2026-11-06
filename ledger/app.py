@@ -8,7 +8,7 @@ import sys
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import parse_qs, urlparse
 
 import psycopg
 import yaml
@@ -28,6 +28,8 @@ from catalog_quarantine import (
 from catalog_visibility import run_visibility
 from ledger_health import fetch_attention_rows, fetch_health_summary
 from intake_failures import load_failures, render_intake_failures
+from item_page import fetch_item, render_item_not_found, render_item_page, row_links
+from omeka_status import fetch_item_is_public
 
 sys.path.insert(0, str(Path("/app/scripts")))
 from ledger_health_report import (  # noqa: E402
@@ -191,34 +193,6 @@ def fetch_ledger_page(
     return rows, total, eff_page
 
 
-def _action_links(item_id) -> list[str]:
-    links: list[str] = []
-    if not item_id:
-        return links
-    admin = f"{ADMIN}/item/{item_id}/show"
-    public = f"{SITE}/item/{item_id}"
-    correct = f"/correct?{urlencode({'omeka_ref': str(item_id)})}"
-    quarantine = f"/quarantine?{urlencode({'omeka_ref': str(item_id)})}"
-    links.append(f'<a href="{html.escape(admin)}">admin</a>')
-    links.append(f'<a href="{html.escape(public)}">site</a>')
-    links.append(f'<a href="{html.escape(correct)}">correct</a>')
-    links.append(f'<a href="{html.escape(quarantine)}">quarantine</a>')
-    ref = html.escape(str(item_id))
-    links.append(
-        f'<form method="post" action="/visibility" class="inline-form">'
-        f'<input type="hidden" name="omeka_ref" value="{ref}">'
-        f'<input type="hidden" name="is_public" value="true">'
-        f'<button type="submit" class="linkish">publish</button></form>'
-    )
-    links.append(
-        f'<form method="post" action="/visibility" class="inline-form">'
-        f'<input type="hidden" name="omeka_ref" value="{ref}">'
-        f'<input type="hidden" name="is_public" value="false">'
-        f'<button type="submit" class="linkish">hide</button></form>'
-    )
-    return links
-
-
 def _render_attention_table(
     rows: list[dict],
     *,
@@ -275,15 +249,17 @@ def _render_attention_table(
     )
     trs = []
     for row in rows:
-        item_id = row.get("omeka_item_id")
+        key_cell, actions = row_links(
+            str(row.get("game_key") or ""), row.get("omeka_item_id"), admin_base=ADMIN, site_base=SITE
+        )
         err = row.get("error_message")
         trs.append(
             "<tr>"
-            f"<td>{html.escape(str(row.get('game_key') or ''))}</td>"
+            f"<td>{key_cell}</td>"
             f"<td>{html.escape(str(row.get('status') or ''))}</td>"
             f'<td class="col-error err">{html.escape(str(err or ""))}</td>'
             f"<td>{html.escape(str(row.get('block_reason') or ''))}</td>"
-            f"<td>{' '.join(_action_links(item_id))}</td>"
+            f"<td>{actions}</td>"
             f"<td>{html.escape(str(row.get('updated_at') or ''))}</td>"
             "</tr>"
         )
@@ -401,18 +377,20 @@ def render_ledger(
     )
     trs = []
     for row in rows:
-        item_id = row.get("omeka_item_id")
+        key_cell, actions = row_links(
+            str(row.get("game_key") or ""), row.get("omeka_item_id"), admin_base=ADMIN, site_base=SITE
+        )
         err = row.get("error_message")
         err_cell = (
             f'<span class="err">{html.escape(str(err))}</span>' if err else ""
         )
         trs.append(
             "<tr>"
-            f"<td>{html.escape(str(row.get('game_key') or ''))}</td>"
+            f"<td>{key_cell}</td>"
             f"<td>{html.escape(str(row.get('status') or ''))}</td>"
             f"<td>{html.escape(str(row.get('moby_status') or ''))}</td>"
             f"<td>{html.escape(str(row.get('moby_title') or ''))}</td>"
-            f"<td>{' '.join(_action_links(item_id))}</td>"
+            f"<td>{actions}</td>"
             f'<td class="col-error">{err_cell}</td>'
             f"<td>{html.escape(str(row.get('updated_at') or ''))}</td>"
             "</tr>"
@@ -623,6 +601,20 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(301)
             self.send_header("Location", "/health")
             self.end_headers()
+            return
+        if path == "/item":
+            game_key = (parse_qs(parsed.query).get("key") or [""])[0]
+            row = fetch_item(connect, game_key) if game_key else None
+            if row is None:
+                self._send_html(render_item_not_found(game_key, status_config=CONFIG), status=404)
+                return
+            item_id = row.get("omeka_item_id")
+            is_public = fetch_item_is_public(int(item_id)) if item_id else None
+            self._send_html(
+                render_item_page(
+                    row, admin_base=ADMIN, site_base=SITE, is_public=is_public, status_config=CONFIG
+                )
+            )
             return
         if path == "/ops":
             self._send_html(render_ops())

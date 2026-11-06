@@ -598,3 +598,52 @@ button.btn-danger {
 button.btn-danger:hover {
   background: rgba(180, 40, 40, 0.32);
 }
+
+.badge-warn {
+  background: var(--hs-warn-bg);
+  color: var(--hs-warn);
+}
+
+.badge-neutral {
+  background: var(--hs-surface-raised);
+  color: var(--hs-content-fg);
+  border: 1px solid var(--hs-border-strong);
+}
+
+/* Item page */
+.actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  margin: 0.6rem 0;
+}
+
+.actions-row .inline-form {
+  margin: 0;
+}
+
+a.link-danger {
+  color: var(--hs-danger);
+}
+
+table.kv th {
+  text-align: left;
+  white-space: nowrap;
+  vertical-align: top;
+  width: 1%;
+}
+
+table.kv td pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}
+
+.panel pre.err {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}

@@ -80,8 +80,8 @@ def _render_confirm(form: dict[str, list[str]], hint: dict[str, Any] | None) -> 
 <p>Reason: <code>{html.escape(reason_label)}</code></p>
 <p>Note: {html.escape(_field(form, "note"))}</p>
 <p>The catalog record and its media disappear from the public site, and the archive stops
-processing this package. To undo it, publish the record again from its item page and ask an
-admin to reset the ledger status.</p>
+processing this package. The package on Wasabi stays as it is. Only an admin can release a
+record from quarantine.</p>
 <form method="post" action="/quarantine">
 {hidden}
 <input type="hidden" name="confirmed" value="yes">

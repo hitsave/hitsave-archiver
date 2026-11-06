@@ -7,7 +7,7 @@ terminal for any of it.
 The result of every upload is a row like this in the **ledger**, the archive's staff dashboard, with
 a link to the new catalog record on [archive.hitsave.org](https://archive.hitsave.org):
 
-![The Ledger page after searching for famitsu wave dvd 2008-12: two complete packages, each with admin, site, correct, quarantine, publish and hide actions](images/archivist-guide/ledger-search.png)
+![The Ledger page after searching for famitsu wave dvd 2008-12: two complete packages, each with a game key linking to its item page and admin and site links](images/archivist-guide/ledger-search.png)
 
 ## Before you start
 
@@ -103,8 +103,12 @@ catalog title. You can still [fix a title](#fix-a-catalog-record) later.
    | `quarantine` | The archive stopped it on purpose: it found a virus, the files broke the content rules, or someone quarantined it. The **Error** column says which. The archive uploaded nothing. | Read the reason. Tell an admin straight away about a virus. |
    | `failed` | Something went wrong, for example during the upload. The **Error** column says what. | Tell an admin. |
 
-4. When the status is `complete`, click the link in the **Omeka** column to open the catalog record,
-   and check its title and description.
+4. Click the package's game key to open its **item page**. It shows everything the ledger knows
+   about the package, the full error if there is one, whether its catalog record is public, and the
+   actions for the record.
+5. When the status is `complete`, click **Public page** or **Omeka admin** on the item page (or
+   **site** / **admin** on the ledger row) to open the catalog record, and check its title and
+   description.
 
 The **Health** page shows the same packages from the other side: counts by status, and an
 **Attention queue** of every package that needs someone, such as quarantined or failed packages and
@@ -142,13 +146,14 @@ came from. So an inbox holds only folders that are waiting or that need attentio
 
 ## Fix a catalog record
 
-Every row in the ledger has six links: **admin** opens the record in the Omeka admin, **site** opens
-the public page, and **correct**, **quarantine**, **publish** and **hide** change the record.
+Every row in the ledger links the game key to the package's item page, plus **admin**, which opens
+the record in the Omeka admin, and **site**, which opens the public page. Everything that changes
+the record (correct, publish, hide, quarantine) is on the item page.
 
 To fix a title or other details:
 
-1. Click **correct** on the package's row. The **Correct catalog metadata** page opens with the
-   catalog item filled in.
+1. Open the package's item page and click **Correct metadata**. The **Correct catalog metadata**
+   page opens with the catalog item filled in.
 
    ![The Correct catalog metadata form: Omeka item id, title, MobyGames URL, Clear MobyGames catalog, description, developers and publishers with their Clear checkboxes, former title, correction summary, and the Wasabi upload checkbox](images/archivist-guide/correct-form.png)
 
@@ -165,26 +170,32 @@ To fix a title or other details:
    also puts back the description from the press kit.
 4. Leave **Upload bag metadata to Wasabi when title or Moby URL changes** ticked, so the copy of the
    details stored with the package on Wasabi matches the catalog.
-5. Click **Apply correction**. The page shows the result when the correction finishes, usually
-   within a minute.
+5. Click **Apply correction**. The button changes to **Running…**; don't click again. The page
+   shows the result when the correction finishes, usually within a minute.
 
 ## Publish or hide a catalog record
 
-New catalog records are private. When you've checked a record, click **publish** on its row in the
-ledger; the record appears on the public site straight away. Click **hide** to make it private
-again. Neither link changes the package on Wasabi.
+New catalog records are private. The item page shows whether a record is **Public** or **Private**
+right now. When you've checked a record, click **Publish** on its item page and confirm; the record
+appears on the public site straight away. Click **Hide** to make it private again. A green line at
+the top of the page confirms the change; a red one says why it failed. Neither button changes the
+package on Wasabi.
+
+If the item page says **Unknown**, the ledger couldn't ask the catalog; both buttons are shown, and
+the line at the top still tells you whether the change worked.
 
 ## Quarantine a catalog record
 
 Quarantine a record that shouldn't be in the public archive, for example press material that isn't
 press-kit material, or images with meaningless names.
 
-1. Click **quarantine** on the package's row.
+1. Open the package's item page and click **Quarantine…**.
 2. Choose a reason in **block_reason**, or leave `curation_review` if none fits, and write a
    **Curation note** that explains why. The note is required, and the ledger adds your email
    address to it.
-3. Click **Quarantine item**. The ledger status changes to `quarantine` and the catalog record
-   disappears from the public site.
+3. Click **Quarantine item…**. The ledger shows the record it's about to quarantine, with your
+   reason and note. Check that it's the right one, then click **Yes, quarantine**. The ledger status
+   changes to `quarantine` and the catalog record disappears from the public site.
 
 The package on Wasabi stays as it is. You can't release a record from quarantine in the ledger yet;
 ask an admin.
