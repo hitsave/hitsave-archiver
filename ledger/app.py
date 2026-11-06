@@ -20,6 +20,7 @@ from catalog_correct import (
     validate_and_job_args,
 )
 from catalog_quarantine import (
+    needs_confirmation as needs_quarantine_confirmation,
     render_quarantine_page,
     run_quarantine,
     validate_and_argv as validate_quarantine_argv,
@@ -693,10 +694,19 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         if path == "/quarantine":
-            _tag_note(form, "note", user)
+            confirming = needs_quarantine_confirmation(form)
+            if not confirming:
+                _tag_note(form, "note", user)
             argv, errors, values = validate_quarantine_argv(form, is_post=True)
             hint = ledger_hint_for_omeka(connect, values.get("omeka_ref", ""))
             result = None
+            if not errors and argv and confirming:
+                self._send_html(
+                    render_quarantine_page(
+                        form=form, hint=hint, is_post=True, status_config=CONFIG, confirm=True
+                    ),
+                )
+                return
             if not errors and argv:
                 audit("quarantine", user, omeka_ref=values.get("omeka_ref", ""))
                 result = run_quarantine(argv)

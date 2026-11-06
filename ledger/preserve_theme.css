@@ -584,3 +584,17 @@ button[disabled] {
   opacity: 0.6;
   cursor: progress;
 }
+
+.panel-danger {
+  border-color: rgba(255, 138, 138, 0.45);
+}
+
+button.btn-danger {
+  background: var(--hs-danger-bg);
+  border: 1px solid rgba(255, 138, 138, 0.55);
+  color: var(--hs-danger);
+}
+
+button.btn-danger:hover {
+  background: rgba(180, 40, 40, 0.32);
+}
