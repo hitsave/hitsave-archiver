@@ -559,3 +559,28 @@ ul.log-list li {
     width: 100%;
   }
 }
+
+/* Notice after a redirect ("Item 1234 is now public.") */
+.notice {
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  margin: 0 0 1rem;
+  font-weight: 600;
+}
+
+.notice-ok {
+  background: var(--hs-ok-bg);
+  border: 1px solid rgba(110, 231, 168, 0.35);
+  color: var(--hs-ok);
+}
+
+.notice-fail {
+  background: var(--hs-danger-bg);
+  border: 1px solid rgba(255, 138, 138, 0.35);
+  color: var(--hs-danger);
+}
+
+button[disabled] {
+  opacity: 0.6;
+  cursor: progress;
+}

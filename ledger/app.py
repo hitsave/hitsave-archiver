@@ -35,7 +35,8 @@ from ledger_health_report import (  # noqa: E402
     ledger_search,
     ledger_search_count,
 )
-from site_ui import render_page_shell, set_current_user
+from notice import render_notice, safe_return_path, visibility_message, with_notice
+from site_ui import render_page_shell, set_current_notice, set_current_user
 from pagination import (
     ledger_pagination_config,
     parse_page,
@@ -576,6 +577,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         set_current_user(forwarded_user(self.headers))
         parsed = urlparse(self.path)
+        set_current_notice(render_notice(parse_qs(parsed.query)))
         path = parsed.path.rstrip("/") or "/"
         if path == "/healthz":
             body = b"ok\n"
@@ -665,6 +667,7 @@ class Handler(BaseHTTPRequestHandler):
         form = self._read_form()
         user = forwarded_user(self.headers)
         set_current_user(user)
+        set_current_notice("")
         if path == "/correct":
             _tag_note(form, "correction_summary", user)
             job_args, errors, values = validate_and_job_args(form, is_post=True)
@@ -715,15 +718,18 @@ class Handler(BaseHTTPRequestHandler):
             is_public_raw = (form.get("is_public") or [""])[0].strip().lower()
             is_public = is_public_raw in ("true", "1", "yes", "on")
             if omeka_ref:
-                audit("publish" if is_public else "hide", user, omeka_ref=omeka_ref)
-                run_visibility(omeka_ref, is_public=is_public)
+                code, output = run_visibility(omeka_ref, is_public=is_public)
+                audit("publish" if is_public else "hide", user, omeka_ref=omeka_ref, exit=str(code))
+                if code != 0:
+                    print(output, flush=True)
+                kind, msg = visibility_message(omeka_ref, is_public, code, output)
+            else:
+                kind, msg = "fail", "No Omeka item given."
+            back = safe_return_path(
+                (form.get("return_to") or [""])[0], self.headers.get("Referer") or ""
+            )
             self.send_response(303)
-            back = (form.get("return_to") or [""])[0].strip()
-            if not back.startswith("/"):
-                referer = (self.headers.get("Referer") or "").strip()
-                ref_path = urlparse(referer).path if referer else "/"
-                back = ref_path if ref_path.startswith("/") else "/"
-            self.send_header("Location", back)
+            self.send_header("Location", with_notice(back, kind, msg))
             self.end_headers()
             return
         self.send_response(404)
