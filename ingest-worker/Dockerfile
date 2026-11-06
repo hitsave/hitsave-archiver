@@ -33,6 +33,7 @@ COPY scripts/batch-expand-preservation.py \
     scripts/build-bagit-package.py \
     scripts/dip_package_previews.py \
     scripts/apply_dvd_menu_bag_previews.py \
+    scripts/rank_dvd_menu_vlm.py \
     scripts/refresh_bag_previews_wasabi.py \
     scripts/add_catalogue_scans_wasabi.py \
     scripts/reset-batch-manifest-ledger.py \

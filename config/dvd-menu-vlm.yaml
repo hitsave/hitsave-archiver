@@ -1,0 +1,16 @@
+# DVD menu VLM ranking (scripts/rank_dvd_menu_vlm.py, run by the remote-intake sweep after
+# dvd-menu-preview). A vision model labels each candidate still main_menu / sub_menu / not_menu;
+# a confident main_menu becomes menu_preview.jpg (heuristic pick kept as menu_preview.heuristic.jpg).
+# Without the credentials file the step is skipped and the heuristic pick stays.
+dvd_menu_vlm:
+  enabled: true
+  # LiteLLM (OpenAI-compatible) on the Docker host; ingest-worker maps host.docker.internal.
+  base_url: http://host.docker.internal:4000
+  # LiteLLM alias (homelab-config config/litellm.yml). 2026-11-06 eval on 10 DVDs: qwen3.5-4b picked
+  # the main menu on 9/10, same as qwen3.5-9b at 3x the speed; gemma-3-4b / qwen3-vl-8b did worse.
+  model: hitsave-menu-vlm
+  # Private config: secrets/litellm-credentials.yaml with `api_key: ...`.
+  credentials_file: secrets/litellm-credentials.yaml
+  timeout_seconds: 60
+  min_confidence: 0.6
+  max_candidates: 24
