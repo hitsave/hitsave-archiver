@@ -153,25 +153,33 @@ the record (correct, publish, hide, quarantine) is on the item page.
 To fix a title or other details:
 
 1. Open the package's item page and click **Correct metadata**. The **Correct catalog metadata**
-   page opens with the catalog item filled in.
+   page opens with the fields filled in with what the catalog has now.
 
-   ![The Correct catalog metadata form: Omeka item id, title, MobyGames URL, Clear MobyGames catalog, description, developers and publishers with their Clear checkboxes, former title, correction summary, and the Wasabi upload checkbox](images/archivist-guide/correct-form.png)
+   ![The Correct catalog metadata form, filled in with the item's current title, MobyGames URL, description, developers and publishers](images/archivist-guide/correct-form.png)
+   <!-- TODO: screenshot predates the prefilled form (2026-11-06); retake. -->
 
-2. Fill in only the fields you want to change:
+2. Change only what's wrong. Fields you leave as they are stay unchanged.
    - **Title**
    - **MobyGames URL**: the address of the right game on [MobyGames](https://www.mobygames.com)
    - **Description**
-   - **Developer(s)** and **Publisher(s)**, separated by commas. To remove them instead, tick
-     **Clear developer(s)** or **Clear publisher(s)**.
-   - **Former title** and **Correction summary**: notes kept with the package. The ledger adds your
-     email address to the summary.
-3. If the archive linked the wrong MobyGames game, tick **Clear MobyGames catalog** instead of
-   entering a URL. That removes the MobyGames link, description and credits. For press material it
-   also puts back the description from the press kit.
-4. Leave **Upload bag metadata to Wasabi when title or Moby URL changes** ticked, so the copy of the
-   details stored with the package on Wasabi matches the catalog.
-5. Click **Apply correction**. The button changes to **Running…**; don't click again. The page
+   - **Developers** and **Publishers**, separated by commas. To remove them all, empty the box.
+3. If the archive linked the wrong MobyGames game and there's no right one, tick **Remove the
+   MobyGames match**. That removes the MobyGames link and what came with it: the release date, the
+   MobyGames rights statement and, unless you changed them here, the developers and publishers. For
+   press material it also puts back the description from the press kit, unless you changed it here.
+4. Under **Notes kept with the package** you can add a **Correction summary** (the ledger adds your
+   email address) and the **Former title**, if it isn't the current one.
+5. Leave **Update the package's details on Wasabi when the title or MobyGames link changes** ticked,
+   so the copy of the details stored with the package on Wasabi matches the catalog.
+6. Click **Review changes**. The next page lists each change as **Now** and **After**, and anything
+   else that will happen. Click **Back to edit** to fix something.
+7. Click **Apply correction**. The button changes to **Running…**; don't click again. The page
    shows the result when the correction finishes, usually within a minute.
+
+If someone else changes the record in the catalog while you're working on it, nothing is saved:
+the form comes back with their changes filled in and yours kept, so you can check it and review
+again. If the page says it couldn't read the item from Omeka, try again in a minute, and ask an
+admin if it keeps happening.
 
 ## Publish or hide a catalog record
 

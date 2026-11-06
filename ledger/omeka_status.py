@@ -1,4 +1,4 @@
-"""Read-only Omeka lookups for the item page (is the catalog record public right now?)."""
+"""Read-only Omeka lookups: the item JSON (correction form) and whether it is public (item page)."""
 from __future__ import annotations
 
 import os
@@ -26,13 +26,13 @@ def _api_settings(config_root: Path) -> tuple[str, dict]:
     return str(api_cfg["base_url"]).rstrip("/"), creds
 
 
-def fetch_item_is_public(
+def fetch_item_json(
     item_id: int,
     *,
     get: Callable | None = None,
     config_root: Path | None = None,
-) -> bool | None:
-    """o:is_public of the Omeka item, or None when it can't be read (no config, Omeka down, …)."""
+) -> dict | None:
+    """The Omeka item's JSON, or None when it can't be read (no config, Omeka down, not found, …)."""
     try:
         base, creds = _api_settings(config_root or _default_config_root())
         query = urlencode({"key_identity": creds["key_identity"], "key_credential": creds["key_credential"]})
@@ -44,7 +44,18 @@ def fetch_item_is_public(
         if resp.status_code != 200:
             return None
         data = resp.json()
-        value = data.get("o:is_public") if isinstance(data, dict) else None
-        return value if isinstance(value, bool) else None
-    except Exception:  # noqa: BLE001 - the page must render whatever goes wrong here
+        return data if isinstance(data, dict) else None
+    except Exception:  # noqa: BLE001 - callers render a page whatever goes wrong here
         return None
+
+
+def fetch_item_is_public(
+    item_id: int,
+    *,
+    get: Callable | None = None,
+    config_root: Path | None = None,
+) -> bool | None:
+    """o:is_public of the Omeka item, or None when it can't be read."""
+    data = fetch_item_json(item_id, get=get, config_root=config_root)
+    value = data.get("o:is_public") if data else None
+    return value if isinstance(value, bool) else None
