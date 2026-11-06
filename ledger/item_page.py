@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any, Callable
 from urllib.parse import urlencode
 
-from formatting import fmt_ts, item_href
+from formatting import fmt_ts, item_href, status_badge
 from site_ui import render_page_shell
 
 ConnectFn = Callable[[], Any]
@@ -36,15 +36,6 @@ def row_links(game_key: str, item_id, *, admin_base: str, site_base: str) -> tup
         f'<a href="{admin}" target="_blank" rel="noopener">admin ↗</a> '
         f'<a href="{public}" target="_blank" rel="noopener">site ↗</a>'
     )
-
-
-def _status_badge(status: str) -> str:
-    cls = {
-        "complete": "badge-ok",
-        "failed": "badge-fail",
-        "quarantine": "badge-fail",
-    }.get(status, "badge-neutral")
-    return f'<span class="badge {cls}">{html.escape(status or "(no status)")}</span>'
 
 
 def _visibility_form(item_id: int, game_key: str, *, make_public: bool) -> str:
@@ -156,7 +147,7 @@ def render_item_page(
 ) -> bytes:
     game_key = str(row.get("game_key") or "")
     title = str(row.get("moby_title") or game_key)
-    inner = f"""<p><code>{html.escape(game_key)}</code> · {_status_badge(str(row.get("status") or ""))}
+    inner = f"""<p><code>{html.escape(game_key)}</code> · {status_badge(row.get("status"))}
  · updated {html.escape(fmt_ts(row.get("updated_at")))}</p>
 {_catalog_panel(row, admin_base=admin_base, site_base=site_base, is_public=is_public)}
 {_problems_panel(row)}

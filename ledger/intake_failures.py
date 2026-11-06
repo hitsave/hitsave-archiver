@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from formatting import fmt_ts
+
 FAILED_DIR = Path(os.environ.get("HITSAVE_INTAKE_FAILED_DIR", "/data/intake-failed"))
 READY_SOURCE_PREFIX = "/data/intake/ready/"
 REASON_MAX = 300
@@ -137,7 +139,7 @@ def render_intake_failures(
     rows = "".join(
         "<tr>"
         f"<td><code>{html.escape(f.slug)}</code></td>"
-        f"<td>{f.failed_at:%Y-%m-%d %H:%M} UTC</td>"
+        f"<td>{html.escape(fmt_ts(f.failed_at))}</td>"
         f'<td class="col-error">{html.escape(f.reason)}</td>'
         "</tr>"
         for f in failures
