@@ -33,11 +33,12 @@ from omeka_status import fetch_item_is_public
 
 sys.path.insert(0, str(Path("/app/scripts")))
 from ledger_health_report import (  # noqa: E402
-    ledger_order_sql,
-    ledger_row_count,
+    ledger_attention_count,
     ledger_search,
     ledger_search_count,
 )
+from filters import filter_banner, flag_chip, parse_filters, status_chip  # noqa: E402
+from formatting import fmt_ts
 from notice import render_notice, safe_return_path, visibility_message, with_notice
 from site_ui import render_page_shell, set_current_notice, set_current_user
 from pagination import (
@@ -154,43 +155,27 @@ def fetch_ledger_page(
     per_page: int,
     sort: str,
     sort_dir: str,
-) -> tuple[list[dict], int, int]:
-    """Return (rows, total_matching, effective_page)."""
-    order = ledger_order_sql(sort, sort_dir)
+    filters: dict[str, str] | None = None,
+) -> tuple[list[dict], int, int, int]:
+    """Return (rows, total_matching, effective_page, attention_count)."""
+    f = filters or {}
     with connect() as conn:
-        if q.strip():
-            total = ledger_search_count(conn, q)
-        else:
-            total = ledger_row_count(conn)
+        total = ledger_search_count(conn, q, status=f.get("status", ""), flag=f.get("flag", ""))
         pages = total_pages(total, per_page)
         eff_page = parse_page(str(page), total_pages=pages)
-        offset = (eff_page - 1) * per_page
-        if q.strip():
-            rows = ledger_search(
-                conn,
-                q,
-                limit=per_page,
-                offset=offset,
-                log=False,
-                sort=sort,
-                sort_dir=sort_dir,
-            )
-        else:
-            with conn.cursor() as cur:
-                cur.execute(
-                    f"""
-                    SELECT game_key, status, moby_status, block_reason, omeka_item_id,
-                           omeka_media_id, moby_title, source_path, aip_wasabi_prefix,
-                           aip_uploaded_at, updated_at, error_message
-                    FROM game_ingest
-                    {order}
-                    LIMIT %s OFFSET %s
-                    """,
-                    (per_page, offset),
-                )
-                cols = [d[0] for d in cur.description]
-                rows = [dict(zip(cols, row)) for row in cur.fetchall()]
-    return rows, total, eff_page
+        rows = ledger_search(
+            conn,
+            q,
+            limit=per_page,
+            offset=(eff_page - 1) * per_page,
+            log=False,
+            sort=sort,
+            sort_dir=sort_dir,
+            status=f.get("status", ""),
+            flag=f.get("flag", ""),
+        )
+        attention = ledger_attention_count(conn)
+    return rows, total, eff_page, attention
 
 
 def _render_attention_table(
@@ -260,7 +245,7 @@ def _render_attention_table(
             f'<td class="col-error err">{html.escape(str(err or ""))}</td>'
             f"<td>{html.escape(str(row.get('block_reason') or ''))}</td>"
             f"<td>{actions}</td>"
-            f"<td>{html.escape(str(row.get('updated_at') or ''))}</td>"
+            f"<td>{html.escape(fmt_ts(row.get('updated_at')))}</td>"
             "</tr>"
         )
     return f"""
@@ -305,19 +290,22 @@ def render_ledger(
     sort_dir: str = "desc",
     page: int = 1,
     per_page: int | None = None,
+    filters: dict[str, str] | None = None,
 ) -> bytes:
+    filters = filters or {}
     pag_cfg = ledger_pagination_config(CONFIG)
     pp = per_page if per_page is not None else int(pag_cfg["default_per_page"])
     pp = parse_per_page(str(pp), pag_cfg)
-    rows, total, page = fetch_ledger_page(
-        q, page=page, per_page=pp, sort=sort, sort_dir=sort_dir
+    rows, total, page, attention_n = fetch_ledger_page(
+        q, page=page, per_page=pp, sort=sort, sort_dir=sort_dir, filters=filters
     )
     summary = fetch_summary()
     chips = "".join(
-        f'<div class="chip"><strong>{n}</strong>{html.escape(st or "(null)")}</div>'
-        for st, n in summary
+        status_chip(st or "", n, active=filters.get("status") == st) for st, n in summary
     )
-    nav_extra: dict[str, str] = {"sort": sort, "dir": sort_dir, "per_page": str(pp)}
+    if summary:
+        chips += flag_chip("attention", attention_n, active=filters.get("flag") == "attention")
+    nav_extra: dict[str, str] = {"sort": sort, "dir": sort_dir, "per_page": str(pp), **filters}
     if q.strip():
         nav_extra["q"] = q
     sort_extra = {**nav_extra, "page": "1"}
@@ -392,7 +380,7 @@ def render_ledger(
             f"<td>{html.escape(str(row.get('moby_title') or ''))}</td>"
             f"<td>{actions}</td>"
             f'<td class="col-error">{err_cell}</td>'
-            f"<td>{html.escape(str(row.get('updated_at') or ''))}</td>"
+            f"<td>{html.escape(fmt_ts(row.get('updated_at')))}</td>"
             "</tr>"
         )
     pp_opts = list(pag_cfg["per_page_options"])  # type: ignore[arg-type]
@@ -406,9 +394,10 @@ def render_ledger(
     )
     inner = f"""
 <div class="summary">{chips or '<span class="muted">No ledger rows yet.</span>'}</div>
-<p class="muted"><a href="/health">Ledger health</a> — flags and attention queue.</p>
+{filter_banner(filters)}
 <form class="search-form" method="get"><input type="search" name="q" value="{html.escape(q)}"
 placeholder="Words from the title, e.g. famitsu wave dvd 2008">
+{"".join(f'<input type="hidden" name="{k}" value="{html.escape(v)}">' for k, v in filters.items())}
 <input type="hidden" name="sort" value="{html.escape(sort)}">
 <input type="hidden" name="dir" value="{html.escape(sort_dir)}">
 <input type="hidden" name="page" value="1">
@@ -435,29 +424,35 @@ def render_health(*, sort: str = "updated_at", sort_dir: str = "desc") -> bytes:
     failed_n = summary.get("failed_or_error_message") or 0
     missing_omeka = summary.get("complete_missing_omeka_item_id") or 0
     status_chips = "".join(
-        f'<div class="chip"><strong>{n}</strong>{html.escape(str(st))}</div>'
+        status_chip(str(st), n, active=False)
         for st, n in sorted(by_status.items(), key=lambda x: str(x[0]))
     )
-    flag_chips = (
-        f'<div class="chip chip-warn"><strong>{failed_n}</strong>failed or error_message</div>'
-        f'<div class="chip chip-warn"><strong>{missing_omeka}</strong>complete, no Omeka id</div>'
-    )
+    flag_chips = flag_chip("failed_or_error", failed_n) + flag_chip("no_omeka", missing_omeka)
     rows = fetch_attention_rows(connect, sort=sort, sort_dir=sort_dir)
+    with connect() as conn:
+        attention_total = ledger_attention_count(conn)
     intake_open, intake_resolved, intake_here = load_failures(connect)
     if intake_here:
         flag_chips += (
-            f'<div class="chip chip-warn"><strong>{len(intake_open)}</strong>intake failures</div>'
+            f'<a class="chip chip-warn" href="#intake-failures"><strong>{len(intake_open)}</strong>'
+            "intake failures</a>"
         )
+    if attention_total > len(rows):
+        attention_heading = f"Attention queue (showing {len(rows)} of {attention_total})"
+    else:
+        attention_heading = f"Attention queue ({attention_total})"
     inner = f"""
 <p>Same flags as Windmill <code>ledger_health_flags</code> / <code>ledger_health_attention</code>.</p>
 <h2>By status</h2>
 <div class="summary">{status_chips or '<span class="muted">Empty ledger.</span>'}</div>
 <h2>Flags</h2>
 <div class="summary">{flag_chips}</div>
-<h2>Attention queue ({len(rows)} rows, max 150)</h2>
-<p>Failed, quarantined, <code>complete</code> without <code>omeka_item_id</code>, or non-empty <code>error_message</code>.</p>
+<h2>{attention_heading}</h2>
+<p>Failed or quarantined packages, complete packages without a catalog record, and anything with an
+error. <a href="/?flag=attention">See all {attention_total} on the Ledger</a>, where you can search
+and page through them.</p>
 {_render_attention_table(rows, sort=sort, sort_dir=sort_dir)}
-<h2>Intake failures{f' ({len(intake_open)})' if intake_here else ''}</h2>
+<h2 id="intake-failures">Intake failures{f' ({len(intake_open)})' if intake_here else ''}</h2>
 {render_intake_failures(intake_open, intake_resolved, available=intake_here)}"""
     return render_page_shell(
         title="Ledger health", active="health", inner=inner, status_config=CONFIG
@@ -586,6 +581,7 @@ class Handler(BaseHTTPRequestHandler):
                     sort_dir=sort_dir,
                     page=page,
                     per_page=per_page,
+                    filters=parse_filters(qs),
                 )
             )
             return

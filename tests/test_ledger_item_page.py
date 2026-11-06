@@ -226,3 +226,7 @@ def test_row_links_point_to_item_page_without_mutating_actions() -> None:
     for bad in ("/visibility", "/quarantine", "/correct", "<form"):
         assert bad not in actions_html
     assert row_links("a", None, admin_base=ADMIN, site_base=SITE)[1] == ""
+
+
+def test_fmt_ts_parses_iso_strings() -> None:
+    assert fmt_ts("2026-11-06T13:34:59.123456+01:00") == "2026-11-06 12:34 UTC"

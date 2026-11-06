@@ -9,6 +9,11 @@ def fmt_ts(value) -> str:
     """'2026-11-06 12:34 UTC' for datetimes (naive ones are taken as UTC), '—' for None."""
     if value is None:
         return "—"
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value)
+        except ValueError:
+            return value
     if isinstance(value, datetime):
         if value.tzinfo is None:
             value = value.replace(tzinfo=timezone.utc)
