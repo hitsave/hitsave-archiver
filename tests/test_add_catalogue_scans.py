@@ -60,3 +60,27 @@ def test_ingestion_premis_is_valid_xml_with_sources() -> None:
     assert root.find(f"{P}eventType").text == "ingestion"
     assert "Omeka media 5471 (item 5470)" in root.find(f"{P}eventDetailInformation/{P}eventDetail").text
     assert root.find(f"{P}linkingObjectIdentifier/{P}linkingObjectIdentifierValue").text == "uuid-1"
+
+
+def test_rename_lines_and_inventory() -> None:
+    man = f"{'a' * 64}  data/p/x.iso\n{'c' * 64}  data/p/Scans/Title - Front.jpg\n"
+    new = m.rename_lines(man, {"data/p/Scans/Title - Front.jpg": "data/p/Scans/_DSC0011.JPG"})
+    assert new == f"{'a' * 64}  data/p/x.iso\n{'c' * 64}  data/p/Scans/_DSC0011.JPG\n"
+    with pytest.raises(ValueError):
+        m.rename_lines(man, {"data/p/missing.jpg": "data/p/y.jpg"})
+    with pytest.raises(ValueError):
+        m.rename_lines(man, {"data/p/Scans/Title - Front.jpg": "data/p/x.iso"})
+    inv = {"files": [{"path": "data/p/x.iso"}, {"path": "data/p/Scans/Title - Front.jpg"}], "summary": {"file_count": 2}}
+    out = m.renamed_inventory(inv, {"data/p/Scans/Title - Front.jpg": "data/p/Scans/_DSC0011.JPG"})
+    assert [f["path"] for f in out["files"]] == ["data/p/Scans/_DSC0011.JPG", "data/p/x.iso"]
+    assert inv["files"][1]["path"] == "data/p/Scans/Title - Front.jpg"
+
+
+def test_filename_change_premis() -> None:
+    xml = m.filename_change_premis_xml(renames={"data/p/Scans/T.jpg": "data/p/Scans/_DSC0011.JPG"}, package_id="pkg",
+                                       package_uuid="u", repository_code="hitsave", when="2026-11-06T00:00:00Z",
+                                       premis_ns="http://www.loc.gov/premis/v3", xsi_ns="http://www.w3.org/2001/XMLSchema-instance",
+                                       reason="Renamed.")
+    root = ET.fromstring(xml.split("\n", 1)[1]); P = "{http://www.loc.gov/premis/v3}"
+    assert root.find(f"{P}eventType").text == "filename change"
+    assert "data/p/Scans/T.jpg -> data/p/Scans/_DSC0011.JPG" in root.find(f"{P}eventDetailInformation/{P}eventDetail").text

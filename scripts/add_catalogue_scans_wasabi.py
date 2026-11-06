@@ -21,6 +21,13 @@ are rebuilt afterwards with refresh_bag_previews_wasabi.py.
 
 Plan (JSON list): [{"game_key": K, "prefix": optional override (scratch rehearsal), "bucket": opt,
   "files": [{"url": U, "name": "<file name>", "omeka_media_id": N, "omeka_item_id": N}]}]
+"name" should be the file's ORIGINAL uploaded name (Omeka media o:source): scans are preserved as
+they are, never renamed for presentation.
+
+Rename (--rename, plan entries carry "renames": [{"from": "data/...", "to": "data/..."}]): fixes the
+names of files this tool added (same bytes): server-side copy to the new key, verified against the
+manifest digest; manifest/inventory paths updated; PREMIS "filename change" event; tagmanifest last;
+old objects deleted only after that; bag re-checked. Payload-Oxum is unchanged.
 
 Usage (inside ingest-worker, clamd reachable; dry-run unless --execute):
   python scripts/add_catalogue_scans_wasabi.py --plan plan.json [--execute] [--no-ledger]
@@ -179,6 +186,57 @@ def ingestion_premis_xml(*, added: list[dict], package_id: str, package_uuid: st
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(root, encoding="unicode") + "\n"
 
 
+def rename_lines(manifest_text: str, renames: dict[str, str]) -> str:
+    """Change the path of manifest lines (digest unchanged). Every 'from' must exist, no 'to' may."""
+    present = parse_manifest(manifest_text)
+    for old, new in renames.items():
+        if old not in present:
+            raise ValueError(f"{old} not in manifest")
+        if new in present:
+            raise ValueError(f"{new} already in manifest")
+    out = []
+    for line in manifest_text.splitlines():
+        if not line.strip():
+            continue
+        digest, path = line.split(None, 1)
+        path = path.strip()
+        out.append(f"{digest}  {renames.get(path, path)}")
+    return "\n".join(out) + "\n"
+
+
+def renamed_inventory(inventory: dict, renames: dict[str, str]) -> dict:
+    inv = copy.deepcopy(inventory)
+    for f in inv["files"]:
+        f["path"] = renames.get(f["path"], f["path"])
+    inv["files"].sort(key=lambda x: x["path"])
+    return inv
+
+
+def filename_change_premis_xml(*, renames: dict[str, str], package_id: str, package_uuid: str,
+                               repository_code: str, when: str, premis_ns: str, xsi_ns: str, reason: str) -> str:
+    P = f"{{{premis_ns}}}"
+    root = ET.Element(f"{P}event", {"version": "3.0",
+                                     f"{{{xsi_ns}}}schemaLocation": f"{premis_ns} http://www.loc.gov/standards/premis/v3/premis.xsd"})
+    ident = ET.SubElement(root, f"{P}eventIdentifier")
+    ET.SubElement(ident, f"{P}eventIdentifierType").text = "UUID"
+    ET.SubElement(ident, f"{P}eventIdentifierValue").text = str(uuid.uuid4())
+    ET.SubElement(root, f"{P}eventType").text = "filename change"
+    ET.SubElement(root, f"{P}eventDateTime").text = when
+    detail = ET.SubElement(root, f"{P}eventDetailInformation")
+    ET.SubElement(detail, f"{P}eventDetail").text = (
+        f"{reason} Same bytes (manifest digests unchanged): " + "; ".join(f"{o} -> {n}" for o, n in renames.items()))
+    outcome = ET.SubElement(root, f"{P}eventOutcomeInformation")
+    ET.SubElement(outcome, f"{P}eventOutcome").text = "success"
+    agent = ET.SubElement(root, f"{P}linkingAgentIdentifier")
+    ET.SubElement(agent, f"{P}linkingAgentIdentifierType").text = "local"
+    ET.SubElement(agent, f"{P}linkingAgentIdentifierValue").text = f"{repository_code}:add_catalogue_scans_wasabi.py"
+    obj = ET.SubElement(root, f"{P}linkingObjectIdentifier")
+    ET.SubElement(obj, f"{P}linkingObjectIdentifierType").text = "UUID" if package_uuid else "local"
+    ET.SubElement(obj, f"{P}linkingObjectIdentifierValue").text = package_uuid or package_id
+    ET.indent(root, space="  ")
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(root, encoding="unicode") + "\n"
+
+
 # ---------------------------------------------------------------- I/O
 
 def _get(s3, bucket: str, key: str) -> bytes:
@@ -296,11 +354,66 @@ def process(entry: dict, *, s3, clamd_factory, bucket: str, prefix: str, execute
     return res
 
 
+def process_rename(entry: dict, *, s3, bucket: str, prefix: str, execute: bool, on: str) -> dict:
+    from premis_virus_check import PREMIS_NS, XSI_NS, iso_now
+
+    root = prefix.strip("/") + "/"
+    renames = {r["from"]: r["to"] for r in entry["renames"]}
+    for new in renames.values():
+        if not new.startswith("data/") or "/../" in new:
+            raise ValueError(f"bad target {new}")
+    res: dict = {"game_key": entry["game_key"], "prefix": root, "renames": renames}
+    manifest_text = _get(s3, bucket, root + MANIFEST).decode("utf-8")
+    tag_text = _get(s3, bucket, root + TAGMANIFEST).decode("utf-8")
+    inventory = json.loads(_get(s3, bucket, root + INVENTORY))
+    submission = json.loads(_get(s3, bucket, root + "metadata/submission.json"))
+    manifest = parse_manifest(manifest_text)
+    new_manifest = rename_lines(manifest_text, renames)
+    new_inventory = renamed_inventory(inventory, renames)
+    premis = f"metadata/premis/catalogue-scans-filename-change-{on}.xml"
+    if premis in parse_manifest(tag_text):
+        raise RuntimeError(f"{premis} already exists")
+    xml = filename_change_premis_xml(
+        renames=renames, package_id=str(submission.get("package_id") or entry["game_key"]),
+        package_uuid=str(submission.get("package_uuid") or ""), repository_code=str(submission.get("repository_code") or "hitsave"),
+        when=iso_now(), premis_ns=PREMIS_NS, xsi_ns=XSI_NS,
+        reason=entry.get("reason") or "Catalogue scans renamed to their original uploaded file names.")
+    tag_files = {MANIFEST: new_manifest.encode("utf-8"),
+                 INVENTORY: (json.dumps(new_inventory, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                 premis: xml.encode("utf-8")}
+    new_tag = upsert_lines(tag_text, {p: sha256_hex(b) for p, b in tag_files.items()})
+    if not execute:
+        res["status"] = "dry-run"
+        return res
+    for old, new in renames.items():          # 1. copy, verify against the manifest digest
+        s3.copy({"Bucket": bucket, "Key": root + old}, bucket, root + new)
+        if sha256_hex(_get(s3, bucket, root + new)) != manifest[old]:
+            raise RuntimeError(f"copy of {old} does not match its manifest digest")
+    types = {".txt": "text/plain", ".json": "application/json", ".xml": "application/xml"}
+    for p, b in tag_files.items():             # 2. tag files, 3. tagmanifest last
+        _put_verified(s3, bucket, root + p, b, types.get(Path(p).suffix, "application/octet-stream"))
+    _put_verified(s3, bucket, root + TAGMANIFEST, new_tag.encode("utf-8"), "text/plain")
+    for old in renames:                        # 4. only now remove the old names
+        s3.delete_object(Bucket=bucket, Key=root + old)
+    objs = [o for page in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=root + "data/")
+            for o in page.get("Contents", [])]
+    oxum = re.search(r"Payload-Oxum:\s*(\d+)\.(\d+)", _get(s3, bucket, root + BAG_INFO).decode("utf-8"))
+    if (sum(o["Size"] for o in objs), len(objs)) != (int(oxum.group(1)), int(oxum.group(2))):
+        raise RuntimeError("Payload-Oxum mismatch after rename")
+    live_tag = parse_manifest(_get(s3, bucket, root + TAGMANIFEST).decode("utf-8"))
+    for p in tag_files:
+        if live_tag.get(p) != sha256_hex(_get(s3, bucket, root + p)):
+            raise RuntimeError(f"tagmanifest line for {p} does not match")
+    res.update(status="renamed", inventory=new_inventory)
+    return res
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--plan", required=True)
     ap.add_argument("--execute", action="store_true")
     ap.add_argument("--no-ledger", action="store_true", help="don't touch the ledger (scratch rehearsals)")
+    ap.add_argument("--rename", action="store_true", help="plan entries carry 'renames' instead of 'files'")
     ap.add_argument("--report", default="")
     args = ap.parse_args()
 
@@ -337,8 +450,11 @@ def main() -> None:
                 continue
             prefix = row[0]
         try:
-            res = process(entry, s3=s3, clamd_factory=clamd_factory, bucket=bucket, prefix=prefix,
-                          execute=args.execute, on=on)
+            if args.rename:
+                res = process_rename(entry, s3=s3, bucket=bucket, prefix=prefix, execute=args.execute, on=on)
+            else:
+                res = process(entry, s3=s3, clamd_factory=clamd_factory, bucket=bucket, prefix=prefix,
+                              execute=args.execute, on=on)
         except Exception as exc:  # noqa: BLE001 - report per package, keep going
             res = {"game_key": entry["game_key"], "status": "FAILED", "error": f"{type(exc).__name__}: {exc}"}
         inv = res.pop("inventory", None)
