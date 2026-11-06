@@ -181,6 +181,28 @@ the form comes back with their changes filled in and yours kept, so you can chec
 again. If the page says it couldn't read the item from Omeka, try again in a minute, and ask an
 admin if it keeps happening.
 
+## Review hidden records
+
+New catalog records start out hidden. **Review** in the ledger's menu goes through the hidden
+records of preserved packages one at a time, oldest first, so you can check each one before it
+appears on the public site. The chips at the top narrow the queue by how the MobyGames match went:
+a **MobyGames match** is usually quickest to check; **ambiguous** and **no MobyGames match** need a
+closer look.
+
+Each record shows its title, MobyGames link, developers, publishers and description as the catalog
+has them now. **Omeka admin** opens the record there if you want to look at the files.
+
+- **Publish and next** puts the record on the public site and shows the next one. A green line
+  confirms it; a red one says why it failed, and the same record stays on screen.
+- **Skip** leaves it hidden and moves on; skipped records come round again.
+- **Correct…** opens the correction form; when the correction is done, **Back to the review
+  queue** brings you back to the same record, now with the corrected details.
+- **Quarantine…** takes it out of the archive (see [Quarantine a catalog record](#quarantine-a-catalog-record)); afterwards
+  **Back to the review queue** continues with the next record.
+
+The list of hidden records is refreshed every few minutes, so records published or hidden in the
+Omeka admin show up (or drop out) shortly after.
+
 ## Publish or hide a catalog record
 
 New catalog records are private. The item page shows whether a record is **Public** or **Private**

@@ -58,6 +58,7 @@ def _generated_dir(status_config: dict) -> str:
 def render_nav(*, active: str, status_config: dict) -> str:
     links: list[tuple[str, str, str]] = [
         ("ledger", "/", "Ledger"),
+        ("review", "/review", "Review"),
         ("health", "/health", "Health"),
         ("correct", "/correct", "Catalog correction"),
         ("quarantine", "/quarantine", "Quarantine"),

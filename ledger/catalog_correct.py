@@ -20,6 +20,7 @@ from correct_review import (
     windmill_args,
 )
 from formatting import item_href, status_badge
+from notice import back_link, local_or_empty
 from windmill_client import run_correction_via_windmill
 
 _ITEM_ID_RE = re.compile(r"/item/(\d+)(?:/|$|\?)")
@@ -110,6 +111,13 @@ what's wrong and check the changes before anything is saved.</p>
     return _shell(inner, status_config)
 
 
+def _cancel_href(values: dict[str, str], hint: dict[str, Any] | None) -> str:
+    back = local_or_empty(values.get("return_to", ""))
+    if back:
+        return back
+    return item_href(str(hint["game_key"])) if hint and hint.get("game_key") else "/"
+
+
 def render_correct_form(
     *,
     item_id: int,
@@ -143,6 +151,7 @@ before anything is saved.</p>
 {_errors(errors or [])}
 <form method="post" action="/correct">
 {_hidden("omeka_ref", str(item_id))}
+{_hidden("return_to", values.get("return_to", ""))}
 {origs}
 {text("title", "Title")}
 {text("moby_url", "MobyGames URL", "(the right game's page on mobygames.com)")}
@@ -161,7 +170,7 @@ before anything is saved.</p>
 {checkbox("execute", values.get("execute", "true") in _TRUE,
           "Update the package's details on Wasabi when the title or MobyGames link changes")}
 <div class="actions"><button type="submit" name="step" value="review">Review changes</button>
-<a href="{html.escape(item_href(str(hint["game_key"])) if hint and hint.get("game_key") else "/")}">Cancel</a></div>
+<a href="{html.escape(_cancel_href(values, hint))}">Cancel</a></div>
 </form></div>"""
     return _shell(inner, status_config)
 
@@ -206,7 +215,7 @@ def render_correct_review(
     carried = [_hidden("omeka_ref", str(item_id))]
     carried += [_hidden(f, values.get(f, "")) for f in FIELDS]
     carried += [_hidden(f"orig_{f}", orig.get(f, "")) for f in FIELDS]
-    carried += [_hidden(n, values.get(n, "")) for n in ("former_title", "correction_summary")]
+    carried += [_hidden(n, values.get(n, "")) for n in ("former_title", "correction_summary", "return_to")]
     carried.append(_hidden("execute", "true" if values.get("execute", "true") in _TRUE else "false"))
     if clear_moby:
         carried.append(_hidden("clear_moby", "true"))
@@ -226,7 +235,7 @@ def render_correct_review(
 
 
 def render_correct_result(
-    *, item_id: int, code: int, log: str, hint: dict[str, Any] | None, status_config: dict
+    *, item_id: int, code: int, log: str, hint: dict[str, Any] | None, status_config: dict, return_to: str = ""
 ) -> bytes:
     ok = code == 0
     back = (
@@ -240,7 +249,7 @@ def render_correct_result(
 <h2>{'Correction applied' if ok else 'Correction failed'}</h2>
 <pre>{html.escape(log or '(no output)')}</pre>
 </div>
-<p class="actions-row">{back} <a href="/correct?omeka_ref={item_id}">Correct this item again</a></p>
+<p class="actions-row">{back_link(return_to)} {back} <a href="/correct?omeka_ref={item_id}">Correct this item again</a></p>
 </div>"""
     return _shell(inner, status_config)
 
@@ -255,8 +264,9 @@ def _unreadable(item_id: int) -> str:
 
 
 def _values_from_form(form: dict[str, list[str]]) -> dict[str, str]:
-    names = (*FIELDS, "former_title", "correction_summary", "clear_moby", "execute")
+    names = (*FIELDS, "former_title", "correction_summary", "clear_moby", "execute", "return_to")
     values = {n: _field(form, n) for n in names}
+    values["return_to"] = local_or_empty(values["return_to"])
     values["execute"] = "true" if values["execute"] in _TRUE else "false"
     return values
 
@@ -281,7 +291,10 @@ def correct_get(
     if item is None:
         return render_correct_lookup(omeka_ref=ref, error=_unreadable(item_id), status_config=status_config)
     current = current_values(item)
-    values = dict(current, former_title="", correction_summary="", clear_moby="", execute="true")
+    values = dict(
+        current, former_title="", correction_summary="", clear_moby="", execute="true",
+        return_to=local_or_empty(_field(qs, "return_to")),
+    )
     return render_correct_form(
         item_id=item_id, current=current, values=values, hint=hint_for(str(item_id)), status_config=status_config
     )
@@ -351,4 +364,6 @@ def correct_post(
     )
     audit(str(item_id))
     code, log = run(args)
-    return render_correct_result(item_id=item_id, code=code, log=log, hint=hint, status_config=status_config)
+    return render_correct_result(
+        item_id=item_id, code=code, log=log, hint=hint, status_config=status_config, return_to=values["return_to"]
+    )

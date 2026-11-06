@@ -5,15 +5,22 @@ from __future__ import annotations
 import html
 import os
 import sys
+import threading
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse
 
 import psycopg
 import yaml
 
-from catalog_correct import correct_get, correct_post, ledger_hint_for_omeka, run_correction
+from catalog_correct import (
+    correct_get,
+    correct_post,
+    ledger_hint_for_omeka,
+    parse_omeka_item_id,
+    run_correction,
+)
 from catalog_quarantine import (
     needs_confirmation as needs_quarantine_confirmation,
     render_quarantine_page,
@@ -24,7 +31,7 @@ from catalog_visibility import run_visibility
 from ledger_health import fetch_attention_rows, fetch_health_summary
 from intake_failures import load_failures, render_intake_failures
 from item_page import fetch_item, render_item_not_found, render_item_page, row_links
-from omeka_status import fetch_item_is_public, fetch_item_json
+from omeka_status import fetch_item_is_public, fetch_item_json, fetch_private_item_ids
 
 sys.path.insert(0, str(Path("/app/scripts")))
 from ledger_health_report import (  # noqa: E402
@@ -35,6 +42,15 @@ from ledger_health_report import (  # noqa: E402
 from filters import filter_banner, flag_chip, parse_filters, status_chip  # noqa: E402
 from formatting import error_cell, fmt_ts, moby_badge, problem_text, status_badge
 from notice import render_notice, safe_return_path, visibility_message, with_notice
+from review_queue import (
+    HiddenItems,
+    next_in_queue,
+    parse_queue_args,
+    queue_counts,
+    render_review_empty,
+    render_review_page,
+    render_review_unavailable,
+)
 from site_ui import render_page_shell, set_current_notice, set_current_user
 from pagination import (
     ledger_pagination_config,
@@ -116,6 +132,33 @@ def _omeka_link_bases(cfg: dict) -> tuple[str, str]:
 
 
 ADMIN, SITE = _omeka_link_bases(CONFIG)
+
+
+HIDDEN = HiddenItems(
+    fetch_private_item_ids,
+    spawn=lambda fn: threading.Thread(target=fn, daemon=True).start(),
+)
+
+
+def render_review(qs: dict[str, list[str]]) -> bytes | str:
+    """The review queue page, or a redirect path when the shown record turned out to be public."""
+    hidden = HIDDEN.ids()
+    if hidden is None:
+        return render_review_unavailable(status_config=CONFIG)
+    moby, after = parse_queue_args(qs)
+    counts = queue_counts(connect, hidden)
+    row = next_in_queue(connect, hidden, moby=moby, after=after)
+    if row is None:
+        return render_review_empty(counts=counts, moby=moby, status_config=CONFIG)
+    item = fetch_item_json(int(row["omeka_item_id"]))
+    if item is not None and item.get("o:is_public") is True:
+        # Published elsewhere since the hidden list was read: drop it and move on.
+        HIDDEN.mark_public(int(row["omeka_item_id"]))
+        params = {k: v for k, v in (("moby", moby), ("after", str(row["id"]))) if v}
+        return "/review?" + urlencode(params)
+    return render_review_page(
+        row=row, item=item, counts=counts, moby=moby, status_config=CONFIG, admin_base=ADMIN
+    )
 
 
 def connect():
@@ -589,6 +632,15 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Location", "/health")
             self.end_headers()
             return
+        if path == "/review":
+            page = render_review(parse_qs(parsed.query))
+            if isinstance(page, str):
+                self.send_response(303)
+                self.send_header("Location", page)
+                self.end_headers()
+            else:
+                self._send_html(page)
+            return
         if path == "/item":
             game_key = (parse_qs(parsed.query).get("key") or [""])[0]
             row = fetch_item(connect, game_key) if game_key else None
@@ -693,6 +745,27 @@ class Handler(BaseHTTPRequestHandler):
                 ),
             )
             return
+        if path == "/review/publish":
+            omeka_ref = (form.get("omeka_ref") or [""])[0].strip()
+            moby, after = parse_queue_args(form)
+            item_id = parse_omeka_item_id(omeka_ref)
+            if item_id is None:
+                code, output = 1, f"Invalid omeka_ref: {omeka_ref!r}"
+            else:
+                code, output = run_visibility(omeka_ref, is_public=True)
+                audit("publish", user, omeka_ref=omeka_ref, exit=str(code), via="review")
+            if code == 0 and item_id is not None:
+                HIDDEN.mark_public(item_id)
+                nxt = after
+            else:
+                print(output, flush=True)
+                nxt = max(0, after - 1)  # show the same record again
+            kind, msg = visibility_message(omeka_ref, True, code, output)
+            params = {k: v for k, v in (("moby", moby), ("after", str(nxt) if nxt else "")) if v}
+            self.send_response(303)
+            self.send_header("Location", with_notice("/review?" + urlencode(params), kind, msg))
+            self.end_headers()
+            return
         if path == "/visibility":
             omeka_ref = (form.get("omeka_ref") or [""])[0].strip()
             is_public_raw = (form.get("is_public") or [""])[0].strip().lower()
@@ -702,6 +775,8 @@ class Handler(BaseHTTPRequestHandler):
                 audit("publish" if is_public else "hide", user, omeka_ref=omeka_ref, exit=str(code))
                 if code != 0:
                     print(output, flush=True)
+                elif (item_id := parse_omeka_item_id(omeka_ref)) is not None:
+                    (HIDDEN.mark_public if is_public else HIDDEN.mark_private)(item_id)
                 kind, msg = visibility_message(omeka_ref, is_public, code, output)
             else:
                 kind, msg = "fail", "No Omeka item given."

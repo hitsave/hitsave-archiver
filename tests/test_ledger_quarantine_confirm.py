@@ -38,3 +38,18 @@ def test_confirm_page_warns_without_ledger_row() -> None:
 def test_plain_form_has_no_confirmed_field() -> None:
     page = render_quarantine_page(form={}, hint=None).decode()
     assert 'name="confirmed"' not in page
+
+
+def test_quarantine_carries_return_to_through_confirm_and_result() -> None:
+    from catalog_quarantine import render_quarantine_page
+
+    form = {"omeka_ref": ["42"], "block_reason": ["curation_review"], "note": ["n"], "return_to": ["/review?after=3"]}
+    page = render_quarantine_page(form=form, hint=None, is_post=False, status_config={}).decode()
+    assert 'name="return_to" value="/review?after=3"' in page
+    confirm = render_quarantine_page(form=form, hint=None, is_post=True, status_config={}, confirm=True).decode()
+    assert 'name="return_to" value="/review?after=3"' in confirm
+    assert 'href="/review?after=3">Cancel' in confirm
+    done = render_quarantine_page(form=form, hint=None, result=(0, "ok"), is_post=True, status_config={}).decode()
+    assert "Back to the review queue" in done
+    evil = dict(form, return_to=["https://evil.example"])
+    assert 'name="return_to" value=""' in render_quarantine_page(form=evil, status_config={}).decode()

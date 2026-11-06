@@ -167,3 +167,16 @@ def test_failed_windmill_run_shows_failure() -> None:
     form["title"] = ["Foo Deluxe"]
     page = _post(_hidden(_post(form, "review", fakes)), "apply", fakes)
     assert "Correction failed" in page and "Omeka 500" in page
+
+
+def test_return_to_is_carried_to_the_result_and_must_be_local() -> None:
+    fakes = Fakes()
+    page = _get({"omeka_ref": ["42"], "return_to": ["/review?moby=ok&after=11"]}, fakes)
+    form = _hidden(page)
+    assert form["return_to"] == ["/review?moby=ok&after=11"]
+    assert 'href="/review?moby=ok&amp;after=11">Cancel' in page
+    form["title"] = ["Foo Deluxe"]
+    result = _post(_hidden(_post(form, "review", fakes)), "apply", fakes)
+    assert 'href="/review?moby=ok&amp;after=11">Back to the review queue</a>' in result
+    evil = _hidden(_get({"omeka_ref": ["42"], "return_to": ["//evil.example/x"]}, fakes))
+    assert evil["return_to"] == [""]
