@@ -711,3 +711,89 @@ th.col-links, th.col-time,
 td.col-links, td.col-time {
   white-space: nowrap;
 }
+
+/* Correction form: review table and secondary actions */
+button.btn-secondary {
+  background: transparent;
+  color: var(--hs-content-fg);
+  border-color: var(--hs-border-strong);
+  margin-left: 0.5rem;
+}
+
+.actions a {
+  margin-left: 0.75rem;
+}
+
+table.diff th[scope="row"] {
+  white-space: nowrap;
+  width: 9rem;
+}
+
+table.diff td {
+  width: 45%;
+  vertical-align: top;
+}
+
+table.diff .diff-val {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 16rem;
+  overflow: auto;
+}
+
+table.diff td.diff-before .diff-val {
+  color: var(--hs-muted);
+}
+
+table.diff td.diff-after .diff-val {
+  color: var(--hs-ok);
+}
+
+details.form-more {
+  margin-top: 1.25rem;
+}
+
+details.form-more > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+label.field input[type="checkbox"] {
+  display: inline-block;
+  width: auto;
+  margin: 0 0.45rem 0 0;
+  vertical-align: middle;
+}
+
+table.diff tbody th[scope="row"] {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.9rem;
+  color: var(--hs-content-fg);
+}
+
+@media (max-width: 640px) {
+  table.diff thead {
+    display: none;
+  }
+
+  table.diff tr,
+  table.diff tbody th[scope="row"],
+  table.diff td {
+    display: block;
+    width: auto;
+  }
+
+  table.diff td::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.75rem;
+    color: var(--hs-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+}
+
+.result > h2 {
+  margin-top: 0;
+}

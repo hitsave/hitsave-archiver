@@ -13,12 +13,7 @@ from urllib.parse import parse_qs, urlparse
 import psycopg
 import yaml
 
-from catalog_correct import (
-    ledger_hint_for_omeka,
-    render_correct_page,
-    run_correction,
-    validate_and_job_args,
-)
+from catalog_correct import correct_get, correct_post, ledger_hint_for_omeka, run_correction
 from catalog_quarantine import (
     needs_confirmation as needs_quarantine_confirmation,
     render_quarantine_page,
@@ -29,7 +24,7 @@ from catalog_visibility import run_visibility
 from ledger_health import fetch_attention_rows, fetch_health_summary
 from intake_failures import load_failures, render_intake_failures
 from item_page import fetch_item, render_item_not_found, render_item_page, row_links
-from omeka_status import fetch_item_is_public
+from omeka_status import fetch_item_is_public, fetch_item_json
 
 sys.path.insert(0, str(Path("/app/scripts")))
 from ledger_health_report import (  # noqa: E402
@@ -620,13 +615,14 @@ class Handler(BaseHTTPRequestHandler):
             self._send_html(render_logs())
             return
         if path == "/correct":
-            form = parse_qs(parsed.query, keep_blank_values=True)
-            omeka_ref = (form.get("omeka_ref") or [""])[0]
-            hint = ledger_hint_for_omeka(connect, omeka_ref) if omeka_ref else None
+            qs = parse_qs(parsed.query, keep_blank_values=True)
             self._send_html(
-                render_correct_page(
-                    form=form, hint=hint, is_post=False, status_config=CONFIG
-                ),
+                correct_get(
+                    qs,
+                    fetch_item=fetch_item_json,
+                    hint_for=lambda ref: ledger_hint_for_omeka(connect, ref),
+                    status_config=CONFIG,
+                )
             )
             return
         if path == "/quarantine":
@@ -654,27 +650,17 @@ class Handler(BaseHTTPRequestHandler):
         set_current_user(user)
         set_current_notice("")
         if path == "/correct":
-            _tag_note(form, "correction_summary", user)
-            job_args, errors, values = validate_and_job_args(form, is_post=True)
-            hint = ledger_hint_for_omeka(connect, values.get("omeka_ref", ""))
-            result = None
-            if not errors and job_args is not None:
-                audit("correct", user, omeka_ref=values.get("omeka_ref", ""))
-                result = run_correction(CONFIG.get("ops") or {}, job_args)
-                if result[0] != 0:
-                    errors.append("Windmill correction job failed (see output below).")
-            display_form = dict(form)
-            if "description" not in display_form:
-                display_form["description"] = [values.get("description", "")]
+            if (form.get("step") or [""])[0] == "apply":
+                _tag_note(form, "correction_summary", user)
             self._send_html(
-                render_correct_page(
-                    form=display_form,
-                    hint=hint,
-                    errors=errors,
-                    result=result,
-                    is_post=True,
+                correct_post(
+                    form,
+                    fetch_item=fetch_item_json,
+                    hint_for=lambda ref: ledger_hint_for_omeka(connect, ref),
+                    run=lambda args: run_correction(CONFIG.get("ops") or {}, args),
+                    audit=lambda ref: audit("correct", user, omeka_ref=ref),
                     status_config=CONFIG,
-                ),
+                )
             )
             return
         if path == "/quarantine":
