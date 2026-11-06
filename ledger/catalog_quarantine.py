@@ -9,6 +9,7 @@ from urllib.parse import urlencode
 
 from catalog_correct import ledger_hint_for_omeka, parse_omeka_item_id
 from formatting import item_href
+from notice import back_link, local_or_empty
 
 SCRIPT = Path("/app/scripts/curation-quarantine-omeka.py")
 
@@ -73,7 +74,8 @@ def _render_confirm(form: dict[str, list[str]], hint: dict[str, Any] | None) -> 
     hidden = "".join(
         f'<input type="hidden" name="{name}" value="{html.escape(_field(form, name))}">'
         for name in ("omeka_ref", "block_reason", "note")
-    )
+    ) + f'<input type="hidden" name="return_to" value="{html.escape(local_or_empty(_field(form, "return_to")))}">'
+    cancel = local_or_empty(_field(form, "return_to")) or cancel
     return f"""<div class="panel panel-danger">
 <h2>Quarantine this record?</h2>
 {record}
@@ -184,6 +186,8 @@ def render_quarantine_page(
 <h2>{'Quarantined' if code == 0 else 'Failed'} (exit {code})</h2>
 <pre>{html.escape(log or '(no output)')}</pre>
 </div>"""
+        if code == 0 and back_link(_field(form, "return_to")):
+            result_block += f'<p class="actions-row">{back_link(_field(form, "return_to"))}</p>'
 
     hint_block = ""
     if hint:
@@ -200,6 +204,7 @@ and hides the Omeka item and DIP media from the public site. You'll be asked to 
 {err_block}
 {result_block}
 <form method="post" action="/quarantine">
+<input type="hidden" name="return_to" value="{html.escape(local_or_empty(_field(form, "return_to")))}">
 <label class="field">Omeka item id or URL <span class="hint-inline">(required)</span>
 <input type="text" name="omeka_ref" value="{val('omeka_ref')}" required></label>
 <label class="field">block_reason

@@ -59,3 +59,40 @@ def fetch_item_is_public(
     data = fetch_item_json(item_id, get=get, config_root=config_root)
     value = data.get("o:is_public") if data else None
     return value if isinstance(value, bool) else None
+
+
+def fetch_private_item_ids(
+    *,
+    get: Callable | None = None,
+    config_root: Path | None = None,
+    per_page: int = 1000,
+    max_pages: int = 50,
+) -> set[int] | None:
+    """Ids of every hidden (o:is_public = false) Omeka item, or None when Omeka can't be read."""
+    try:
+        base, creds = _api_settings(config_root or _default_config_root())
+        if get is None:
+            import requests
+
+            get = requests.get
+        ids: set[int] = set()
+        for page in range(1, max_pages + 1):
+            params = {
+                "key_identity": creds["key_identity"],
+                "key_credential": creds["key_credential"],
+                "is_public": "0",
+                "per_page": per_page,
+                "page": page,
+            }
+            resp = get(f"{base}/items", params=params, headers={"Accept": "application/json"}, timeout=60)
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            if not isinstance(data, list):
+                return None
+            if not data:
+                break
+            ids.update(int(i["o:id"]) for i in data if isinstance(i, dict) and "o:id" in i)
+        return ids
+    except Exception:  # noqa: BLE001 - callers show "couldn't read Omeka" instead
+        return None

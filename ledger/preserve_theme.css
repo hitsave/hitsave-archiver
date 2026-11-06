@@ -713,7 +713,8 @@ td.col-links, td.col-time {
 }
 
 /* Correction form: review table and secondary actions */
-button.btn-secondary {
+button.btn-secondary,
+a.btn-secondary {
   background: transparent;
   color: var(--hs-content-fg);
   border-color: var(--hs-border-strong);
@@ -796,4 +797,67 @@ table.diff tbody th[scope="row"] {
 
 .result > h2 {
   margin-top: 0;
+}
+
+/* Review queue */
+a.btn-secondary {
+  display: inline-block;
+  padding: 0.5rem 1.1rem;
+  border: 1px solid var(--hs-border-strong);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.review-card > h2 {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 1.35rem;
+}
+
+table.review-kv th[scope="row"] {
+  width: 9rem;
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.review-desc {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 22rem;
+  overflow: auto;
+}
+
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-top: 1.25rem;
+}
+
+.review-actions a,
+.review-actions button.btn-secondary {
+  margin: 0;
+}
+
+table.review-kv {
+  width: 100%;
+}
+
+table.review-kv td {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  table.review-kv tr,
+  table.review-kv th[scope="row"],
+  table.review-kv td {
+    display: block;
+    width: auto;
+  }
+
+  table.review-kv th[scope="row"] {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
 }

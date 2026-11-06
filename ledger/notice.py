@@ -44,3 +44,18 @@ def visibility_message(item_ref: str, is_public: bool, code: int, output: str) -
     reason = lines[-1] if lines else "no output from the visibility script."
     verb = "publish" if is_public else "hide"
     return "fail", f"Couldn't {verb} item {item_ref}: {reason}"
+
+
+def local_or_empty(path: str) -> str:
+    """`path` if it's a local path (safe to link or redirect to), else ''."""
+    path = (path or "").strip()
+    return path if _is_local(path) else ""
+
+
+def back_link(return_to: str) -> str:
+    """'Back to …' link for a page opened from somewhere else in the ledger ('' when not)."""
+    path = local_or_empty(return_to)
+    if not path:
+        return ""
+    label = "Back to the review queue" if path.startswith("/review") else "Go back"
+    return f'<a href="{html.escape(path)}">{label}</a>'
