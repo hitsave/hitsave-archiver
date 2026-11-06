@@ -8,7 +8,7 @@ import sys
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import parse_qs, urlparse
 
 import psycopg
 import yaml
@@ -20,6 +20,7 @@ from catalog_correct import (
     validate_and_job_args,
 )
 from catalog_quarantine import (
+    needs_confirmation as needs_quarantine_confirmation,
     render_quarantine_page,
     run_quarantine,
     validate_and_argv as validate_quarantine_argv,
@@ -27,6 +28,8 @@ from catalog_quarantine import (
 from catalog_visibility import run_visibility
 from ledger_health import fetch_attention_rows, fetch_health_summary
 from intake_failures import load_failures, render_intake_failures
+from item_page import fetch_item, render_item_not_found, render_item_page, row_links
+from omeka_status import fetch_item_is_public
 
 sys.path.insert(0, str(Path("/app/scripts")))
 from ledger_health_report import (  # noqa: E402
@@ -35,7 +38,8 @@ from ledger_health_report import (  # noqa: E402
     ledger_search,
     ledger_search_count,
 )
-from site_ui import render_page_shell, set_current_user
+from notice import render_notice, safe_return_path, visibility_message, with_notice
+from site_ui import render_page_shell, set_current_notice, set_current_user
 from pagination import (
     ledger_pagination_config,
     parse_page,
@@ -189,34 +193,6 @@ def fetch_ledger_page(
     return rows, total, eff_page
 
 
-def _action_links(item_id) -> list[str]:
-    links: list[str] = []
-    if not item_id:
-        return links
-    admin = f"{ADMIN}/item/{item_id}/show"
-    public = f"{SITE}/item/{item_id}"
-    correct = f"/correct?{urlencode({'omeka_ref': str(item_id)})}"
-    quarantine = f"/quarantine?{urlencode({'omeka_ref': str(item_id)})}"
-    links.append(f'<a href="{html.escape(admin)}">admin</a>')
-    links.append(f'<a href="{html.escape(public)}">site</a>')
-    links.append(f'<a href="{html.escape(correct)}">correct</a>')
-    links.append(f'<a href="{html.escape(quarantine)}">quarantine</a>')
-    ref = html.escape(str(item_id))
-    links.append(
-        f'<form method="post" action="/visibility" class="inline-form">'
-        f'<input type="hidden" name="omeka_ref" value="{ref}">'
-        f'<input type="hidden" name="is_public" value="true">'
-        f'<button type="submit" class="linkish">publish</button></form>'
-    )
-    links.append(
-        f'<form method="post" action="/visibility" class="inline-form">'
-        f'<input type="hidden" name="omeka_ref" value="{ref}">'
-        f'<input type="hidden" name="is_public" value="false">'
-        f'<button type="submit" class="linkish">hide</button></form>'
-    )
-    return links
-
-
 def _render_attention_table(
     rows: list[dict],
     *,
@@ -273,15 +249,17 @@ def _render_attention_table(
     )
     trs = []
     for row in rows:
-        item_id = row.get("omeka_item_id")
+        key_cell, actions = row_links(
+            str(row.get("game_key") or ""), row.get("omeka_item_id"), admin_base=ADMIN, site_base=SITE
+        )
         err = row.get("error_message")
         trs.append(
             "<tr>"
-            f"<td>{html.escape(str(row.get('game_key') or ''))}</td>"
+            f"<td>{key_cell}</td>"
             f"<td>{html.escape(str(row.get('status') or ''))}</td>"
             f'<td class="col-error err">{html.escape(str(err or ""))}</td>'
             f"<td>{html.escape(str(row.get('block_reason') or ''))}</td>"
-            f"<td>{' '.join(_action_links(item_id))}</td>"
+            f"<td>{actions}</td>"
             f"<td>{html.escape(str(row.get('updated_at') or ''))}</td>"
             "</tr>"
         )
@@ -399,18 +377,20 @@ def render_ledger(
     )
     trs = []
     for row in rows:
-        item_id = row.get("omeka_item_id")
+        key_cell, actions = row_links(
+            str(row.get("game_key") or ""), row.get("omeka_item_id"), admin_base=ADMIN, site_base=SITE
+        )
         err = row.get("error_message")
         err_cell = (
             f'<span class="err">{html.escape(str(err))}</span>' if err else ""
         )
         trs.append(
             "<tr>"
-            f"<td>{html.escape(str(row.get('game_key') or ''))}</td>"
+            f"<td>{key_cell}</td>"
             f"<td>{html.escape(str(row.get('status') or ''))}</td>"
             f"<td>{html.escape(str(row.get('moby_status') or ''))}</td>"
             f"<td>{html.escape(str(row.get('moby_title') or ''))}</td>"
-            f"<td>{' '.join(_action_links(item_id))}</td>"
+            f"<td>{actions}</td>"
             f'<td class="col-error">{err_cell}</td>'
             f"<td>{html.escape(str(row.get('updated_at') or ''))}</td>"
             "</tr>"
@@ -576,6 +556,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         set_current_user(forwarded_user(self.headers))
         parsed = urlparse(self.path)
+        set_current_notice(render_notice(parse_qs(parsed.query)))
         path = parsed.path.rstrip("/") or "/"
         if path == "/healthz":
             body = b"ok\n"
@@ -621,6 +602,20 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Location", "/health")
             self.end_headers()
             return
+        if path == "/item":
+            game_key = (parse_qs(parsed.query).get("key") or [""])[0]
+            row = fetch_item(connect, game_key) if game_key else None
+            if row is None:
+                self._send_html(render_item_not_found(game_key, status_config=CONFIG), status=404)
+                return
+            item_id = row.get("omeka_item_id")
+            is_public = fetch_item_is_public(int(item_id)) if item_id else None
+            self._send_html(
+                render_item_page(
+                    row, admin_base=ADMIN, site_base=SITE, is_public=is_public, status_config=CONFIG
+                )
+            )
+            return
         if path == "/ops":
             self._send_html(render_ops())
             return
@@ -665,6 +660,7 @@ class Handler(BaseHTTPRequestHandler):
         form = self._read_form()
         user = forwarded_user(self.headers)
         set_current_user(user)
+        set_current_notice("")
         if path == "/correct":
             _tag_note(form, "correction_summary", user)
             job_args, errors, values = validate_and_job_args(form, is_post=True)
@@ -690,10 +686,19 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         if path == "/quarantine":
-            _tag_note(form, "note", user)
+            confirming = needs_quarantine_confirmation(form)
+            if not confirming:
+                _tag_note(form, "note", user)
             argv, errors, values = validate_quarantine_argv(form, is_post=True)
             hint = ledger_hint_for_omeka(connect, values.get("omeka_ref", ""))
             result = None
+            if not errors and argv and confirming:
+                self._send_html(
+                    render_quarantine_page(
+                        form=form, hint=hint, is_post=True, status_config=CONFIG, confirm=True
+                    ),
+                )
+                return
             if not errors and argv:
                 audit("quarantine", user, omeka_ref=values.get("omeka_ref", ""))
                 result = run_quarantine(argv)
@@ -715,15 +720,18 @@ class Handler(BaseHTTPRequestHandler):
             is_public_raw = (form.get("is_public") or [""])[0].strip().lower()
             is_public = is_public_raw in ("true", "1", "yes", "on")
             if omeka_ref:
-                audit("publish" if is_public else "hide", user, omeka_ref=omeka_ref)
-                run_visibility(omeka_ref, is_public=is_public)
+                code, output = run_visibility(omeka_ref, is_public=is_public)
+                audit("publish" if is_public else "hide", user, omeka_ref=omeka_ref, exit=str(code))
+                if code != 0:
+                    print(output, flush=True)
+                kind, msg = visibility_message(omeka_ref, is_public, code, output)
+            else:
+                kind, msg = "fail", "No Omeka item given."
+            back = safe_return_path(
+                (form.get("return_to") or [""])[0], self.headers.get("Referer") or ""
+            )
             self.send_response(303)
-            back = (form.get("return_to") or [""])[0].strip()
-            if not back.startswith("/"):
-                referer = (self.headers.get("Referer") or "").strip()
-                ref_path = urlparse(referer).path if referer else "/"
-                back = ref_path if ref_path.startswith("/") else "/"
-            self.send_header("Location", back)
+            self.send_header("Location", with_notice(back, kind, msg))
             self.end_headers()
             return
         self.send_response(404)

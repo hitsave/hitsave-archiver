@@ -5,8 +5,10 @@ import html
 import subprocess
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 from catalog_correct import ledger_hint_for_omeka, parse_omeka_item_id
+from formatting import item_href
 
 SCRIPT = Path("/app/scripts/curation-quarantine-omeka.py")
 
@@ -44,6 +46,48 @@ def validate_quarantine_form(
         "note": note,
     }
     return values, errors
+
+
+def needs_confirmation(form: dict[str, list[str]]) -> bool:
+    """Quarantine runs only on the second POST, from the confirm screen."""
+    return _field(form, "confirmed") != "yes"
+
+
+def _render_confirm(form: dict[str, list[str]], hint: dict[str, Any] | None) -> str:
+    reason = _field(form, "block_reason") or "curation_review"
+    reason_label = dict(BLOCK_REASONS).get(reason, reason)
+    if hint:
+        key = str(hint.get("game_key") or "")
+        record = (
+            f"<p><strong>{html.escape(str(hint.get('moby_title') or key))}</strong><br>"
+            f"<code>{html.escape(key)}</code> · Omeka item {html.escape(str(hint.get('omeka_item_id') or ''))}"
+            f" · status {html.escape(str(hint.get('status') or ''))}</p>"
+        )
+        cancel = item_href(key)
+    else:
+        record = (
+            '<div class="errors"><p>No ledger row has this Omeka item '
+            f"(<code>{html.escape(_field(form, 'omeka_ref'))}</code>). Check the id before you go on.</p></div>"
+        )
+        cancel = "/quarantine?" + urlencode({"omeka_ref": _field(form, "omeka_ref")})
+    hidden = "".join(
+        f'<input type="hidden" name="{name}" value="{html.escape(_field(form, name))}">'
+        for name in ("omeka_ref", "block_reason", "note")
+    )
+    return f"""<div class="panel panel-danger">
+<h2>Quarantine this record?</h2>
+{record}
+<p>Reason: <code>{html.escape(reason_label)}</code></p>
+<p>Note: {html.escape(_field(form, "note"))}</p>
+<p>The catalog record and its media disappear from the public site, and the archive stops
+processing this package. The package on Wasabi stays as it is. Only an admin can release a
+record from quarantine.</p>
+<form method="post" action="/quarantine">
+{hidden}
+<input type="hidden" name="confirmed" value="yes">
+<div class="actions"><button type="submit" class="btn-danger" data-busy="Quarantining…">Yes, quarantine</button>
+<a href="{html.escape(cancel)}">Cancel</a></div>
+</form></div>"""
 
 
 def build_argv(values: dict[str, str]) -> list[str]:
@@ -95,9 +139,19 @@ def render_quarantine_page(
     result: tuple[int, str] | None = None,
     is_post: bool = False,
     status_config: dict | None = None,
+    confirm: bool = False,
 ) -> bytes:
     form = form or {}
     errors = errors or []
+    if confirm:
+        from site_ui import render_page_shell
+
+        return render_page_shell(
+            title="Quarantine catalog item",
+            active="quarantine",
+            inner=_render_confirm(form, hint),
+            status_config=status_config or {},
+        )
 
     def val(name: str, default: str = "") -> str:
         if name in form:
@@ -141,7 +195,7 @@ def render_quarantine_page(
 
     inner = f"""<div class="panel">
 <p>Sets ledger <code>status=quarantine</code>, records <code>block_reason</code> and a note,
-and hides the Omeka item and DIP media from the public site. Irreversible from this UI — use Omeka admin to re-publish if needed.</p>
+and hides the Omeka item and DIP media from the public site. You'll be asked to confirm first.</p>
 {hint_block}
 {err_block}
 {result_block}
@@ -152,7 +206,7 @@ and hides the Omeka item and DIP media from the public site. Irreversible from t
 <select name="block_reason">{reason_options}</select></label>
 <label class="field">Curation note <span class="hint-inline">(required)</span>
 <textarea name="note" required>{val('note')}</textarea></label>
-<div class="actions"><button type="submit">Quarantine item</button></div>
+<div class="actions"><button type="submit" class="btn-danger">Quarantine item…</button></div>
 </form></div>"""
     cfg = status_config or {}
     return render_page_shell(

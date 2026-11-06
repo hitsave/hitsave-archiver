@@ -214,7 +214,7 @@ Omeka and optional Wasabi bag updates run on the hitsave worker.</p>
 <textarea name="correction_summary">{val('correction_summary')}</textarea></label>
 <label class="field"><input type="checkbox" name="execute" value="true"{" checked" if execute_checked else ""}>
  Upload bag metadata to Wasabi when title or Moby URL changes</label>
-<div class="actions"><button type="submit">Apply correction</button></div>
+<div class="actions"><button type="submit" data-busy="Running…">Apply correction</button></div>
 </form></div>"""
     cfg = status_config or {}
     return render_page_shell(title="Correct catalog metadata", active="correct", inner=inner, status_config=cfg)

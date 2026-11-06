@@ -20,6 +20,28 @@ def current_user() -> str:
     return getattr(_REQUEST, "user", "")
 
 
+def set_current_notice(notice_html: str) -> None:
+    """Already-rendered notice (notice.render_notice) for the request on this thread."""
+    _REQUEST.notice = notice_html or ""
+
+
+def current_notice() -> str:
+    return getattr(_REQUEST, "notice", "")
+
+
+# Optional enhancement: a submit button with data-busy shows that text and can't be clicked twice
+# while the server runs the action. Forms still work without JavaScript.
+_BUSY_SCRIPT = """<script>
+document.addEventListener("submit", function (e) {
+  if (e.defaultPrevented) return;
+  var b = e.target.querySelector("button[data-busy]");
+  if (!b) return;
+  if (b.disabled) { e.preventDefault(); return; }
+  setTimeout(function () { b.disabled = true; b.textContent = b.dataset.busy; }, 0);
+});
+</script>"""
+
+
 @lru_cache(maxsize=1)
 def _theme_css() -> str:
     if _THEME_PATH.is_file():
@@ -98,10 +120,12 @@ def render_page_shell(*, title: str, active: str, inner: str, status_config: dic
 </header>
 <main class="page">
 <h1>{html.escape(title)}</h1>
+{current_notice()}
 {inner}
 </main>
 <footer class="site-footer">
 <p>{f'Batch logs: <code>{gen}</code> · ' if Path(_generated_dir(status_config)).is_dir() else ''}MobyGames fields where shown: Data by MobyGames.com</p>
 </footer>
+{_BUSY_SCRIPT}
 </body></html>"""
     return doc.encode("utf-8")
