@@ -220,10 +220,11 @@ def _render_attention_table(
                 current_dir=sort_dir,
                 extra=extra,
             ),
-            "<th>Actions</th>",
+            '<th class="col-links">Omeka</th>',
             sort_header_link(
                 label="Updated",
                 col="updated_at",
+                th_class="col-time",
                 base_path=base_path,
                 current_sort=sort,
                 current_dir=sort_dir,
@@ -242,8 +243,8 @@ def _render_attention_table(
             f"<td>{status_badge(row.get('status'))}</td>"
             f'<td class="col-error">{error_cell(row.get("error_message"))}</td>'
             f"<td>{html.escape(str(row.get('block_reason') or ''))}</td>"
-            f"<td>{actions}</td>"
-            f"<td>{html.escape(fmt_ts(row.get('updated_at')))}</td>"
+            f'<td class="col-links">{actions}</td>'
+            f'<td class="col-time">{html.escape(fmt_ts(row.get("updated_at")))}</td>'
             "</tr>"
         )
     return f"""
@@ -341,7 +342,7 @@ def render_ledger(
                 current_dir=sort_dir,
                 extra=sort_extra,
             ),
-            "<th>Omeka</th>",
+            '<th class="col-links">Omeka</th>',
             sort_header_link(
                 label="Error",
                 col="error_message",
@@ -354,6 +355,7 @@ def render_ledger(
             sort_header_link(
                 label="Updated",
                 col="updated_at",
+                th_class="col-time",
                 base_path="/",
                 current_sort=sort,
                 current_dir=sort_dir,
@@ -372,9 +374,9 @@ def render_ledger(
             f"<td>{status_badge(row.get('status'))}</td>"
             f"<td>{moby_badge(row.get('moby_status'))}</td>"
             f"<td>{html.escape(str(row.get('moby_title') or ''))}</td>"
-            f"<td>{actions}</td>"
+            f'<td class="col-links">{actions}</td>'
             f'<td class="col-error">{error_cell(row.get("error_message"))}</td>'
-            f"<td>{html.escape(fmt_ts(row.get('updated_at')))}</td>"
+            f'<td class="col-time">{html.escape(fmt_ts(row.get("updated_at")))}</td>'
             "</tr>"
         )
     pp_opts = list(pag_cfg["per_page_options"])  # type: ignore[arg-type]

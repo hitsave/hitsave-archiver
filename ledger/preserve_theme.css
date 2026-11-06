@@ -223,7 +223,7 @@ a:focus-visible {
 
 th.col-error,
 td.col-error {
-  min-width: 22rem;
+  min-width: 16rem;
   width: 38%;
   max-width: 52rem;
 }
@@ -703,5 +703,11 @@ details.err-more > pre.err {
 }
 
 td .badge {
+  white-space: nowrap;
+}
+
+/* Keep "admin ↗ site ↗" and timestamps on one line */
+th.col-links, th.col-time,
+td.col-links, td.col-time {
   white-space: nowrap;
 }
