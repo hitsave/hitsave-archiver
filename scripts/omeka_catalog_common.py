@@ -98,6 +98,11 @@ def resolve_dump_item_set_id(
     )
 
 
+def merged_item_sets(automated: int, existing: list[int]) -> list[int]:
+    """[automated] + existing sets in their current order, without duplicates."""
+    return [automated] + [s for s in dict.fromkeys(existing) if s != automated]
+
+
 def apply_item_item_sets(
     session: requests.Session,
     base: str,
@@ -107,7 +112,12 @@ def apply_item_item_sets(
     *,
     api: Any,
 ) -> None:
-    """Replace item set membership (Omeka REST PATCH appends by default)."""
+    """Put item_set_ids first, keeping every other set the item already has (full-item PUT).
+
+    Registration owns its configured set(s); sets an admin added by hand (e.g. Famitsu Wave on
+    Famitsu Wave DVDs, next to the automated Coverdiscs set) must survive a re-register.
+    Re-running with a different configured set leaves the old one in place: remove it by hand.
+    """
     get_url = api.api_url(base, f"items/{item_id}", creds)
     resp = session.get(get_url, headers={"Accept": "application/ld+json"}, timeout=120)
     if not resp.ok:
@@ -116,7 +126,12 @@ def apply_item_item_sets(
         )
     item_body = resp.json()
     put_body = {k: v for k, v in item_body.items() if not str(k).startswith("@")}
-    put_body["o:item_set"] = [{"o:id": sid} for sid in item_set_ids]
+    existing = [int(s["o:id"]) for s in item_body.get("o:item_set") or [] if s.get("o:id") is not None]
+    ordered = list(item_set_ids)
+    for sid in existing:
+        if sid not in ordered:
+            ordered.append(sid)
+    put_body["o:item_set"] = [{"o:id": sid} for sid in ordered]
     put_url = api.api_url(base, f"items/{item_id}", creds)
     put = session.put(
         put_url,
