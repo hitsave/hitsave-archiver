@@ -33,15 +33,33 @@ GROUP BY status
 ORDER BY status
 """
 
-FAILED_OR_ERROR_SQL = """
+# Named row conditions shared by the health counts, the attention queue and the ledger app's
+# ?flag= filter, so a count and the rows behind it can't drift apart. name -> (SQL, label).
+FLAG_CONDITIONS: dict[str, tuple[str, str]] = {
+    "failed_or_error": (
+        "(status = 'failed' OR (error_message IS NOT NULL AND error_message <> ''))",
+        "failed or has an error",
+    ),
+    "no_omeka": (
+        "(omeka_item_id IS NULL AND status = 'complete')",
+        "complete, no catalog record",
+    ),
+    "attention": (
+        "(status IN ('failed', 'quarantine')"
+        " OR (status = 'complete' AND omeka_item_id IS NULL)"
+        " OR (error_message IS NOT NULL AND error_message <> ''))",
+        "needs attention",
+    ),
+}
+
+FAILED_OR_ERROR_SQL = f"""
 SELECT COUNT(*)::int FROM game_ingest
-WHERE status = 'failed'
-   OR (error_message IS NOT NULL AND error_message <> '')
+WHERE {FLAG_CONDITIONS["failed_or_error"][0]}
 """
 
-COMPLETE_MISSING_OMEKA_SQL = """
+COMPLETE_MISSING_OMEKA_SQL = f"""
 SELECT COUNT(*)::int FROM game_ingest
-WHERE omeka_item_id IS NULL AND status = 'complete'
+WHERE {FLAG_CONDITIONS["no_omeka"][0]}
 """
 
 LEDGER_SORT_COLUMNS: dict[str, str] = {
@@ -92,15 +110,29 @@ def search_where(query: str) -> tuple[str, tuple[str, ...]]:
         return "TRUE", ()
     cond = " AND ".join(f"{SEARCH_HAYSTACK} LIKE %s" for _ in terms)
     return cond, tuple(f"% {t}%" for t in terms)
+def ledger_where(query: str, *, status: str = "", flag: str = "") -> tuple[str, tuple[str, ...]]:
+    """Search terms AND an exact status AND a named flag (unknown flags are ignored)."""
+    parts: list[str] = []
+    binds: tuple[str, ...] = ()
+    cond, terms = search_where(query)
+    if terms:
+        parts.append(cond)
+        binds += terms
+    if status:
+        parts.append("status = %s")
+        binds += (status,)
+    if flag in FLAG_CONDITIONS:
+        parts.append(FLAG_CONDITIONS[flag][0])
+    return (" AND ".join(parts) if parts else "TRUE"), binds
+
+
 LEDGER_COUNT_SQL = "SELECT COUNT(*)::int FROM game_ingest"
 
-ATTENTION_SELECT = """
+ATTENTION_SELECT = f"""
 SELECT game_key, status, ingest_kind, moby_status, block_reason,
        omeka_item_id, moby_title, source_path, error_message, updated_at
 FROM game_ingest
-WHERE status IN ('failed', 'quarantine')
-   OR (status = 'complete' AND omeka_item_id IS NULL)
-   OR (error_message IS NOT NULL AND error_message <> '')
+WHERE {FLAG_CONDITIONS["attention"][0]}
 """
 
 # Windmill / docs: full attention query (default sort).
@@ -186,10 +218,16 @@ def ledger_summary(conn) -> dict[str, Any]:
     }
 
 
-def ledger_search_count(conn, query: str) -> int:
-    cond, binds = search_where(query)
+def ledger_search_count(conn, query: str, *, status: str = "", flag: str = "") -> int:
+    cond, binds = ledger_where(query, status=status, flag=flag)
     with conn.cursor() as cur:
         cur.execute(f"SELECT COUNT(*)::int FROM game_ingest WHERE {cond}", binds)
+        return int(cur.fetchone()[0])
+
+
+def ledger_attention_count(conn) -> int:
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT COUNT(*)::int FROM game_ingest WHERE {FLAG_CONDITIONS['attention'][0]}")
         return int(cur.fetchone()[0])
 
 
@@ -208,8 +246,10 @@ def ledger_search(
     log: bool = True,
     sort: str | None = None,
     sort_dir: str | None = None,
+    status: str = "",
+    flag: str = "",
 ) -> list[dict[str, Any]]:
-    cond, binds = search_where(query)
+    cond, binds = ledger_where(query, status=status, flag=flag)
     order = ledger_order_sql(sort or "updated_at", sort_dir or "desc")
     sql = SEARCH_COLUMNS.strip() + f"\nWHERE {cond}\n{order}\nLIMIT %s OFFSET %s\n"
     params = binds + (limit, offset)

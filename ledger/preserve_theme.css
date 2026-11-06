@@ -309,7 +309,8 @@ code {
   margin: 1rem 0;
 }
 
-.search-form input[type="text"] {
+.search-form input[type="text"],
+.search-form input[type="search"] {
   flex: 1 1 16rem;
   min-width: 12rem;
   max-width: 36rem;
@@ -650,4 +651,30 @@ table.kv td pre {
 
 .panel > h2:first-child {
   margin-top: 0;
+}
+
+/* Chips that filter the ledger */
+a.chip {
+  color: var(--hs-content-fg);
+  text-decoration: none;
+}
+
+a.chip:hover {
+  border-color: var(--hs-teal);
+}
+
+a.chip-warn:hover {
+  border-color: var(--hs-warn);
+}
+
+.chip-active {
+  border-color: var(--hs-teal);
+  box-shadow: inset 0 0 0 1px var(--hs-teal);
+}
+
+.filter-banner {
+  background: var(--hs-surface-raised);
+  border-left: 3px solid var(--hs-teal);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.9rem;
 }
