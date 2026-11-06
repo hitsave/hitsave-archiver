@@ -362,7 +362,15 @@ remote_intake_scripts_dir() {
 # fails the sweep: a missing menu only means no menu slide.
 remote_intake_dvd_menu_preview() {
   local slug="$1"
-  remote_intake_archiver_compose run --rm -T dvd-menu-preview \
-    --package "/data/intake/ready/$slug" --out "/output/$slug" \
-    || echo "WARN dvd-menu-preview failed for $slug; ingest continues without a menu preview" >&2
+  if ! remote_intake_archiver_compose run --rm -T dvd-menu-preview \
+    --package "/data/intake/ready/$slug" --out "/output/$slug"; then
+    echo "WARN dvd-menu-preview failed for $slug; ingest continues without a menu preview" >&2
+    return 0
+  fi
+  # Vision-model pass over the exported candidates (config/dvd-menu-vlm.yaml, LiteLLM): swaps in the
+  # disc's main menu when the model is confident. A no-op for non-DVD packages (no candidates.json),
+  # without a key, or when the model is unreachable; the heuristic pick stays.
+  remote_intake_archiver_compose run --rm -T --no-deps --entrypoint python ingest-worker \
+    /app/scripts/rank_dvd_menu_vlm.py --dir "/output/dvd-menu/$slug" \
+    || echo "WARN dvd menu VLM ranking failed for $slug; keeping the heuristic menu pick" >&2
 }

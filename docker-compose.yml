@@ -67,6 +67,9 @@ services:
       - ${HOST_SUBMISSIONS:-./data/submissions}:/data/submissions
       - ${HOST_OUTPUT:-./data/output}:/output
       - ${HOST_INTAKE:-./data/intake}/ready:/data/intake/ready:ro
+    extra_hosts:
+      # LiteLLM on the host (config/dvd-menu-vlm.yaml base_url) for the DVD menu VLM ranking step.
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
@@ -77,7 +80,8 @@ services:
     # DVD-Video menu still per staged package (remote-intake sweep, before ingest). Built from the
     # PRIVATE hitsave/dvd-menu-preview checkout (CSS descrambler: never vendor it into this public
     # repo or ingest-worker). No network; reads ready/ only and writes
-    # <HOST_OUTPUT>/dvd-menu/<slug>/{menu_preview.jpg,result.json} for build-bagit-package.
+    # <HOST_OUTPUT>/dvd-menu/<slug>/{menu_preview.jpg,result.json,candidates/} for build-bagit-package
+    # (menu_preview.jpg only) and the VLM ranking step (scripts/rank_dvd_menu_vlm.py).
     image: hitsave/dvd-menu-preview:local
     build:
       context: ${HITSAVE_DVD_MENU_PREVIEW_SRC:-../hitsave-dvd-menu-preview}
