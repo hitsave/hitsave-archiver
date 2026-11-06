@@ -203,6 +203,14 @@ def test_problems_and_fields_are_escaped_and_formatted() -> None:
     assert "—" in page  # None fields
 
 
+def test_big_json_fields_are_folded_and_capped() -> None:
+    inventory = [{"path": f"data/file{i}.bin", "sha256": "0" * 64} for i in range(5000)]
+    page = _page(_row(inventory_json=inventory), True)
+    assert "<details><summary>5000 entries</summary>" in page
+    assert "cut at 20,000 characters" in page
+    assert len(page) < 60_000
+
+
 def test_not_found_page_escapes_key() -> None:
     page = render_item_not_found("<x>", status_config={}).decode()
     assert "&lt;x&gt;" in page

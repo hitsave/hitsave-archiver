@@ -11,6 +11,7 @@ from formatting import fmt_ts, item_href
 from site_ui import render_page_shell
 
 ConnectFn = Callable[[], Any]
+JSON_MAX_CHARS = 20_000
 
 
 def fetch_item(connect: ConnectFn, game_key: str) -> dict[str, Any] | None:
@@ -103,7 +104,7 @@ def _catalog_panel(row: dict[str, Any], *, admin_base: str, site_base: str, is_p
 <p class="actions-row"><a href="{admin}" target="_blank" rel="noopener">Omeka admin ↗</a>
 <a href="{public}" target="_blank" rel="noopener">Public page ↗</a>
 <a href="/correct?{ref}">Correct metadata</a></p>
-<div class="actions-row">{forms}</div>
+{f'<div class="actions-row">{forms}</div>' if forms else ""}
 <div class="actions-row">{quarantine}</div>
 </div>"""
 
@@ -128,7 +129,12 @@ def _field_value(value: Any) -> str:
     if isinstance(value, datetime):
         return html.escape(fmt_ts(value))
     if isinstance(value, (dict, list)):
-        return f"<pre>{html.escape(json.dumps(value, indent=2, default=str, ensure_ascii=False))}</pre>"
+        # inventory_json can list thousands of files: fold JSON away and cap what's sent.
+        text = json.dumps(value, indent=2, default=str, ensure_ascii=False)
+        size = f"{len(value)} {'keys' if isinstance(value, dict) else 'entries'}"
+        if len(text) > JSON_MAX_CHARS:
+            text = text[:JSON_MAX_CHARS] + f"\n… cut at {JSON_MAX_CHARS:,} characters"
+        return f"<details><summary>{size}</summary><pre>{html.escape(text)}</pre></details>"
     return html.escape(str(value))
 
 

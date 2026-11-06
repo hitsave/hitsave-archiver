@@ -647,3 +647,7 @@ table.kv td pre {
   font-family: var(--mono);
   font-size: 0.85rem;
 }
+
+.panel > h2:first-child {
+  margin-top: 0;
+}
