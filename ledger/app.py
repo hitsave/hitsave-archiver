@@ -5,7 +5,7 @@ from __future__ import annotations
 import html
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -38,7 +38,7 @@ from ledger_health_report import (  # noqa: E402
     ledger_search_count,
 )
 from filters import filter_banner, flag_chip, parse_filters, status_chip  # noqa: E402
-from formatting import fmt_ts
+from formatting import error_cell, fmt_ts, moby_badge, status_badge
 from notice import render_notice, safe_return_path, visibility_message, with_notice
 from site_ui import render_page_shell, set_current_notice, set_current_user
 from pagination import (
@@ -50,7 +50,6 @@ from pagination import (
 )
 from table_sort import parse_sort_params, sort_header_link
 from windmill_client import (
-    utc_display,
     fetch_completed_jobs,
     windmill_api_settings,
     windmill_job_ui_url,
@@ -237,12 +236,11 @@ def _render_attention_table(
         key_cell, actions = row_links(
             str(row.get("game_key") or ""), row.get("omeka_item_id"), admin_base=ADMIN, site_base=SITE
         )
-        err = row.get("error_message")
         trs.append(
             "<tr>"
             f"<td>{key_cell}</td>"
-            f"<td>{html.escape(str(row.get('status') or ''))}</td>"
-            f'<td class="col-error err">{html.escape(str(err or ""))}</td>'
+            f"<td>{status_badge(row.get('status'))}</td>"
+            f'<td class="col-error">{error_cell(row.get("error_message"))}</td>'
             f"<td>{html.escape(str(row.get('block_reason') or ''))}</td>"
             f"<td>{actions}</td>"
             f"<td>{html.escape(fmt_ts(row.get('updated_at')))}</td>"
@@ -368,18 +366,14 @@ def render_ledger(
         key_cell, actions = row_links(
             str(row.get("game_key") or ""), row.get("omeka_item_id"), admin_base=ADMIN, site_base=SITE
         )
-        err = row.get("error_message")
-        err_cell = (
-            f'<span class="err">{html.escape(str(err))}</span>' if err else ""
-        )
         trs.append(
             "<tr>"
             f"<td>{key_cell}</td>"
-            f"<td>{html.escape(str(row.get('status') or ''))}</td>"
-            f"<td>{html.escape(str(row.get('moby_status') or ''))}</td>"
+            f"<td>{status_badge(row.get('status'))}</td>"
+            f"<td>{moby_badge(row.get('moby_status'))}</td>"
             f"<td>{html.escape(str(row.get('moby_title') or ''))}</td>"
             f"<td>{actions}</td>"
-            f'<td class="col-error">{err_cell}</td>'
+            f'<td class="col-error">{error_cell(row.get("error_message"))}</td>'
             f"<td>{html.escape(fmt_ts(row.get('updated_at')))}</td>"
             "</tr>"
         )
@@ -499,12 +493,12 @@ def render_ops() -> bytes:
                 "<tr>"
                 f"<td>{path}</td>"
                 f"<td>{state}</td>"
-                f"<td>{html.escape(utc_display(row.get('started_at')))}</td>"
+                f"<td>{html.escape(fmt_ts(row.get('started_at') or ''))}</td>"
                 f"<td><code>{html.escape(str(jid))}</code></td>"
                 "</tr>"
             )
         jobs_html = f"""
-<div class="table-wrap"><table><thead><tr><th>Script / flow</th><th>Success</th><th>Started (UTC)</th><th>Job id</th></tr></thead><tbody>
+<div class="table-wrap"><table><thead><tr><th>Script / flow</th><th>Success</th><th>Started</th><th>Job id</th></tr></thead><tbody>
 {''.join(trs) if trs else '<tr><td colspan="4">No completed jobs returned.</td></tr>'}
 </tbody></table></div>"""
     else:
@@ -525,7 +519,7 @@ def render_logs() -> bytes:
     logs = list_generated_logs()
     lis = []
     for path in logs:
-        mtime = datetime.fromtimestamp(path.stat().st_mtime).isoformat(timespec="seconds")
+        mtime = fmt_ts(datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc))
         lis.append(f"<li><code>{html.escape(path.name)}</code> — {html.escape(mtime)}</li>")
     inner = f"""
 <p>Log files under <code>{html.escape(str(GENERATED_DIR))}</code> (newest first, max 30).</p>

@@ -678,3 +678,30 @@ a.chip-warn:hover {
   border-radius: var(--radius-sm);
   padding: 0.55rem 0.9rem;
 }
+
+/* Long errors in table cells fold behind their first line */
+details.err-more > summary {
+  cursor: pointer;
+  list-style-position: outside;
+  margin-left: 1rem;
+}
+
+details.err-more > summary .err {
+  white-space: normal;
+}
+
+details.err-more[open] > summary .err {
+  color: var(--hs-muted);
+}
+
+details.err-more > pre.err {
+  margin: 0.4rem 0 0;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  max-height: 20rem;
+  overflow: auto;
+}
+
+td .badge {
+  white-space: nowrap;
+}
