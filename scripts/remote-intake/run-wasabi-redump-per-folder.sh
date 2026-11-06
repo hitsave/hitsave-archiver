@@ -148,7 +148,7 @@ for pair in "${pairs[@]}"; do
 
   remote_intake_dvd_menu_preview "$slug"
   echo "--- ingest (BagIt + Wasabi preservation) $slug ---"
-  if remote_intake_archiver_compose run --rm -T ingest-worker "/data/intake/ready/$slug/game.ingest.yaml"; then
+  if remote_intake_ingest_or_reject "$slug" "$lane"; then
     echo "=== done ingest $slug $(date -Is) ==="
     if [[ "$(ledger_status_for_slug "$slug")" == "complete" ]]; then
       finish_complete "$slug" "$lane" "$source_prefix" "$pkg_name"

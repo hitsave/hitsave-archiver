@@ -183,6 +183,18 @@ def upsert_ledger(
 
 
 REINGEST_REFUSED_EXIT = 3
+DUPLICATE_DUMP_EXIT = 4
+
+# Disc/cartridge image extensions; the SIP's largest such file (>= 1 MiB) is its primary image.
+# Small files that are identical across different discs by nature (Switch "Card ID Set" .bin,
+# DVD DMI.bin/PFI.bin, shared audio tracks) never qualify: only the single largest image counts.
+DUMP_IMAGE_EXTENSIONS = {
+    ".iso", ".bin", ".img", ".mdf", ".nrg", ".chd", ".gdi", ".cdi", ".xci", ".nsp", ".nsz", ".xcz",
+    ".wbfs", ".rvz", ".gcm", ".wud", ".wux", ".cso", ".pbp", ".nds", ".3ds", ".cia", ".gba", ".gb",
+    ".gbc", ".sfc", ".smc", ".nes", ".fds", ".n64", ".z64", ".v64", ".md", ".gen", ".smd", ".sms",
+    ".gg", ".pce", ".32x", ".a26", ".a78", ".lnx", ".ws", ".wsc", ".vb", ".ngp", ".ngc", ".j64",
+}
+PRIMARY_IMAGE_MIN_BYTES = 1 << 20
 
 
 def reingest_allowed(game_cfg: dict) -> bool:
@@ -191,6 +203,81 @@ def reingest_allowed(game_cfg: dict) -> bool:
 
     env = os.environ.get("HITSAVE_ALLOW_REINGEST", "").strip().lower()
     return env in ("1", "true", "yes") or game_cfg.get("allow_reingest") is True
+
+
+def primary_dump_image(source: Path) -> Path | None:
+    """Largest disc/cartridge image in the SIP (>= 1 MiB), or None."""
+    best: tuple[int, str, Path] | None = None
+    for path in source.rglob("*"):
+        if not path.is_file() or path.suffix.lower() not in DUMP_IMAGE_EXTENSIONS:
+            continue
+        size = path.stat().st_size
+        if size < PRIMARY_IMAGE_MIN_BYTES:
+            continue
+        key = (size, str(path), path)
+        if best is None or key[:2] > best[:2]:
+            best = key
+    return best[2] if best else None
+
+
+def sha256_file(path: Path, chunk: int = 8 << 20) -> str:
+    import hashlib
+
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        while block := fh.read(chunk):
+            h.update(block)
+    return h.hexdigest()
+
+
+def preserved_dumps_with_sha(conn, sha256: str, *, exclude_game_key: str) -> list[dict]:
+    """Other dump packages (complete, or retired as quarantine) whose inventory holds this hash."""
+    import json
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT game_key, status, omeka_item_id, package_storage_prefix FROM game_ingest
+            WHERE ingest_kind = 'dump' AND status IN ('complete', 'quarantine') AND game_key <> %s
+              AND inventory_json -> 'files' @> %s::jsonb
+            ORDER BY (status = 'complete') DESC, created_at
+            """,
+            (exclude_game_key, json.dumps([{"sha256": sha256}])),
+        )
+        cols = [d.name for d in cur.description]
+        return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def guard_duplicate_dump(conn, *, game_key: str, source: Path, game_cfg: dict) -> None:
+    """
+    Never preserve the same dump twice under another package (2026-11: FWD0512_2 came in once from
+    Drive and once from Wasabi, with an edited submission info, and was bagged twice).
+
+    The SIP's primary image (largest disc/cartridge image) is hashed and looked up in the ledger
+    inventories of other dump packages. On a match: print DUPLICATE_OF=<game_key> and exit
+    DUPLICATE_DUMP_EXIT before any ledger write; the sweep moves the package to intake failed/.
+    HITSAVE_ALLOW_REINGEST=1 / allow_reingest: true skips this guard.
+    """
+    if reingest_allowed(game_cfg):
+        return
+    image = primary_dump_image(source)
+    if image is None:
+        return
+    digest = sha256_file(image)
+    matches = preserved_dumps_with_sha(conn, digest, exclude_game_key=game_key)
+    if not matches:
+        return
+    conn.close()
+    first = matches[0]
+    others = ", ".join(f"{m['game_key']} ({m['status']})" for m in matches)
+    print(
+        f"REFUSING duplicate dump: {image.relative_to(source)} (sha256 {digest}) is already preserved "
+        f"in {others}. Omeka item {first.get('omeka_item_id')}. Nothing was written. Set "
+        "HITSAVE_ALLOW_REINGEST=1 only if this really must be preserved again.",
+        file=sys.stderr,
+    )
+    print(f"DUPLICATE_OF={first['game_key']}", flush=True)
+    raise SystemExit(DUPLICATE_DUMP_EXIT)
 
 
 def existing_complete_row(conn, game_key: str) -> dict | None:
@@ -467,6 +554,8 @@ def main() -> None:
         raw_game_cfg["game_key"] = game_key
         # Before ANY ledger write: don't overwrite (or mark failed) an already-preserved package.
         guard_complete_package(conn, game_key=game_key, source=source, game_cfg=raw_game_cfg)
+        if kind == "dump":
+            guard_duplicate_dump(conn, game_key=game_key, source=source, game_cfg=raw_game_cfg)
         dump_kwargs: dict = {}
         if kind == "dump":
             dump_clf = classify_dump_sip(

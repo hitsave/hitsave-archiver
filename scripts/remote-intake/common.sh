@@ -374,3 +374,35 @@ remote_intake_dvd_menu_preview() {
     /app/scripts/rank_dvd_menu_vlm.py --dir "/output/dvd-menu/$slug" \
     || echo "WARN dvd menu VLM ranking failed for $slug; keeping the heuristic menu pick" >&2
 }
+
+# Ingest one staged package. On a duplicate dump (ingest-folder.py exit 4: its primary image is
+# already preserved in another package) the package is moved to intake failed/<slug>/ with
+# error.txt + .intake-lane, so remote_intake_sync_rejections reports it and sweeps stop retrying.
+# Returns the ingest exit code.
+remote_intake_ingest_or_reject() {
+  local slug="$1" lane="$2" log rc dup
+  log="$(mktemp)"
+  set +e
+  remote_intake_archiver_compose run --rm -T ingest-worker "/data/intake/ready/$slug/game.ingest.yaml" 2>&1 | tee "$log"
+  rc=${PIPESTATUS[0]}
+  set -e
+  if [[ "$rc" -eq 4 ]]; then
+    dup="$(grep -o 'DUPLICATE_OF=[^[:space:]]*' "$log" | tail -1 | cut -d= -f2 || true)"
+    local reason
+    reason="Duplicate dump: its disc/cartridge image is already preserved as ${dup:-another package} (identical SHA-256). Not ingested again; see the ingest log."
+    if remote_intake_gdrive_compose run --rm -T --user 1000:1000 --entrypoint sh intake -c '
+        set -e; s="$1"; lane="$2"; reason="$3"
+        [ -d "/data/intake/ready/$s" ] || exit 0
+        mkdir -p /data/intake/failed
+        rm -rf "/data/intake/failed/$s"
+        mv "/data/intake/ready/$s" "/data/intake/failed/$s"
+        printf "%s\n" "$reason" > "/data/intake/failed/$s/error.txt"
+        printf "%s\n" "$lane" > "/data/intake/failed/$s/.intake-lane"' sh "$slug" "$lane" "$reason"; then
+      echo "--- duplicate of ${dup:-?}: moved $slug to failed/ ---"
+    else
+      echo "WARN: duplicate $slug could not be moved to failed/ (stays in ready/)" >&2
+    fi
+  fi
+  rm -f "$log"
+  return "$rc"
+}
