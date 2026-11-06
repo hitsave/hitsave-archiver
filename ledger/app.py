@@ -33,7 +33,7 @@ from ledger_health_report import (  # noqa: E402
     ledger_search_count,
 )
 from filters import filter_banner, flag_chip, parse_filters, status_chip  # noqa: E402
-from formatting import error_cell, fmt_ts, moby_badge, status_badge
+from formatting import error_cell, fmt_ts, moby_badge, problem_text, status_badge
 from notice import render_notice, safe_return_path, visibility_message, with_notice
 from site_ui import render_page_shell, set_current_notice, set_current_user
 from pagination import (
@@ -370,7 +370,7 @@ def render_ledger(
             f"<td>{moby_badge(row.get('moby_status'))}</td>"
             f"<td>{html.escape(str(row.get('moby_title') or ''))}</td>"
             f'<td class="col-links">{actions}</td>'
-            f'<td class="col-error">{error_cell(row.get("error_message"))}</td>'
+            f'<td class="col-error">{error_cell(problem_text(row))}</td>'
             f'<td class="col-time">{html.escape(fmt_ts(row.get("updated_at")))}</td>'
             "</tr>"
         )

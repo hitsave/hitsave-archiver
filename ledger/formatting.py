@@ -63,3 +63,14 @@ def error_cell(err: str | None) -> str:
         f'<details class="err-more"><summary><span class="err">{html.escape(preview)}</span></summary>'
         f'<pre class="err">{html.escape(full)}</pre></details>'
     )
+
+
+def problem_text(row: dict) -> str:
+    """What the table's Error column shows: the error, else the block reason of a quarantined or
+    failed package (on complete packages block_reason only notes how the MobyGames match went)."""
+    err = str(row.get("error_message") or "").strip()
+    if err:
+        return err
+    if row.get("status") in ("quarantine", "failed"):
+        return str(row.get("block_reason") or "").strip()
+    return ""

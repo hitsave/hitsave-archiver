@@ -70,3 +70,13 @@ def test_error_cell_escapes_and_caps() -> None:
 def test_fmt_ts_accepts_z_suffix() -> None:
     assert fmt_ts("2026-11-04T16:00:00.388421Z") == "2026-11-04 16:00 UTC"
     assert fmt_ts("") == ""
+
+
+def test_problem_text_falls_back_to_block_reason_for_quarantined_and_failed() -> None:
+    from formatting import problem_text
+
+    assert problem_text({"status": "quarantine", "error_message": None, "block_reason": "duplicate of x"}) == "duplicate of x"
+    assert problem_text({"status": "failed", "error_message": "", "block_reason": "virus_detected"}) == "virus_detected"
+    assert problem_text({"status": "quarantine", "error_message": "Not a press kit", "block_reason": "curation_review"}) == "Not a press kit"
+    # Moby match notes on complete rows aren't problems
+    assert problem_text({"status": "complete", "error_message": None, "block_reason": "moby_ambiguous"}) == ""
