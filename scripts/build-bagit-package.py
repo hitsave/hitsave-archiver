@@ -155,16 +155,27 @@ def validate_bag(bag_dir: Path) -> None:
     bag.validate()
 
 
+DVD_MENU_STILLS = (("menu_preview.jpg", "menu"), ("contact_sheet.jpg", "contact_sheet"))
+
+
 def dvd_menu_still(source: Path, dump_classification: DumpClassification | None) -> Path | None:
     """Menu still the sweep's dvd-menu-preview step wrote for this staged package, if any.
 
-    <HITSAVE_DVD_MENU_DIR or /output/dvd-menu>/<ready slug>/menu_preview.jpg; DVD-Video dumps only.
+    <HITSAVE_DVD_MENU_DIR or /output/dvd-menu>/<ready slug>/menu_preview.jpg, or contact_sheet.jpg
+    when the disc has no usable menu (frames of its main title); DVD-Video dumps only.
     """
     if dump_classification is None or (dump_classification.dump_system or "") != "DVD-Video":
         return None
     root = Path(os.environ.get("HITSAVE_DVD_MENU_DIR", "/output/dvd-menu"))
-    still = root / source.name / "menu_preview.jpg"
-    return still if still.is_file() else None
+    for name, _ in DVD_MENU_STILLS:
+        still = root / source.name / name
+        if still.is_file():
+            return still
+    return None
+
+
+def dvd_menu_kind(still: Path) -> str:
+    return dict(DVD_MENU_STILLS).get(still.name, "menu")
 
 
 def build_bagit_package(
@@ -313,6 +324,7 @@ def build_bagit_package(
             payload_manifest=preview_manifest,
             metadata_dir=meta_dir,
             config=preview_cfg,
+            kind=dvd_menu_kind(menu_jpg),
         )
         print(f"  DVD menu preview: {menu_jpg}")
     if preview_manifest:

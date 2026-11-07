@@ -472,15 +472,23 @@ def add_dvd_menu_preview(
     payload_manifest: dict | None,
     metadata_dir: str = "metadata",
     config: dict | None = None,
+    kind: str = "menu",
 ) -> dict:
-    """Pack a DVD menu still (dvd-menu-preview) in front of the payload previews; returns the manifest."""
+    """Pack a DVD menu still (dvd-menu-preview) in front of the payload previews; returns the manifest.
+
+    kind "contact_sheet": the disc has no usable menu and the still is a contact sheet of its main
+    title. It takes the menu's place (key "menu", browse image); the manifest says
+    dvd_menu_kind: contact_sheet so the viewer labels it "Contact sheet", not "DVD menu".
+    """
     cfg = config or load_preview_config()
     menu = write_dvd_menu_packaged_previews(
         bag_dir, menu_jpg=menu_jpg, package_id=package_id, metadata_dir=metadata_dir, config=cfg
     )
+    if kind != "menu":
+        menu["dvd_menu_kind"] = kind
     display_rel = f"{metadata_dir}/hitsave/display/menu.jpg"
     (bag_dir / display_rel).parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(menu_jpg, bag_dir / display_rel)  # menu stills are already web size (720x480)
+    shutil.copyfile(menu_jpg, bag_dir / display_rel)  # already web size (menu 720x480, sheet 1280x720)
     menu["display"] = {"menu": display_rel}
     merged = merge_menu_manifest(menu, payload_manifest)
     manifest_path = bag_dir / str(cfg.get("manifest_inner_path") or "metadata/hitsave/preview-manifest.json")

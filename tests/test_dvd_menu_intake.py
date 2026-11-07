@@ -33,3 +33,21 @@ def test_menu_still_only_for_dvd_video(tmp_path: Path, monkeypatch) -> None:
     assert build.dvd_menu_still(source, None) is None
     still.unlink()
     assert build.dvd_menu_still(source, dvd) is None
+
+
+def test_contact_sheet_when_the_disc_has_no_menu(tmp_path: Path, monkeypatch) -> None:
+    import pytest
+
+    pytest.importorskip("bagit")
+    build = _load("build_bagit_package", ROOT / "scripts" / "build-bagit-package.py")
+    monkeypatch.setenv("HITSAVE_DVD_MENU_DIR", str(tmp_path))
+    source = Path("/data/intake/ready/dvd-video-wesker-s-report")
+    (tmp_path / source.name).mkdir()
+    sheet = tmp_path / source.name / "contact_sheet.jpg"
+    sheet.write_bytes(b"jpg")
+    dvd = SimpleNamespace(dump_system="DVD-Video")
+    assert build.dvd_menu_still(source, dvd) == sheet
+    assert build.dvd_menu_kind(sheet) == "contact_sheet"
+    menu = tmp_path / source.name / "menu_preview.jpg"
+    menu.write_bytes(b"jpg")  # a real menu wins
+    assert build.dvd_menu_still(source, dvd) == menu and build.dvd_menu_kind(menu) == "menu"
