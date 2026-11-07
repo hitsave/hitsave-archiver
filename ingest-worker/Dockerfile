@@ -45,6 +45,8 @@ COPY scripts/batch-expand-preservation.py \
     scripts/rename_dump_package_slug.py \
     scripts/sync_dump_bag_metadata_from_ledger.py \
     scripts/rename_bag_payload_folders.py \
+    scripts/disc_contents_policy.py \
+    scripts/build_disc_contents_bag.py \
     scripts/wasabi_rename.py \
     scripts/relocate_dump_bags_by_sort_letter.py \
     scripts/export-preservation-catalog.py \
