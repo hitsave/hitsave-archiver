@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Ingest one SIP folder: ClamAV → BagIt → Wasabi → ledger."""
+"""Ingest one SIP folder: ClamAV → BagIt → Wasabi → ledger.
+
+    ingest-folder.py GAME_YAML              full ingest
+    ingest-folder.py GAME_YAML --scan-only  only the gates (guards, content policy, ClamAV), then stop
+
+The sweeps run --scan-only first, so nothing opens a package's files (DVD menu preview) before it
+is scanned. That run saves its scan report (virus_scan_cache); the full ingest reuses it when the
+files haven't changed instead of scanning the package twice.
+"""
 from __future__ import annotations
 
 import json
@@ -32,6 +40,7 @@ from premis_virus_check import (  # noqa: E402
     attach_virus_check_premis,
     scan_sip_tree,
 )
+from virus_scan_cache import load_matching_report, report_path, save_report  # noqa: E402
 from source_content_policy import (  # noqa: E402
     ContentPolicyError,
     check_source_content_policy,
@@ -506,9 +515,26 @@ def run_bagit_ingest(
     return bag_dir, submission, inventory, checksum_path, submission_source_id, package_uuid
 
 
+def scan_or_reuse(clamd, source: Path, cache: Path, *, scan=scan_sip_tree) -> VirusScanReport:
+    """The --scan-only run's report when it still covers these files, else a fresh scan."""
+    report, why = load_matching_report(cache, source)
+    if report is not None:
+        print(f"  ClamAV: reusing the scan from {report.scanned_at} (files unchanged since)", flush=True)
+        return report
+    if why != "no saved scan":
+        print(f"  ClamAV: scanning again ({why})", flush=True)
+    return scan(clamd, source)
+
+
+def parse_args(argv: list[str]) -> tuple[Path, bool]:
+    args = [a for a in argv if a != "--scan-only"]
+    game_cfg_path = Path(args[0]) if args else Path("/config/preservation/game.yml")
+    return game_cfg_path, "--scan-only" in argv
+
+
 def main() -> None:
     ingest_cfg_path = Path("/config/preservation/ingest.yaml")
-    game_cfg_path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("/config/preservation/game.yml")
+    game_cfg_path, scan_only = parse_args(sys.argv[1:])
 
     if not ingest_cfg_path.is_file():
         raise SystemExit(f"Missing {ingest_cfg_path}")
@@ -606,10 +632,12 @@ def main() -> None:
     clamd = wait_for_clamd(clam["host"], int(clam["port"]), int(clam.get("connect_timeout_seconds", 120)))
 
     quarantine_base = output_root / paths["quarantine_subdir"] / game_key
+    scan_cache = report_path(output_root, game_key)
     try:
         check_source_content_policy(source, ingest_cfg)
-        # Metadata only; never blocks archiving.
-        run_moby_enrichment(game_cfg, game_cfg_path)
+        if not scan_only:
+            # Metadata only; never blocks archiving.
+            run_moby_enrichment(game_cfg, game_cfg_path)
 
         upsert_ledger(
             conn,
@@ -618,7 +646,10 @@ def main() -> None:
             status="scanning",
             ingest_kind=ingest_kind,
         )
-        virus_scan = scan_sip_tree(clamd, source)
+        if scan_only:
+            virus_scan = scan_sip_tree(clamd, source)
+        else:
+            virus_scan = scan_or_reuse(clamd, source, scan_cache)
         for fs in virus_scan.file_scans:
             if fs.method != "whole" or fs.notes:
                 print(f"  ClamAV: {fs.rel} -> {fs.method} ({fs.streams} stream(s)) {'; '.join(fs.notes)}", flush=True)
@@ -628,6 +659,11 @@ def main() -> None:
                 f"(limit alerts); recorded as partial in PREMIS: {virus_scan.not_scanned_paths[:10]}",
                 flush=True,
             )
+        if scan_only:
+            save_report(scan_cache, virus_scan, source)
+            upsert_ledger(conn, game_key=game_key, source_path=str(source), status="scanned", ingest_kind=ingest_kind)
+            print(f"Scan clean: {game_key} ({virus_scan.files_scanned} file(s) scanned); ready to ingest")
+            return
 
         bag_dir, _sub, inventory, checksum_manifest_path, submission_source_id, package_uuid = run_bagit_ingest(
             conn,
@@ -667,6 +703,7 @@ def main() -> None:
             "sort_letter": identity.sort_letter,
         }
         upsert_ledger(conn, **complete_kwargs)
+        scan_cache.unlink(missing_ok=True)
         print(f"Ingest complete: {game_key} (bagit)")
         print(f"  package_id: {identity.package_id}")
         print(f"  sort_letter: {identity.sort_letter}")

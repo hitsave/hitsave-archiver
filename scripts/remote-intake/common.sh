@@ -375,15 +375,31 @@ remote_intake_dvd_menu_preview() {
     || echo "WARN dvd menu VLM ranking failed for $slug; keeping the heuristic menu pick" >&2
 }
 
-# Ingest one staged package. On a duplicate dump (ingest-folder.py exit 4: its primary image is
-# already preserved in another package) the package is moved to intake failed/<slug>/ with
-# error.txt + .intake-lane, so remote_intake_sync_rejections reports it and sweeps stop retrying.
-# Returns the ingest exit code.
+# Virus-scan a staged package before anything opens its files, then build the DVD menu preview.
+# The scan is `ingest-folder.py --scan-only`: the same gates as the ingest (re-ingest and duplicate
+# guards, content policy, ClamAV, ledger quarantine on a hit). Its report is saved, and the ingest
+# reuses it while the files are unchanged, so packages aren't scanned twice. Returns non-zero when
+# the scan didn't pass; the caller then skips the menu preview and the ingest.
+remote_intake_scan_then_menu() {
+  local slug="$1" lane="$2"
+  echo "--- virus scan $slug ---"
+  if ! remote_intake_ingest_or_reject "$slug" "$lane" --scan-only; then
+    echo "--- scan didn't pass for $slug: no menu preview, no ingest ---"
+    return 1
+  fi
+  remote_intake_dvd_menu_preview "$slug"
+}
+
+# Ingest one staged package (extra arguments go to ingest-folder.py, e.g. --scan-only). On a
+# duplicate dump (ingest-folder.py exit 4: its primary image is already preserved in another
+# package) the package is moved to intake failed/<slug>/ with error.txt + .intake-lane, so
+# remote_intake_sync_rejections reports it and sweeps stop retrying. Returns the ingest exit code.
 remote_intake_ingest_or_reject() {
   local slug="$1" lane="$2" log rc dup
+  shift 2
   log="$(mktemp)"
   set +e
-  remote_intake_archiver_compose run --rm -T ingest-worker "/data/intake/ready/$slug/game.ingest.yaml" 2>&1 | tee "$log"
+  remote_intake_archiver_compose run --rm -T ingest-worker "/data/intake/ready/$slug/game.ingest.yaml" "$@" 2>&1 | tee "$log"
   rc=${PIPESTATUS[0]}
   set -e
   if [[ "$rc" -eq 4 ]]; then
