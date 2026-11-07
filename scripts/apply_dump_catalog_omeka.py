@@ -21,6 +21,7 @@ sys.path.insert(0, str(SCRIPTS))
 from dump_catalog_omeka import (  # noqa: E402
     build_dump_catalog_values,
     dump_catalog_config,
+    is_labelled_press_kit,
     manifest_from_sip_and_handoff,
 )
 from ingest_kind import resolve_ingest_kind  # noqa: E402
@@ -120,7 +121,8 @@ def apply_handoff_dump_catalog(
     uploader_cfg = load_omeka_catalog_config(root)
     api_cfg = require_omeka_api_config(uploader_cfg)
     dump_cfg = dump_catalog_config(
-        uploader_cfg, manifest.get("dump_class"), manifest.get("dump_system"), manifest.get("dump_category")
+        uploader_cfg, manifest.get("dump_class"), manifest.get("dump_system"), manifest.get("dump_category"),
+        press_kit=is_labelled_press_kit(manifest),
     )
     creds = load_yaml(root / api_cfg["credentials_file"])
 
@@ -282,7 +284,8 @@ def apply_dump_catalog(
     # Item set / resource template can differ per dump type (by_dump_class / by_dump_system /
     # by_system_category).
     dump_cfg = dump_catalog_config(
-        uploader_cfg, manifest.get("dump_class"), manifest.get("dump_system"), manifest.get("dump_category")
+        uploader_cfg, manifest.get("dump_class"), manifest.get("dump_system"), manifest.get("dump_category"),
+        press_kit=is_labelled_press_kit(manifest),
     )
 
     api_cfg = require_omeka_api_config(uploader_cfg)
