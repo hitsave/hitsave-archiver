@@ -59,6 +59,7 @@ def render_nav(*, active: str, status_config: dict) -> str:
     links: list[tuple[str, str, str]] = [
         ("ledger", "/", "Ledger"),
         ("review", "/review", "Review"),
+        ("disc", "/disc-contents", "Disc contents"),
         ("health", "/health", "Health"),
         ("correct", "/correct", "Catalog correction"),
         ("quarantine", "/quarantine", "Quarantine"),

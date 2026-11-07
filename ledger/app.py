@@ -42,6 +42,9 @@ from ledger_health_report import (  # noqa: E402
 from filters import filter_banner, flag_chip, parse_filters, status_chip  # noqa: E402
 from formatting import error_cell, fmt_ts, moby_badge, problem_text, status_badge
 from notice import render_notice, safe_return_path, visibility_message, with_notice
+from disc_contents_review import pending as disc_contents_pending
+from disc_contents_review import recent as disc_contents_recent
+from disc_contents_review import render_disc_contents_page, run_decision
 from review_queue import (
     HiddenItems,
     next_in_queue,
@@ -632,6 +635,14 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Location", "/health")
             self.end_headers()
             return
+        if path == "/disc-contents":
+            self._send_html(
+                render_disc_contents_page(
+                    rows=disc_contents_pending(connect), decided=disc_contents_recent(connect),
+                    status_config=CONFIG, admin_base=ADMIN,
+                )
+            )
+            return
         if path == "/review":
             page = render_review(parse_qs(parsed.query))
             if isinstance(page, str):
@@ -744,6 +755,21 @@ class Handler(BaseHTTPRequestHandler):
                     status_config=CONFIG,
                 ),
             )
+            return
+        if path == "/disc-contents/decide":
+            game_key = (form.get("game_key") or [""])[0].strip()
+            display = (form.get("display") or [""])[0].strip()
+            code, output = run_decision(game_key, display, user)
+            audit("disc-contents-" + display, user, game_key=game_key, exit=str(code))
+            if code == 0:
+                kind = "ok"
+                msg = f"{game_key}: disc contents {'published' if display == 'public' else 'kept private'}."
+            else:
+                print(output, flush=True)
+                kind, msg = "fail", f"{game_key}: couldn't save the decision ({output.splitlines()[-1] if output else 'error'})."
+            self.send_response(303)
+            self.send_header("Location", with_notice("/disc-contents", kind, msg))
+            self.end_headers()
             return
         if path == "/review/publish":
             omeka_ref = (form.get("omeka_ref") or [""])[0].strip()
