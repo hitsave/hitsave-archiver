@@ -261,6 +261,8 @@ def manifest_from_sip_and_handoff(
         },
         "redump": {"parsed": parsed},
         "switch": switch_block,
+        # Contributor's folder name (hitsave-submission.yaml): one of the press kit labels.
+        "folder_name": _handoff_folder_name(handoff),
     }
     if handoff.get("wasabi"):
         manifest["wasabi"].update(
@@ -503,17 +505,40 @@ def build_redump_values(
 DUMP_CLASS_OVERRIDE_KEYS = ("item_set_title", "item_set_id", "resource_template_label")
 
 
+def _handoff_folder_name(handoff: dict[str, Any]) -> str | None:
+    from preservation_common import original_folder_name
+
+    return original_folder_name(handoff) if handoff else None
+
+
+def is_labelled_press_kit(manifest: dict[str, Any]) -> bool:
+    """A press kit by its Redump Edition / Comments or the contributor's folder name (the labels
+    disc_contents_policy uses), unless Redump files it as software (Games, Demos, Applications...)."""
+    from disc_contents_policy import NO_PUBLIC_CATEGORIES, press_kit_label
+
+    fields = ((manifest.get("redump") or {}).get("parsed") or {}).get("fields") or {}
+    category = str(fields.get("Category") or manifest.get("dump_category") or "").strip().casefold()
+    if category in NO_PUBLIC_CATEGORIES:
+        return False
+    return press_kit_label(
+        fields.get("Edition/Release") or fields.get("Edition"), fields.get("Comments"), manifest.get("folder_name")
+    ) is not None
+
+
 def dump_catalog_config(
     uploader_cfg: dict[str, Any],
     dump_class: str | None = None,
     dump_system: str | None = None,
     dump_category: str | None = None,
+    *,
+    press_kit: bool = False,
 ) -> dict[str, Any]:
     """omeka-catalog.yaml dump_catalog with per-type overrides on top: by_dump_class.<dump_class>,
     then by_dump_system.<dump_system> (the system wins; system names match case-insensitively).
     dump_class alone is too coarse: "redump" covers DVD-Video coverdiscs and PS4 game discs alike.
     by_system_category."<System>/<Category>" (Redump Category, e.g. "Sony PlayStation/Coverdiscs")
-    is the most specific and wins over both.
+    is the most specific and wins over both. A labelled press kit (is_labelled_press_kit) takes the
+    press_kit block over all of them: it's press material whatever the disc.
 
       dump_catalog:
         item_set_title: Video Games         # defaults: games
@@ -556,6 +581,7 @@ def dump_catalog_config(
         _type_overrides(dump, "by_dump_class", dump_class)
         | _type_overrides(dump, "by_dump_system", dump_system)
         | _type_overrides(dump, "by_system_category", _system_category(dump_system, dump_category))
+        | (_block_overrides(dump.get("press_kit"), "press_kit") if press_kit else {})
     )
 
 
@@ -575,15 +601,18 @@ def _type_overrides(dump: dict[str, Any], section: str, value: str | None) -> di
         raise ValueError(f"omeka-catalog.yaml dump_catalog.{section} must be a mapping")
     want = str(value or "").strip().casefold()
     block = next((b for k, b in table.items() if want and str(k).strip().casefold() == want), None)
+    return _block_overrides(block, f"{section}.{value}")
+
+
+def _block_overrides(block: Any, where: str) -> dict[str, Any]:
+    """The override keys of one dump_catalog block (item set, resource template), validated."""
     if not block:
         return {}
     if not isinstance(block, dict):
-        raise ValueError(f"omeka-catalog.yaml dump_catalog.{section}.{value} must be a mapping")
+        raise ValueError(f"omeka-catalog.yaml dump_catalog.{where} must be a mapping")
     unknown = set(block) - set(DUMP_CLASS_OVERRIDE_KEYS)
     if unknown:
-        raise ValueError(
-            f"omeka-catalog.yaml dump_catalog.{section}.{value}: unsupported keys {sorted(unknown)}"
-        )
+        raise ValueError(f"omeka-catalog.yaml dump_catalog.{where}: unsupported keys {sorted(unknown)}")
     out = {k: block[k] for k in DUMP_CLASS_OVERRIDE_KEYS if k in block}
     if "item_set_title" in out and "item_set_id" not in out:
         out["item_set_id"] = None  # resolve the overriding title, not the default set's id
