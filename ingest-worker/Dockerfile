@@ -44,6 +44,7 @@ COPY scripts/batch-expand-preservation.py \
     scripts/audit_dump_title_slugs.py \
     scripts/rename_dump_package_slug.py \
     scripts/sync_dump_bag_metadata_from_ledger.py \
+    scripts/rename_bag_payload_folders.py \
     scripts/wasabi_rename.py \
     scripts/relocate_dump_bags_by_sort_letter.py \
     scripts/export-preservation-catalog.py \
@@ -70,6 +71,7 @@ COPY scripts/batch-expand-preservation.py \
     scripts/normalize_display_title.py \
     scripts/ingest-folder.py \
     scripts/premis_virus_check.py \
+    scripts/virus_scan_cache.py \
     scripts/clamav_full_scan.py \
     scripts/archive_scan.py \
     scripts/udf_extents.py \
