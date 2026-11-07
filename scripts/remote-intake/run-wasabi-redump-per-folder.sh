@@ -146,7 +146,10 @@ for pair in "${pairs[@]}"; do
     echo "--- already staged; ingest pending ---"
   fi
 
-  remote_intake_dvd_menu_preview "$slug"
+  if ! remote_intake_scan_then_menu "$slug" "$lane"; then
+    echo "=== FAILED scan $slug $(date -Is) ==="
+    continue
+  fi
   echo "--- ingest (BagIt + Wasabi preservation) $slug ---"
   if remote_intake_ingest_or_reject "$slug" "$lane"; then
     echo "=== done ingest $slug $(date -Is) ==="
