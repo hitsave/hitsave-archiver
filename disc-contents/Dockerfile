@@ -20,5 +20,7 @@ RUN apt-get update \
 RUN useradd --create-home --uid 1000 --shell /bin/bash contents
 WORKDIR /app
 COPY scripts/extract_disc_contents.py /app/extract_disc_contents.py
-USER contents
-ENTRYPOINT ["python3", "/app/extract_disc_contents.py"]
+COPY disc-contents/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+# Starts as root only to take ownership of /output (see entrypoint.sh); extraction runs as contents.
+ENTRYPOINT ["/app/entrypoint.sh"]
