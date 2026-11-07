@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import os
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -261,15 +262,75 @@ def wasabi_package_storage_prefix(
     ).strip("/")
 
 
-def bagit_payload_relpath(source: Path, file_path: Path, *, preserve_source_folder: bool) -> str:
-    """Relative path under BagIt payload dir (before data/ prefix in manifests)."""
+def bagit_payload_relpath(
+    source: Path, file_path: Path, *, preserve_source_folder: bool, folder: str | None = None
+) -> str:
+    """Relative path under BagIt payload dir (before data/ prefix in manifests).
+
+    ``folder`` is the payload folder name (sip_layout(...).folder: the contributor's original
+    folder name); it defaults to the SIP folder's own name.
+    """
     inner = file_path.relative_to(source).as_posix()
     if not preserve_source_folder:
         return inner
-    folder = source.name.strip()
-    if not folder or folder in (".", ".."):
-        raise ValueError(f"Cannot preserve source folder name for SIP path: {source}")
+    folder = source.name.strip() if folder is None else folder
+    if not safe_folder_name(folder):
+        raise ValueError(f"Cannot preserve source folder name {folder!r} for SIP path: {source}")
     return f"{folder}/{inner}" if inner else folder
+
+
+# Remote intake stages every package as ready/<slug>/ and adds two files of its own at the SIP
+# root. The bag keeps the contributor's original folder name (recorded by intake in the handoff
+# manifest) as data/<original name>/, and the intake files go to metadata/intake/, not the payload.
+GAME_INGEST_FILENAME = "game.ingest.yaml"
+INTAKE_METADATA_SUBDIR = "intake"
+_ORIGINAL_FOLDER_KEYS = ("package_folder_name", "drive_folder_name")
+
+
+@dataclass(frozen=True)
+class SipLayout:
+    folder: str  # payload folder name: data/<folder>/...
+    intake_files: tuple[str, ...] = ()  # SIP-root files intake wrote: metadata/intake/<name>
+    staging_folder: str = ""  # the SIP folder's own name (ready/<slug>)
+
+    def is_intake_file(self, source: Path, path: Path) -> bool:
+        return path.parent == source and path.name in self.intake_files
+
+
+def safe_folder_name(name: str) -> bool:
+    return bool(name) and name == name.strip() and name not in (".", "..") and not any(
+        c in name for c in "/\\\0\r\n"
+    )
+
+
+def original_folder_name(handoff: dict) -> str | None:
+    """The contributor's folder name as intake recorded it (Wasabi or Drive), if any."""
+    blocks = [handoff] + [v for v in handoff.values() if isinstance(v, dict)]
+    for block in blocks:
+        for key in _ORIGINAL_FOLDER_KEYS:
+            value = block.get(key)
+            if isinstance(value, str) and value:
+                return value
+    return None
+
+
+def sip_layout(source: Path, game_cfg: dict | None) -> SipLayout:
+    """Payload folder name and intake-written files for a SIP (see the comment above)."""
+    staging = source.name
+    handoff_name = str((game_cfg or {}).get("handoff_manifest") or "").strip()
+    if not handoff_name or "/" in handoff_name:
+        return SipLayout(folder=staging, staging_folder=staging)
+    intake_files = tuple(n for n in (GAME_INGEST_FILENAME, handoff_name) if (source / n).is_file())
+    folder = staging
+    handoff_path = source / handoff_name
+    if handoff_path.is_file():
+        data = yaml.safe_load(handoff_path.read_text(encoding="utf-8")) or {}
+        name = original_folder_name(data) if isinstance(data, dict) else None
+        if name and safe_folder_name(name):
+            folder = name
+        elif name:
+            print(f"  Original folder name {name!r} can't be a bag folder; keeping {staging!r}", flush=True)
+    return SipLayout(folder=folder, intake_files=intake_files, staging_folder=staging)
 
 
 def skip_reason(path: Path) -> str | None:

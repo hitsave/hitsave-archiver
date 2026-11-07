@@ -54,9 +54,8 @@ def _sha(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
 
 
-@pytest.fixture
-def world(tmp_path: Path):
-    payload = {f"data/{SLUG}/disc.iso": b"ISO" * 1000, f"data/{SLUG}/!submissionInfo.txt": b"info"}
+def _world(tmp_path: Path, top: str = SLUG):
+    payload = {f"data/{top}/disc.iso": b"ISO" * 1000, f"data/{top}/!submissionInfo.txt": b"info"}
     bag_root = tmp_path / "bag"
     bag = bag_root / "pkg-1"
     for rel, data in payload.items():
@@ -82,6 +81,25 @@ def world(tmp_path: Path):
     inventory = {"files": [{"path": rel, "sha256": _sha(d), "size_bytes": len(d)} for rel, d in payload.items()]}
     c = prune.Candidate(1, "pkg-1", "dump", PREFIX, BUCKET, inventory, bag, ready)
     return {"s3": FakeS3(objects), "c": c, "bag_root": bag_root, "ready_root": ready_root}
+
+
+@pytest.fixture
+def world(tmp_path: Path):
+    return _world(tmp_path)
+
+
+def test_bag_with_original_folder_name_verifies_against_ready(tmp_path: Path) -> None:
+    import shutil
+
+    w = _world(tmp_path, top="Making of Fahrenheit, The (Japan)")  # ready/ is still ready/<slug>
+    assert prune.verify(w["s3"], w["c"])[0] == []
+    shutil.rmtree(w["c"].bag_dir)
+    w["c"].bag_dir = None
+    assert prune.verify(w["s3"], w["c"])[0] == []
+    (w["c"].ready_dir / "extra-scan.png").write_bytes(b"png")
+    assert prune.verify(w["s3"], w["c"])[0] == [
+        "ready file not in ingest inventory: data/Making of Fahrenheit, The (Japan)/extra-scan.png"
+    ]
 
 
 def test_verified_package_passes_and_prune_keeps_handoff(world) -> None:

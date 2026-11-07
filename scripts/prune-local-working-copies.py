@@ -144,9 +144,16 @@ def inventory_files(inventory: dict | None) -> dict[str, tuple[str, int]]:
     return out
 
 
-def ready_rel_to_bag_rel(ready_dir: Path, path: Path) -> str:
-    """ready/<slug>/x/y -> data/<slug>/x/y (how build-bagit-package lays out an intake SIP)."""
-    return f"data/{ready_dir.name}/{path.relative_to(ready_dir).as_posix()}"
+def payload_top(inv: dict, ready_dir: Path) -> str:
+    """The bag's payload folder (data/<folder>/): the contributor's original folder name for bags
+    built since original folder names, ready/<slug>'s name before that."""
+    tops = {rel.split("/")[1] for rel in inv if rel.startswith("data/") and rel.count("/") >= 2}
+    return tops.pop() if len(tops) == 1 else ready_dir.name
+
+
+def ready_rel_to_bag_rel(ready_dir: Path, path: Path, top: str | None = None) -> str:
+    """ready/<slug>/x/y -> data/<top>/x/y (how build-bagit-package lays out an intake SIP)."""
+    return f"data/{top or ready_dir.name}/{path.relative_to(ready_dir).as_posix()}"
 
 
 def verify(s3, c: Candidate) -> tuple[list[str], int]:
@@ -166,7 +173,7 @@ def verify(s3, c: Candidate) -> tuple[list[str], int]:
                 problems.append(f"local bag file not in ingest inventory: {rel}")
     if c.ready_dir:
         for p in local_payload_files(c.ready_dir, skip_names=KEEP_IN_READY | {MARKER}):
-            rel = ready_rel_to_bag_rel(c.ready_dir, p)
+            rel = ready_rel_to_bag_rel(c.ready_dir, p, payload_top(inv, c.ready_dir))
             if rel not in inv:
                 problems.append(f"ready file not in ingest inventory: {rel}")
             elif p.stat().st_size != inv[rel][1]:
@@ -218,7 +225,7 @@ def verify(s3, c: Candidate) -> tuple[list[str], int]:
         if c.bag_dir and (c.bag_dir / rel).is_file():
             local = c.bag_dir / rel
         elif c.ready_dir:
-            prefix = f"data/{c.ready_dir.name}/"
+            prefix = f"data/{payload_top(inv, c.ready_dir)}/"
             if rel.startswith(prefix) and (c.ready_dir / rel[len(prefix):]).is_file():
                 local = c.ready_dir / rel[len(prefix):]
         if local is None:
