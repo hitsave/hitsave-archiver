@@ -81,7 +81,8 @@ services:
     # PRIVATE hitsave/dvd-menu-preview checkout (CSS descrambler: never vendor it into this public
     # repo or ingest-worker). No network; reads ready/ only and writes
     # <HOST_OUTPUT>/dvd-menu/<slug>/{menu_preview.jpg,result.json,candidates/} for build-bagit-package
-    # (menu_preview.jpg only) and the VLM ranking step (scripts/rank_dvd_menu_vlm.py).
+    # (menu_preview.jpg, or contact_sheet.jpg for a disc without a usable menu) and the VLM ranking
+    # step (scripts/rank_dvd_menu_vlm.py).
     image: hitsave/dvd-menu-preview:local
     build:
       context: ${HITSAVE_DVD_MENU_PREVIEW_SRC:-../hitsave-dvd-menu-preview}

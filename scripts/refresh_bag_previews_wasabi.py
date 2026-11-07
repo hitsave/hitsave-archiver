@@ -125,6 +125,9 @@ def merge_foreign_previews(old: dict, new: dict, foreign: list[str]) -> dict:
     ]
     if old.get("browse"):
         merged["browse"] = old["browse"]
+    for flag in ("dvd_menu_preview", "dvd_menu_kind"):  # what the "menu" still is (menu / contact sheet)
+        if flag in old and "menu" in foreign:
+            merged[flag] = old[flag]
     return merged
 
 

@@ -208,3 +208,30 @@ def test_dvd_menu_without_payload_previews(tmp_path: Path) -> None:
     merged = add_dvd_menu_preview(tmp_path, menu_jpg=menu, package_id="pkg", payload_manifest=None,
                                   config=_scan_cfg())
     assert merged["gallery_file_keys"] == ["menu"] and "files" not in merged
+
+
+def test_contact_sheet_takes_the_menu_slot_with_its_kind(tmp_path: Path) -> None:
+    from dip_package_previews import add_dvd_menu_preview
+
+    sheet = tmp_path / "contact_sheet.jpg"
+    Image.new("RGB", (1280, 720), (40, 50, 60)).save(sheet, "JPEG")
+    merged = add_dvd_menu_preview(tmp_path, menu_jpg=sheet, package_id="pkg", payload_manifest=None,
+                                  config=_scan_cfg(), kind="contact_sheet")
+    assert merged["gallery_file_keys"] == ["menu"] and merged["dvd_menu_kind"] == "contact_sheet"
+    assert Image.open(tmp_path / merged["display"]["menu"]).size == (1280, 720)
+    plain = add_dvd_menu_preview(tmp_path / "m", menu_jpg=sheet, package_id="pkg", payload_manifest=None,
+                                 config=_scan_cfg())
+    assert "dvd_menu_kind" not in plain  # a menu: the viewer's default label
+
+
+def test_refresh_keeps_the_contact_sheet_kind() -> None:
+    import importlib
+
+    importlib.import_module("pytest").importorskip("psycopg")
+    from refresh_bag_previews_wasabi import merge_foreign_previews
+
+    old = {"grid": {"menu": "g/menu.jpg"}, "gallery_file_keys": ["menu"], "dvd_menu_preview": True,
+           "dvd_menu_kind": "contact_sheet"}
+    new = {"grid": {"f4": "g4"}, "gallery_file_keys": ["f4"]}
+    merged = merge_foreign_previews(old, new, ["menu"])
+    assert merged["dvd_menu_kind"] == "contact_sheet" and merged["gallery_file_keys"] == ["menu", "f4"]
