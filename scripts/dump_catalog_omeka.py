@@ -33,12 +33,16 @@ def _redump_field(fields: dict[str, str], key: str) -> str | None:
     return raw
 
 
-def literal_formats(fields: dict[str, str]) -> list[str]:
-    """dcterms:format literals for dumps without vocabulary terms (DVD-Video, Audio CD, unmapped
-    systems): the Redump "System" only. The disc's Media Type (DVD-ROM-5, CD-ROM...) is not shown:
-    the archive cares that it is a DVD-Video, not which disc layer it was pressed on."""
-    system = _redump_field(fields, "System")
-    return [system] if system else []
+def _omeka_format_from_redump(field: str, value: str | None) -> str | None:
+    """Map Redump submissionInfo labels to Omeka dcterms:format display (e.g. DVD-ROM-5 → DVD-5)."""
+    if not value:
+        return None
+    text = value.strip()
+    if field == "Media Type":
+        media = re.fullmatch(r"DVD-ROM-(\d+)", text, flags=re.IGNORECASE)
+        if media:
+            return f"DVD-{media.group(1)}"
+    return text
 
 
 def _redump_languages(fields: dict[str, str]) -> str | None:
@@ -457,9 +461,9 @@ def build_redump_values(
     system = _redump_field(fields, "System")
     media_type = _redump_field(fields, "Media Type")
     if not _append_platform_media(values, session, base, creds, api, cfg, system, media_type):
-        # DVD-Video / Audio CD coverdiscs (and unmapped systems): the System as a literal.
-        for value in literal_formats(fields):
-            append_literal("dcterms:format", value)
+        # DVD-Video / Audio CD coverdiscs (and unmapped systems): literal format values as before.
+        for field, raw in (("System", system), ("Media Type", media_type)):
+            append_literal("dcterms:format", _omeka_format_from_redump(field, raw))
     append_literal("dcterms:type", _redump_field(fields, "Category"))
     append_literal("dcterms:coverage", _redump_field(fields, "Region"))
     append_literal("dcterms:language", _redump_languages(fields))
