@@ -22,7 +22,10 @@ from yaml_config import dumps_json  # noqa: E402
 from dump_classify import DumpClassification, classify_dump_sip  # noqa: E402
 from preservation_common import (  # noqa: E402
     bagit_package_s3_uri_for_prefix,
+    INTAKE_METADATA_SUBDIR,
+    SipLayout,
     bagit_payload_relpath,
+    sip_layout,
     iso_now,
     load_ingest_config,
     load_packaging_config,
@@ -59,12 +62,16 @@ def collect_files(
     *,
     preserve_source_folder: bool = False,
     excluded: list[dict] | None = None,
+    layout: SipLayout | None = None,
 ) -> list[FileRow]:
-    """Payload rows. Files left out by policy are appended to ``excluded`` (if given)."""
+    """Payload rows. Files left out by policy are appended to ``excluded`` (if given); the
+    layout's intake files aren't payload (they go to metadata/intake/)."""
     rows: list[FileRow] = []
     total = 0
     for path in sorted(source.rglob("*")):
         if not path.is_file():
+            continue
+        if layout is not None and layout.is_intake_file(source, path):
             continue
         reason = skip_reason(path)
         if reason:
@@ -84,7 +91,10 @@ def collect_files(
         if max_bytes > 0 and total > max_bytes:
             raise SystemExit(f"Would exceed max_total_bytes ({max_bytes})")
         rel = bagit_payload_relpath(
-            source, path, preserve_source_folder=preserve_source_folder
+            source,
+            path,
+            preserve_source_folder=preserve_source_folder,
+            folder=layout.folder if layout is not None else None,
         )
         mime, _ = mimetypes.guess_type(path.name)
         if size >= 500_000_000:
@@ -168,7 +178,9 @@ def build_bagit_package(
     max_bytes: int,
     ingest_kind: str = "press_material",
     dump_classification: DumpClassification | None = None,
+    layout: SipLayout | None = None,
 ) -> tuple[dict, dict]:
+    layout = layout or sip_layout(source, None)
     pkg = load_packaging_config()
     bag_cfg = pkg.get("bagit") or {}
     payload_dir = str(bag_cfg.get("payload_dir") or "data")
@@ -186,6 +198,7 @@ def build_bagit_package(
         max_bytes,
         preserve_source_folder=preserve_source_folder,
         excluded=excluded,
+        layout=layout,
     )
     if excluded:
         print(f"  Excluded from payload by policy ({len(excluded)} file(s), recorded in inventory.json):")
@@ -232,7 +245,8 @@ def build_bagit_package(
         "package_storage_prefix": wasabi_key,
         "storage_layout": storage_profile_for_kind(ingest_kind),
         "game_key": identity.package_id,
-        "source_folder_name": source.name,
+        "source_folder_name": layout.folder,
+        "staging_folder_name": layout.staging_folder,
         "ingested_at": ingested_at,
         "repository_code": repository_code,
     }
@@ -277,6 +291,11 @@ def build_bagit_package(
     (meta_root / "inventory.json").write_text(
         dumps_json(inventory, indent=2), encoding="utf-8"
     )
+    if layout.intake_files:
+        intake_dir = meta_root / INTAKE_METADATA_SUBDIR
+        intake_dir.mkdir(parents=True, exist_ok=True)
+        for name in layout.intake_files:
+            shutil.copy2(source / name, intake_dir / name)
     preview_cfg = load_preview_config()
     preview_manifest = write_hitsave_previews(
         bag_dir,
@@ -370,6 +389,7 @@ def main() -> None:
         max_bytes=max_bytes,
         ingest_kind=ingest_kind,
         dump_classification=dump_clf,
+        layout=sip_layout(source, raw),
     )
 
     manifest = bag_dir / "manifest-sha256.txt"

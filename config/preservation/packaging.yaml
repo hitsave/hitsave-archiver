@@ -7,7 +7,10 @@ preservation:
     payload_dir: data
     metadata_dir: metadata
     manifest_algorithm: sha256
-    # Payload paths: data/{original_sip_folder_name}/… not data/… at bag root.
+    # Payload paths: data/{original_sip_folder_name}/… not data/… at bag root. For remote intake
+    # (staged as ready/<slug>/) that's the contributor's folder name intake recorded in
+    # hitsave-submission.yaml; intake's game.ingest.yaml and hitsave-submission.yaml go to
+    # metadata/intake/ (preservation_common.sip_layout).
     preserve_source_folder_in_payload: true
     # PREMIS 3 virus-check event (written after ClamAV, before Wasabi upload).
     premis_virus_check_relpath: premis/virus-check-event.xml

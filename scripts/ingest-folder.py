@@ -304,14 +304,17 @@ def existing_complete_row(conn, game_key: str) -> dict | None:
     return {"source_path": row[1], "inventory_json": inv}
 
 
-def sip_inventory_diff(source: Path, inventory: dict | None) -> list[str]:
+def sip_inventory_diff(source: Path, inventory: dict | None, game_cfg: dict | None = None) -> list[str]:
     """Compare SIP (payload path, size) pairs with the preserved inventory; [] when identical.
 
     Files the pre-2026-11-01 policy excluded (dotfiles, desktop.ini, OCR debug) don't count as
     differences when the preserved bag lacks them: the package was preserved under that policy.
+    Bags from before original folder names (payload under the ready/<slug> name, intake files in
+    the payload) also match their SIP.
     """
     from preservation_common import (
         bagit_payload_relpath,
+        sip_layout,
         legacy_skip_reason,
         load_packaging_config,
         should_skip,
@@ -320,20 +323,34 @@ def sip_inventory_diff(source: Path, inventory: dict | None) -> list[str]:
     bag_cfg = load_packaging_config().get("bagit") or {}
     payload_dir = str(bag_cfg.get("payload_dir") or "data")
     preserve = bool(bag_cfg.get("preserve_source_folder_in_payload", False))
-    current = {}
-    legacy_excluded: set[str] = set()
-    for path in sorted(source.rglob("*")):
-        if path.is_file() and not should_skip(path):
-            rel = bagit_payload_relpath(source, path, preserve_source_folder=preserve)
-            current[f"{payload_dir}/{rel}"] = path.stat().st_size
-            if legacy_skip_reason(path):
-                legacy_excluded.add(f"{payload_dir}/{rel}")
     preserved = {
         str(f.get("path")): int(f.get("size_bytes") or 0)
         for f in (inventory or {}).get("files") or []
     }
     if not preserved:
         return ["preserved package has no inventory_json to compare against"]
+
+    def payload_of(layout):
+        current: dict[str, int] = {}
+        legacy: set[str] = set()
+        for path in sorted(source.rglob("*")):
+            if not path.is_file() or should_skip(path):
+                continue
+            if layout is not None and layout.is_intake_file(source, path):
+                continue
+            rel = bagit_payload_relpath(
+                source, path, preserve_source_folder=preserve, folder=layout.folder if layout else None
+            )
+            current[f"{payload_dir}/{rel}"] = path.stat().st_size
+            if legacy_skip_reason(path):
+                legacy.add(f"{payload_dir}/{rel}")
+        return current, legacy
+
+    # Compare with whichever layout the preserved bag uses (most paths in common; ties: current).
+    current, legacy_excluded = max(
+        (payload_of(sip_layout(source, game_cfg)), payload_of(None)),
+        key=lambda c: len(c[0].keys() & preserved.keys()),
+    )
     added = current.keys() - preserved.keys()
     legacy_only = added & legacy_excluded
     if legacy_only:
@@ -364,7 +381,7 @@ def guard_complete_package(conn, *, game_key: str, source: Path, game_cfg: dict)
     existing = existing_complete_row(conn, game_key)
     if existing is None or reingest_allowed(game_cfg):
         return
-    diffs = sip_inventory_diff(source, existing["inventory_json"])
+    diffs = sip_inventory_diff(source, existing["inventory_json"], game_cfg)
     conn.close()
     if not diffs:
         print(
