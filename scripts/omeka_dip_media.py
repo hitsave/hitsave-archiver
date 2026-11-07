@@ -4,8 +4,17 @@ from __future__ import annotations
 from typing import Any, Callable
 
 
+def media_is_disc_contents(media_body: dict[str, Any]) -> bool:
+    """The disc contents package of a data-disc dump (build_disc_contents_bag.py), a second
+    omeka_dip_package media on the item: never the item's own package."""
+    data = media_body.get("data") if isinstance(media_body.get("data"), dict) else {}
+    return str(data.get("package_storage_prefix") or "").strip().lstrip("/").startswith("disc-contents/")
+
+
 def media_is_dip_package(media_body: dict[str, Any], *, dip_ingester: str) -> bool:
-    """True when media is omeka_dip_package or Wasabi S3 BagIt DIP."""
+    """True when media is omeka_dip_package or Wasabi S3 BagIt DIP (not a disc contents package)."""
+    if media_is_disc_contents(media_body):
+        return False
     renderer = str(media_body.get("o:renderer") or media_body.get("o:ingester") or "").strip()
     if renderer == dip_ingester:
         return True

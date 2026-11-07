@@ -49,6 +49,7 @@ register_omeka() {
   local slug="$1"
   if "$RI/register-dump-omeka.sh" --slug "$slug"; then
     echo "--- omeka ok $slug ---"
+    remote_intake_disc_contents "$slug"
   else
     echo "WARN: omeka register failed for $slug $(date -Is)"
   fi

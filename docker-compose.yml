@@ -92,6 +92,20 @@ services:
       - ${HOST_INTAKE:-./data/intake}/ready:/data/intake/ready:ro
       - ${HOST_OUTPUT:-./data/output}/dvd-menu:/output
 
+  disc-contents:
+    # Files and web copies of a data-disc dump (PC/Mac press kits etc.), after ingest, for
+    # scripts/build_disc_contents_bag.py. No network; reads ready/ only and writes
+    # <HOST_OUTPUT>/disc-contents/<slug>/{files/,derived/,listing.json,result.json}.
+    image: hitsave/disc-contents:local
+    build:
+      context: .
+      dockerfile: disc-contents/Dockerfile
+    profiles: ["tools"]
+    network_mode: none
+    volumes:
+      - ${HOST_INTAKE:-./data/intake}/ready:/data/intake/ready:ro
+      - ${HOST_OUTPUT:-./data/output}/disc-contents:/output
+
   omeka-catalog:
     build:
       context: .

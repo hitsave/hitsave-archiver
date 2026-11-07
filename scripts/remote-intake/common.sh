@@ -375,6 +375,43 @@ remote_intake_dvd_menu_preview() {
     || echo "WARN dvd menu VLM ranking failed for $slug; keeping the heuristic menu pick" >&2
 }
 
+# Data-disc dumps (PC/Mac press kits etc.): extract the disc's files into a contents bag next to
+# the dump (hitsave-dumps, disc-contents/<dump path>) and attach it to the Omeka item. Labelled
+# press kits are public; promotional discs wait for review in the ledger; retail software, console
+# and video discs get nothing (scripts/disc_contents_policy.py). Runs after the Omeka registration;
+# never fails the sweep. Rerun by hand: build_disc_contents_bag.py {classify|build|attach} --slug S.
+remote_intake_disc_contents() {
+  local slug="$1" rc dir priv
+  dir="$(remote_intake_archiver_compose_dir)"
+  priv="$(remote_intake_private_config_host)"
+  set +e
+  remote_intake_archiver_compose run --rm -T --no-deps --entrypoint python ingest-worker \
+    /app/scripts/build_disc_contents_bag.py classify --slug "$slug"
+  rc=$?
+  set -e
+  if [[ "$rc" -eq 3 ]]; then
+    return 0  # not a data disc, or nothing to show
+  elif [[ "$rc" -ne 0 ]]; then
+    echo "WARN disc contents: classify failed for $slug" >&2
+    return 0
+  fi
+  echo "--- disc contents $slug ---"
+  if ! remote_intake_archiver_compose run --rm -T disc-contents \
+    --package "/data/intake/ready/$slug" --out "/output/$slug"; then
+    echo "WARN disc contents: extraction failed for $slug" >&2
+    return 0
+  fi
+  if ! remote_intake_archiver_compose run --rm -T --entrypoint python ingest-worker \
+    /app/scripts/build_disc_contents_bag.py build --slug "$slug"; then
+    echo "WARN disc contents: bag failed for $slug (rerun: build_disc_contents_bag.py build --slug $slug)" >&2
+    return 0
+  fi
+  remote_intake_archiver_compose run --rm -T --entrypoint python \
+    -v "$priv/omeka-catalog.yaml:/config/omeka-catalog.yaml:ro" omeka-catalog \
+    /app/scripts/build_disc_contents_bag.py attach --slug "$slug" \
+    || echo "WARN disc contents: Omeka attach failed for $slug (rerun: build_disc_contents_bag.py attach --slug $slug)" >&2
+}
+
 # Virus-scan a staged package before anything opens its files, then build the DVD menu preview.
 # The scan is `ingest-folder.py --scan-only`: the same gates as the ingest (re-ingest and duplicate
 # guards, content policy, ClamAV, ledger quarantine on a hit). Its report is saved, and the ingest
