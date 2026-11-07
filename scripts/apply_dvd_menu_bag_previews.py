@@ -13,7 +13,9 @@ refresh_bag_previews_wasabi.py). The menu manifest is merged with them instead o
 menu first, then the existing payload previews (grid/display/files keep pointing at their files on
 Wasabi, which are not re-uploaded). The menu is the browse image, as on every other DVD.
 
-Menu JPEGs come from the private hitsave/dvd-menu-preview tool (rendered from the ISO). New DVD-Video intakes get theirs
+Menu JPEGs come from the private hitsave/dvd-menu-preview tool (rendered from the ISO); a report
+entry with status "contact_sheet" packs <slug>/contact_sheet.jpg (disc without a usable menu)
+instead, labelled "Contact sheet" by the viewer. New DVD-Video intakes get theirs
 during the sweep (dvd-menu-preview service + build-bagit-package.py); this script backfills bags
 packaged before that.
 """
@@ -39,9 +41,9 @@ SCRIPTS = REPO_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from dip_package_previews import (  # noqa: E402
+    add_dvd_menu_preview,
     load_preview_config,
     merge_menu_manifest,
-    write_dvd_menu_packaged_previews,
 )
 from preservation_common import resolve_wasabi_bucket, wasabi_unpacked_prefix  # noqa: E402
 from s3_etag import hash_file  # noqa: E402
@@ -148,10 +150,17 @@ def existing_wasabi_manifest(package_storage_prefix: str, *, ingest_config_path:
         return None
 
 
-def build_preview_files(menu_jpg: Path, package_id: str, work: Path) -> dict[str, Path]:
-    """Render the DVD-menu previews into a scratch dir; {bag-relative path: file}."""
+# dvd-menu-preview report status -> what the "menu" still is. A disc without a usable menu gets a
+# contact sheet of its main title (contact_sheet.jpg) in the menu's place.
+PREVIEW_KINDS = {"ok": "menu", "ok_low_score": "menu", "contact_sheet": "contact_sheet"}
+
+
+def build_preview_files(menu_jpg: Path, package_id: str, work: Path, *, kind: str = "menu") -> dict[str, Path]:
+    """Render the DVD-menu previews into a scratch dir, as packaging does (browse, grid thumb,
+    display copy, manifest with dvd_menu_kind); {bag-relative path: file}."""
     preview_cfg = load_preview_config()
-    write_dvd_menu_packaged_previews(work, menu_jpg=menu_jpg, package_id=package_id, config=preview_cfg)
+    add_dvd_menu_preview(work, menu_jpg=menu_jpg, package_id=package_id, payload_manifest=None,
+                         config=preview_cfg, kind=kind)
     hitsave = work / "metadata" / "hitsave"
     return {
         p.relative_to(work).as_posix(): p for p in sorted(hitsave.rglob("*")) if p.is_file()
@@ -238,7 +247,7 @@ def main() -> None:
     ingest = load_yaml(ingest_config)
     db_cfg = load_yaml(Path(ingest["database"]["config_file"]))["postgres"]
 
-    ok_status = ("ok", "ok_low_score")
+    ok_status = tuple(PREVIEW_KINDS)
     updated: list[str] = []
     skipped: list[tuple[str, str]] = []
 
@@ -264,14 +273,15 @@ def main() -> None:
                 skipped.append((iso, f"no ledger row for {folder}"))
                 continue
             slug = slug_from_iso_name(Path(iso).name)
-            menu_jpg = preview_root / slug / "menu_preview.jpg"
+            kind = PREVIEW_KINDS[status]
+            menu_jpg = preview_root / slug / ("contact_sheet.jpg" if kind == "contact_sheet" else "menu_preview.jpg")
             if not menu_jpg.is_file():
                 skipped.append((iso, f"missing preview {menu_jpg}"))
                 continue
             print(f"=== {row.game_key} ===", flush=True)
             with tempfile.TemporaryDirectory() as work:
                 try:
-                    files = build_preview_files(menu_jpg, row.package_id, Path(work))
+                    files = build_preview_files(menu_jpg, row.package_id, Path(work), kind=kind)
                 except (OSError, RuntimeError) as exc:
                     skipped.append((iso, str(exc)))
                     print(f"  FAIL previews: {exc}", flush=True)

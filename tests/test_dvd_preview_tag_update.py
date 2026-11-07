@@ -116,3 +116,20 @@ def test_menu_backfill_without_payload_previews_is_menu_only() -> None:
     menu = {"grid": {"menu": "m.jpg"}, "gallery_file_keys": ["menu"]}
     assert merge_menu_with_existing(menu, None) is menu
     assert merge_menu_with_existing(menu, {"grid": {"menu": "old.jpg"}, "gallery_file_keys": ["menu"]}) is menu
+
+
+def test_build_preview_files_contact_sheet(tmp_path: Path) -> None:
+    import json
+
+    from PIL import Image
+
+    sheet = tmp_path / "contact_sheet.jpg"
+    Image.new("RGB", (1280, 720), (30, 60, 90)).save(sheet, "JPEG")
+    files = dvd.build_preview_files(sheet, "pkg", tmp_path / "work", kind="contact_sheet")
+    manifest = json.loads(files["metadata/hitsave/preview-manifest.json"].read_text())
+    assert manifest["dvd_menu_kind"] == "contact_sheet" and manifest["gallery_file_keys"] == ["menu"]
+    assert files["metadata/hitsave/display/menu.jpg"].read_bytes() == sheet.read_bytes()  # full size
+    assert "metadata/hitsave/thumbnails/grid/menu.jpg" in files
+    assert dvd.PREVIEW_KINDS["contact_sheet"] == "contact_sheet" and dvd.PREVIEW_KINDS["ok"] == "menu"
+    menu = dvd.build_preview_files(sheet, "pkg", tmp_path / "w2")
+    assert "dvd_menu_kind" not in json.loads(menu["metadata/hitsave/preview-manifest.json"].read_text())
