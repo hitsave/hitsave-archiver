@@ -1,4 +1,4 @@
-from dump_catalog_omeka import _omeka_format_from_redump, _redump_languages
+from dump_catalog_omeka import _redump_languages, literal_formats
 
 
 def test_redump_languages_placeholder_is_omitted() -> None:
@@ -11,11 +11,8 @@ def test_redump_languages_real_value_kept() -> None:
     assert _redump_languages(fields) == "Japanese"
 
 
-def test_omeka_format_dvd_rom_disc_sizes() -> None:
-    assert _omeka_format_from_redump("Media Type", "DVD-ROM-5") == "DVD-5"
-    assert _omeka_format_from_redump("Media Type", "dvd-rom-9") == "DVD-9"
-    assert _omeka_format_from_redump("Media Type", "DVD-ROM") == "DVD-ROM"
-
-
-def test_omeka_format_system_unchanged() -> None:
-    assert _omeka_format_from_redump("System", "DVD-Video") == "DVD-Video"
+def test_literal_format_is_the_system_only() -> None:
+    """DVD-Video coverdiscs show "DVD-Video", not the disc's Media Type (DVD-ROM-5 -> "DVD-5")."""
+    assert literal_formats({"System": "DVD-Video", "Media Type": "DVD-ROM-5"}) == ["DVD-Video"]
+    assert literal_formats({"System": "Audio CD", "Media Type": "CD-ROM"}) == ["Audio CD"]
+    assert literal_formats({"Media Type": "DVD-ROM-9"}) == []
