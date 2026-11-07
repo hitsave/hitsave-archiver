@@ -10,6 +10,23 @@ _ALTF_TAG = re.compile(r"\[T:ALTF\]\s*(.+)", re.I)
 _SECTION_HEADER = re.compile(r"^([^:\t].*):\s*$")
 _ROOT_FIELD = re.compile(r"^([^:\t]+):\s*(.*)$")
 _SECTION_FIELD = re.compile(r"^\t([^:]+):\s*(.*)$")
+# Free-text fields: their value runs over the following untabbed lines, which may themselves look
+# like "Name: value" ("<b>Logs Link</b>: …", "[T:VOL] 2002DPK", "Falcone: Into the Maelstrom (0:46)").
+_FREE_TEXT_FIELDS = frozenset({"Comments", "Contents"})
+# Top-level sections of a submission. A free-text value ends at one of these only when a tabbed
+# field follows it: "Extras:" is also a common line inside Contents.
+_KNOWN_SECTIONS = frozenset({
+    "Common Disc Info", "Version and Editions", "Extras", "Copy Protection",
+    "Tracks and Write Offsets", "Dumping Info", "Size & Checksum", "EDC",
+    "Parent/Clone Relationship", "Ringcode Information",
+})
+
+
+def _next_is_field(lines: list[str], i: int) -> bool:
+    for nxt in lines[i + 1:]:
+        if nxt.strip():
+            return bool(_SECTION_FIELD.match(nxt))
+    return False
 _ROM_TAG = re.compile(
     r'<rom name="([^"]+)" size="(\d+)" crc="([a-f0-9]+)" md5="([a-f0-9]+)" sha1="([a-f0-9]+)"\s*/>',
     re.I,
@@ -197,7 +214,12 @@ def parse_submission_info(text: str) -> RedumpSubmission:
         current_key = None
         buf = []
 
-    for line in lines:
+    for i, line in enumerate(lines):
+        if current_key in _FREE_TEXT_FIELDS and not _SECTION_FIELD.match(line):
+            header = _SECTION_HEADER.match(line)
+            if not (header and header.group(1).strip() in _KNOWN_SECTIONS and _next_is_field(lines, i)):
+                buf.append(line.rstrip())
+                continue
         sec_field = _SECTION_FIELD.match(line)
         if sec_field:
             key = sec_field.group(1).strip()
@@ -252,7 +274,9 @@ def parse_submission_info(text: str) -> RedumpSubmission:
         if title and title not in sub.foreign_alternate_titles:
             sub.foreign_alternate_titles.append(title)
     for match in _ALT_TAG.finditer(comments):
-        sub.alternate_titles.append(match.group(1).strip())
+        alt = match.group(1).strip()
+        if alt and alt not in sub.alternate_titles:
+            sub.alternate_titles.append(alt)
     for match in _ALTF_TAG.finditer(comments):
         alt = match.group(1).strip()
         if alt and alt not in sub.foreign_alternate_titles:
