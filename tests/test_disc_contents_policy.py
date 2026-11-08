@@ -49,3 +49,11 @@ def test_classify_submission_reads_redump_fields() -> None:
     fields = {"System": "IBM PC compatible", "Category": "Multimedia", "Edition/Release": "Press Kit",
               "Comments": "Press disc released at E3 2002."}
     assert p.classify_submission(fields).display == "public"
+
+
+def test_classify_submission_reads_mpf_editions_field() -> None:
+    # MPF's !submissionInfo.txt writes "Editions:", not Redump's "Edition/Release" (item 31460).
+    fields = {"System": "IBM PC compatible", "Category": "Multimedia", "Editions": "Press Kit"}
+    assert p.classify_submission(fields).display == "public"
+    assert p.edition_field({"Editions": "Press Kit"}) == "Press Kit"
+    assert p.edition_field({}) is None

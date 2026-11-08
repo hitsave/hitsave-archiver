@@ -103,12 +103,24 @@ def classify(
     return DiscContentsDecision("promotional", REVIEW, [f"Category {category or '(none)'!r}: unknown, needs review"])
 
 
+# Redump pages say "Edition/Release"; MPF's !submissionInfo.txt says "Editions".
+EDITION_FIELDS = ("Edition/Release", "Edition", "Editions")
+
+
+def edition_field(fields: dict[str, str]) -> str | None:
+    """The disc's edition text from parsed sidecar fields, whichever spelling the sidecar uses."""
+    for key in EDITION_FIELDS:
+        if fields.get(key):
+            return fields[key]
+    return None
+
+
 def classify_submission(fields: dict[str, str], *, folder_name: str | None = None) -> DiscContentsDecision:
     """classify() from parsed Redump sidecar fields (hitsave_dump_sidecars.redump)."""
     return classify(
         system=fields.get("System"),
         category=fields.get("Category"),
-        edition=fields.get("Edition/Release") or fields.get("Edition"),
+        edition=edition_field(fields),
         comments=fields.get("Comments"),
         folder_name=folder_name,
     )

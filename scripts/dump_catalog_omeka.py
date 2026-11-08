@@ -514,14 +514,14 @@ def _handoff_folder_name(handoff: dict[str, Any]) -> str | None:
 def is_labelled_press_kit(manifest: dict[str, Any]) -> bool:
     """A press kit by its Redump Edition / Comments or the contributor's folder name (the labels
     disc_contents_policy uses), unless Redump files it as software (Games, Demos, Applications...)."""
-    from disc_contents_policy import NO_PUBLIC_CATEGORIES, press_kit_label
+    from disc_contents_policy import NO_PUBLIC_CATEGORIES, edition_field, press_kit_label
 
     fields = ((manifest.get("redump") or {}).get("parsed") or {}).get("fields") or {}
     category = str(fields.get("Category") or manifest.get("dump_category") or "").strip().casefold()
     if category in NO_PUBLIC_CATEGORIES:
         return False
     return press_kit_label(
-        fields.get("Edition/Release") or fields.get("Edition"), fields.get("Comments"), manifest.get("folder_name")
+        edition_field(fields), fields.get("Comments"), manifest.get("folder_name")
     ) is not None
 
 
