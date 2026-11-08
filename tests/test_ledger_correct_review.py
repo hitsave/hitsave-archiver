@@ -23,6 +23,7 @@ ITEM = {
     "dcterms:description": [{"@value": "Line one.\r\nLine two."}, {"@value": "Second value."}],
     "dcterms:creator": [{"@value": "Dev A"}, {"@value": "Dev B"}],
     "dcterms:publisher": [{"@value": "Pub"}],
+    "dcterms:provenance": [{"@value": "Anthony Perkins"}],
     "bibo:uri": [
         {"@id": "s3://bucket/mobygames.com/aip"},
         {"@id": "https://example.org/ref"},
@@ -35,6 +36,7 @@ CURRENT = {
     "description": "Line one.\nLine two.\n\nSecond value.",
     "developer": "Dev A, Dev B",
     "publisher": "Pub",
+    "donor": "Anthony Perkins",
 }
 
 
@@ -44,7 +46,7 @@ def test_current_values_from_item() -> None:
 
 def test_current_values_fallbacks() -> None:
     cur = current_values({"o:title": "Only o:title", "bibo:uri": [{"@id": "https://example.org/x"}]})
-    assert cur == {"title": "Only o:title", "moby_url": "", "description": "", "developer": "", "publisher": ""}
+    assert cur == {"title": "Only o:title", "moby_url": "", "description": "", "developer": "", "publisher": "", "donor": ""}
 
 
 def test_unchanged_form_is_nothing_to_change() -> None:
@@ -149,3 +151,20 @@ def test_fetch_item_json(tmp_path) -> None:
     assert fetch_item_json(5, get=lambda u, **k: _Resp(200, ITEM), config_root=root) == ITEM
     assert fetch_item_json(5, get=lambda u, **k: _Resp(500, {}), config_root=root) is None
     assert fetch_item_json(5, get=lambda u, **k: _Resp(200, []), config_root=root) is None
+
+
+def test_donor_sets_clears_and_maps_to_windmill() -> None:
+    changes, errors = plan_changes(CURRENT, dict(CURRENT, donor="Anthony Perkins; Brock"), clear_moby=False)
+    assert errors == [] and changes == [Change("donor", "Anthony Perkins", "Anthony Perkins, Brock", "set")]
+    cleared, errors = plan_changes(CURRENT, dict(CURRENT, donor=""), clear_moby=False)
+    assert errors == [] and cleared == [Change("donor", "Anthony Perkins", "", "clear")]
+    args = windmill_args("16396", changes + cleared[:0], clear_moby=False, former_title="", correction_summary="", execute=True)
+    assert args == {"omeka_ref": "16396", "donor": "Anthony Perkins, Brock"}
+    assert windmill_args("1", cleared, clear_moby=False, former_title="", correction_summary="", execute=True) == {
+        "omeka_ref": "1", "clear_donor": True}
+    # A donor change touches neither Wasabi nor the MobyGames match; removing the match keeps donors.
+    assert side_effects(changes, clear_moby=False, execute=True) == []
+    moby = " ".join(side_effects([], clear_moby=True, execute=True)).casefold()
+    assert "donated" not in moby
+    kept = " ".join(side_effects([Change("donor", "a", "b", "set")], clear_moby=True, execute=True))
+    assert "developers and publishers from the match are removed" in kept

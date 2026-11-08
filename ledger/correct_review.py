@@ -8,16 +8,19 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-FIELDS = ("title", "moby_url", "description", "developer", "publisher")
+FIELDS = ("title", "moby_url", "description", "developer", "publisher", "donor")
 FIELD_LABELS = {
     "title": "Title",
     "moby_url": "MobyGames URL",
     "description": "Description",
     "developer": "Developers",
     "publisher": "Publishers",
+    "donor": "Donated by",
 }
-_NAME_FIELDS = ("developer", "publisher")
-_TERMS = {"description": "dcterms:description", "developer": "dcterms:creator", "publisher": "dcterms:publisher"}
+_NAME_FIELDS = ("developer", "publisher", "donor")
+_MOBY_NAME_FIELDS = ("developer", "publisher")  # what a MobyGames match brings
+_TERMS = {"description": "dcterms:description", "developer": "dcterms:creator", "publisher": "dcterms:publisher",
+          "donor": "dcterms:provenance"}
 _EMPTY_ERRORS = {
     "title": "The title can't be empty; type the corrected title.",
     "description": (
@@ -71,6 +74,7 @@ def current_values(item: dict) -> dict[str, str]:
         "description": _normalize("description", "\n\n".join(_literals(item, _TERMS["description"]))),
         "developer": ", ".join(_literals(item, _TERMS["developer"])),
         "publisher": ", ".join(_literals(item, _TERMS["publisher"])),
+        "donor": ", ".join(_literals(item, _TERMS["donor"])),
     }
 
 
@@ -139,10 +143,10 @@ def side_effects(changes: list[Change], *, clear_moby: bool, execute: bool) -> l
             "The MobyGames link is removed, along with the release date and the MobyGames rights "
             "statement from the match."
         )
-        if not fields & set(_NAME_FIELDS):
+        if not fields & set(_MOBY_NAME_FIELDS):
             out.append("The developers and publishers from the match are removed too.")
         else:
-            kept = [FIELD_LABELS[f].lower() for f in _NAME_FIELDS if f not in fields]
+            kept = [FIELD_LABELS[f].lower() for f in _MOBY_NAME_FIELDS if f not in fields]
             if kept:
                 out.append(f"The {' and '.join(kept)} from the match are removed too.")
         if "description" not in fields:

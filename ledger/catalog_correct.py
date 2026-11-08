@@ -162,6 +162,7 @@ before anything is saved.</p>
 <textarea name="description" rows="6">{html.escape(values.get("description", ""))}</textarea></label>
 {text("developer", "Developers", "(comma-separated; empty the box to remove them all)")}
 {text("publisher", "Publishers", "(comma-separated; empty the box to remove them all)")}
+{text("donor", "Donated by", "(who gave Hit Save the physical item; comma-separated; empty the box to remove)")}
 <details class="form-more"><summary>Notes kept with the package</summary>
 {text("former_title", "Former title", "(default: the current title)")}
 <label class="field">Correction summary <span class="hint-inline">(the ledger adds your email address)</span>

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Patch Omeka catalog fields for one item (optional title, Moby URL, description, developer, publisher).
+# Patch Omeka catalog fields for one item (optional title, Moby URL, description, developer, publisher, donor).
 # shellcheck shell=bash
 # arguments of the form X="$I" are parsed as parameters X of type string
 omeka_ref="$1"
@@ -15,6 +15,8 @@ reset_ledger_moby="${10:-true}"
 former_title="${11:-}"
 correction_summary="${12:-}"
 execute="${13:-true}"
+donor="${14:-}"
+clear_donor="${15:-false}"
 # shellcheck disable=SC1091
 source /run/hitsave/hitsave-bootstrap.sh
 
@@ -37,6 +39,10 @@ fi
 [[ -n "${publisher:-}" ]] && args+=(--publisher "$publisher")
 if [[ "${clear_publisher:-false}" == "true" ]]; then
   args+=(--clear-publisher)
+fi
+[[ -n "${donor:-}" ]] && args+=(--donor "$donor")
+if [[ "${clear_donor:-false}" == "true" ]]; then
+  args+=(--clear-donor)
 fi
 if [[ "${reset_ledger_moby:-true}" == "false" ]]; then
   args+=(--no-reset-ledger-moby)
