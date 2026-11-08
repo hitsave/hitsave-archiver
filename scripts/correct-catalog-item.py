@@ -41,7 +41,8 @@ def _patch_wasabi_module():
     spec.loader.exec_module(mod)
     return mod
 
-_ITEM_ID_RE = re.compile(r"/item/(\d+)(?:/|$|\?)")
+# Admin/public item URLs, or the item's ARK (ark:/78322/<id>: the ARK number is the item id).
+_ITEM_ID_RE = re.compile(r"(?:/item/|\bark:/?78322/)(\d+)(?:[/?#]|$)")
 
 
 def parse_omeka_item_id(ref: str) -> int:
@@ -52,7 +53,7 @@ def parse_omeka_item_id(ref: str) -> int:
     if m:
         return int(m.group(1))
     raise SystemExit(
-        f"Could not parse Omeka item id from {ref!r} (use numeric id or a URL containing /item/<id>)"
+        f"Could not parse Omeka item id from {ref!r} (use numeric id, a URL containing /item/<id>, or an ark:/78322/<id> link)"
     )
 
 

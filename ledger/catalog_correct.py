@@ -23,7 +23,8 @@ from formatting import item_href, status_badge
 from notice import back_link, local_or_empty
 from windmill_client import run_correction_via_windmill
 
-_ITEM_ID_RE = re.compile(r"/item/(\d+)(?:/|$|\?)")
+# Admin/public item URLs, or the item's ARK (ark:/78322/<id>: the ARK number is the item id).
+_ITEM_ID_RE = re.compile(r"(?:/item/|\bark:/?78322/)(\d+)(?:[/?#]|$)")
 _TRUE = ("true", "on", "1", "yes")
 
 FetchItem = Callable[[int], "dict | None"]
@@ -104,7 +105,7 @@ def render_correct_lookup(*, omeka_ref: str = "", error: str = "", status_config
 what's wrong and check the changes before anything is saved.</p>
 {_errors([error] if error else [])}
 <form method="get" action="/correct">
-<label class="field">Omeka item id or URL
+<label class="field">Omeka item id, item URL or ARK link
 <input type="text" name="omeka_ref" value="{html.escape(omeka_ref)}" required></label>
 <div class="actions"><button type="submit">Open</button></div>
 </form></div>"""
@@ -286,7 +287,7 @@ def correct_get(
     item_id = parse_omeka_item_id(ref)
     if item_id is None:
         return render_correct_lookup(
-            omeka_ref=ref, error="Not an Omeka item id or item URL.", status_config=status_config
+            omeka_ref=ref, error="Not an Omeka item id, item URL or ARK link (ark:/78322/…).", status_config=status_config
         )
     item = fetch_item(item_id)
     if item is None:
@@ -314,7 +315,7 @@ def correct_post(
     item_id = parse_omeka_item_id(ref)
     if item_id is None:
         return render_correct_lookup(
-            omeka_ref=ref, error="Not an Omeka item id or item URL.", status_config=status_config
+            omeka_ref=ref, error="Not an Omeka item id, item URL or ARK link (ark:/78322/…).", status_config=status_config
         )
     step = _field(form, "step")
     values = _values_from_form(form)
