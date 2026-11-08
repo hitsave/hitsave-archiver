@@ -28,6 +28,7 @@ def test_press_kit_label_sources() -> None:
     assert is_labelled_press_kit(_manifest(Category="Multimedia", **{"Edition/Release": "Press Kit"}))
     assert is_labelled_press_kit(_manifest(Category="Multimedia", Comments="Press disc released at E3 2002."))
     assert is_labelled_press_kit(_manifest(Category="Bonus Discs", folder_name="09 - Titus (Press Kit)"))
+    assert is_labelled_press_kit(_manifest(Category="Multimedia", Editions="Press Kit"))  # MPF sidecar key
     assert not is_labelled_press_kit(_manifest(Category="Multimedia", **{"Edition/Release": "Original"}))
     assert not is_labelled_press_kit(_manifest(Category="Games", **{"Edition/Release": "Press Kit"}))  # software
 
