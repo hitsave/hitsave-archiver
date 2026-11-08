@@ -180,3 +180,17 @@ def test_return_to_is_carried_to_the_result_and_must_be_local() -> None:
     assert 'href="/review?moby=ok&amp;after=11">Back to the review queue</a>' in result
     evil = _hidden(_get({"omeka_ref": ["42"], "return_to": ["//evil.example/x"]}, fakes))
     assert evil["return_to"] == [""]
+
+
+def test_donated_by_field_round_trip() -> None:
+    fakes = Fakes(dict(ITEM, **{"dcterms:provenance": [{"@value": "Anthony Perkins"}]}))
+    page = _get({"omeka_ref": ["42"]}, fakes)
+    assert "Donated by" in page
+    form = _hidden(page)
+    assert form["donor"] == ["Anthony Perkins"] and form["orig_donor"] == ["Anthony Perkins"]
+    form.update(donor=["Anthony Perkins, Brock of Nostalgist's Archive"])
+    review = _post(form, "review", fakes)
+    assert "Donated by" in review and "Brock of Nostalgist" in review
+    _post(_hidden(review), "apply", fakes)
+    assert fakes.runs and fakes.runs[-1]["donor"] == "Anthony Perkins, Brock of Nostalgist's Archive"
+    assert set(fakes.runs[-1]) <= {"omeka_ref", "donor", "execute"}

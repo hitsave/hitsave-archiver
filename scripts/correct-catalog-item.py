@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Apply optional Omeka catalog corrections for one ledger item (by Omeka id or URL)."""
+"""Apply optional Omeka catalog corrections for one item (by Omeka id or URL).
+
+Items without a ledger row (catalogued by hand) can be corrected too, except --clear-moby-url,
+which needs the ledger; they have no package on Wasabi to update."""
 from __future__ import annotations
 
 import argparse
@@ -78,7 +81,7 @@ def _split_names(value: str | None) -> list[str] | None:
     return parts or None
 
 
-def _ledger_row_by_omeka_item_id(item_id: int) -> dict:
+def _ledger_row_by_omeka_item_id(item_id: int, *, required: bool = True) -> dict | None:
     ingest_cfg = load_yaml(CONFIG_ROOT / "preservation/ingest.yaml")
     db_cfg = load_yaml(Path(ingest_cfg["database"]["config_file"]))["postgres"]
     conn = register_api.pg_connect(db_cfg)
@@ -97,6 +100,8 @@ def _ledger_row_by_omeka_item_id(item_id: int) -> dict:
     finally:
         conn.close()
     if not row:
+        if not required:
+            return None
         raise SystemExit(f"No ledger row for omeka_item_id={item_id}")
     cols = [
         "game_key",
@@ -190,6 +195,8 @@ def apply_omeka_corrections(
     publishers: list[str] | None,
     clear_developer: bool,
     clear_publisher: bool,
+    donors: list[str] | None = None,
+    clear_donor: bool = False,
 ) -> dict[str, Any]:
     session, base, creds = _omeka_session()
     item_body = _fetch_item(session, base, creds, item_id)
@@ -220,6 +227,14 @@ def apply_omeka_corrections(
         publisher_pid = register_api.resolve_property_id(session, base, creds, "dcterms:publisher")
         updates["dcterms:publisher"] = [
             register_api.literal_value(publisher_pid, name) for name in publishers
+        ]
+
+    if clear_donor:
+        updates["dcterms:provenance"] = []
+    elif donors is not None:
+        provenance_pid = register_api.resolve_property_id(session, base, creds, "dcterms:provenance")
+        updates["dcterms:provenance"] = [
+            register_api.literal_value(provenance_pid, name) for name in donors
         ]
 
     if clear_developer:
@@ -288,6 +303,14 @@ def main() -> None:
         help="Clear all dcterms:publisher values on the item",
     )
     parser.add_argument(
+        "--donor", help="Who donated the physical item: one name or comma-separated list (dcterms:provenance)"
+    )
+    parser.add_argument(
+        "--clear-donor",
+        action="store_true",
+        help="Clear all dcterms:provenance values on the item",
+    )
+    parser.add_argument(
         "--reset-ledger-moby",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -308,6 +331,7 @@ def main() -> None:
 
     developers = _split_names(args.developer) if args.developer is not None else None
     publishers = _split_names(args.publisher) if args.publisher is not None else None
+    donors = _split_names(args.donor) if args.donor is not None else None
     title = (args.title or "").strip() or None
     moby_url = (args.moby_url or "").strip() or None
     description: str | None = None
@@ -318,6 +342,7 @@ def main() -> None:
         args.clear_moby_url,
         args.clear_developer,
         args.clear_publisher,
+        args.clear_donor,
     )
     correction_inputs = [
         title,
@@ -325,18 +350,22 @@ def main() -> None:
         description if args.description is not None else None,
         developers,
         publishers,
+        donors,
     ]
     if not any(v is not None for v in correction_inputs) and not any(clear_flags):
         raise SystemExit(
             "Provide at least one correction field "
-            "(--title, --moby-url, --description, --developer, --publisher, "
-            "or --clear-moby-url / --clear-developer / --clear-publisher)"
+            "(--title, --moby-url, --description, --developer, --publisher, --donor, "
+            "or --clear-moby-url / --clear-developer / --clear-publisher / --clear-donor)"
         )
     if args.clear_moby_url and moby_url is not None:
         raise SystemExit("Use either --moby-url or --clear-moby-url, not both")
+    if args.clear_donor and donors is not None:
+        raise SystemExit("Use either --donor or --clear-donor, not both")
 
     item_id = parse_omeka_item_id(args.omeka_ref)
-    ledger = _ledger_row_by_omeka_item_id(item_id)
+    # Only removing a MobyGames match needs the ledger (press-kit text, match reset).
+    ledger = _ledger_row_by_omeka_item_id(item_id, required=args.clear_moby_url)
 
     session, base, creds = _omeka_session()
     item_before = _fetch_item(session, base, creds, item_id)
@@ -366,6 +395,8 @@ def main() -> None:
         publishers=publishers,
         clear_developer=clear_developer,
         clear_publisher=clear_publisher,
+        donors=donors,
+        clear_donor=args.clear_donor,
     )
 
     if args.clear_moby_url and args.reset_ledger_moby:
@@ -382,7 +413,10 @@ def main() -> None:
         bag_moby = ""
     else:
         bag_moby = moby_url or _public_moby_uri(item_before) or ""
-    if title is not None or moby_url is not None or args.clear_moby_url:
+    if ledger is None and (title is not None or moby_url is not None):
+        print(json.dumps({"wasabi_bag": "skipped", "reason": "no ledger row: no package on Wasabi"}, indent=2),
+              file=sys.stderr)
+    elif title is not None or moby_url is not None or args.clear_moby_url:
         if not bag_moby and not args.clear_moby_url:
             print(
                 json.dumps(

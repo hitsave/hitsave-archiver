@@ -60,3 +60,10 @@ schema:
       type: boolean
       description: Upload bag metadata to Wasabi when title or moby_url changes
       default: true
+    donor:
+      type: string
+      description: dcterms:provenance ("Donated by") — who donated the physical item; one name or comma-separated list
+    clear_donor:
+      type: boolean
+      description: Clear all dcterms:provenance values
+      default: false
