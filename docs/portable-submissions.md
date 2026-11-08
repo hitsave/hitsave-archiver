@@ -35,7 +35,13 @@ ingest_kind: press_material
 omeka_item_title: "My Game — press and marketing materials"
 material_type: press
 submitter: archivist@example.org
+donor: Anthony Perkins   # optional: who donated the physical item (a list works too)
 ```
+
+`donor` becomes the Omeka item's **Donated by** field (`dcterms:provenance`); names are added to
+any donors already on the item. The same key works for Drive/Wasabi uploads: a
+`hitsave-submission.yaml` with just `donor:` in the upload folder (hitsave-intake copies it into
+the handoff manifest). `submitter` is who sent the files, which isn't always the donor.
 
 Ledger **`game_key`** (`package_id`) is assigned at ingest — do not set it in the zip manifest.
 

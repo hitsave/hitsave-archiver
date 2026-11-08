@@ -14,6 +14,8 @@ try:
 except ImportError:
     yaml = None  # type: ignore
 
+from donor_provenance import donor_names
+
 _UNIX_IFMT = 0o170000
 _UNIX_IFREG = 0o100000
 _UNIX_IFDIR = 0o040000
@@ -34,6 +36,7 @@ class SubmissionManifest:
     material_type: str | None
     submitter: str | None
     notes: str | None
+    donor: tuple[str, ...] = ()  # who donated the physical item -> Omeka "Donated by"
 
 
 @dataclass(frozen=True)
@@ -274,6 +277,7 @@ def load_manifest(
             material_type=str(data.get("material_type") or "").strip() or None,
             submitter=str(data.get("submitter") or "").strip() or None,
             notes=str(data.get("notes") or "").strip() or None,
+            donor=tuple(donor_names(data.get("donor"))),
         )
     return empty
 

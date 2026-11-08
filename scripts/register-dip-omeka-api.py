@@ -29,6 +29,7 @@ from moby_resolve import (  # noqa: E402
 )
 from yaml_config import load_yaml  # noqa: E402
 from press_material_description import press_material_description  # noqa: E402
+from donor_provenance import PROVENANCE, donor_names, merged_provenance  # noqa: E402
 from normalize_display_title import catalog_item_title  # noqa: E402
 from omeka_dip_media import find_dip_media_id_on_item  # noqa: E402
 from omeka_staff_metadata import (  # noqa: E402
@@ -545,6 +546,16 @@ def main() -> None:
     else:
         desc_text = press_material_description(title, inventory_json)
     extra["dcterms:description"] = [literal_value(desc_pid, desc_text)]
+    donors = donor_names((game_cfg.get("submission") or {}).get("donor"))
+    if donors:
+        existing_body = None
+        if ledger_item_id_existing:
+            got = session.get(api_url(base, f"items/{ledger_item_id_existing}", creds), timeout=120)
+            got.raise_for_status()
+            existing_body = got.json()
+        extra[PROVENANCE] = merged_provenance(
+            existing_body, donors, resolve_property_id(session, base, creds, PROVENANCE), literal_value
+        )
     if metadata_json and uses_moby_catalog_data(metadata_json):
         append_moby_fields_to_payload(
             extra,

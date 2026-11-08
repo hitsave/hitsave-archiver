@@ -150,6 +150,7 @@ def main() -> None:
                 material_type=inner.material_type or manifest.material_type,
                 submitter=inner.submitter or manifest.submitter,
                 notes=inner.notes or manifest.notes,
+                donor=inner.donor or manifest.donor,
             )
 
         title_raw = (
@@ -188,7 +189,7 @@ def main() -> None:
             game_cfg["max_files"] = int(pres_block["max_files"])
         if pres_block.get("max_total_bytes") is not None:
             game_cfg["max_total_bytes"] = int(pres_block["max_total_bytes"])
-        if manifest.material_type or manifest.submitter or manifest.notes:
+        if manifest.material_type or manifest.submitter or manifest.notes or manifest.donor:
             game_cfg["submission"].update(
                 {
                     k: v
@@ -196,6 +197,7 @@ def main() -> None:
                         "material_type": manifest.material_type,
                         "submitter": manifest.submitter,
                         "notes": manifest.notes,
+                        "donor": list(manifest.donor),
                         "source_zip": str(zip_path),
                     }.items()
                     if v

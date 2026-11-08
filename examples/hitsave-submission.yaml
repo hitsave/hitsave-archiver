@@ -4,3 +4,4 @@ omeka_item_title: "My Game — press and marketing materials"
 material_type: press
 submitter: archivist@example.org
 notes: Received from publisher; includes high-res box art.
+donor: Anthony Perkins  # who donated the physical item -> Omeka "Donated by"; one name or a list

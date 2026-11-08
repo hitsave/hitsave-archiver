@@ -62,6 +62,7 @@ COPY scripts/batch-expand-preservation.py \
     scripts/ingest_kind.py \
     scripts/dump_classify.py \
     scripts/dump_catalog_omeka.py \
+    scripts/donor_provenance.py \
     scripts/dump_platforms.py \
     scripts/apply_dump_catalog_omeka.py \
     scripts/batch_ledger.py \
