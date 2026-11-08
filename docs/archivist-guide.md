@@ -86,6 +86,41 @@ catalog title. You can still [fix a title](#fix-a-catalog-record) later.
    as for Drive.
 3. Leave the folder alone. As on Drive, the archive starts once nothing has changed for an hour.
 
+## Credit the person who donated the item
+
+If someone donated the physical item, such as the disc, cartridge or tape, add their name to the
+upload. The catalog record then shows it as **Donated by**.
+
+1. Create a plain-text file named exactly `hitsave-submission.yaml`.
+2. Put one line in it with the donor's name:
+
+   ```yaml
+   donor: Anthony Perkins
+   ```
+
+   For more than one donor, separate the names with commas:
+
+   ```yaml
+   donor: Anthony Perkins, Brock of Nostalgist's Archive
+   ```
+
+3. Upload the file into the dump's folder, next to the image files and the sidecar. Put it at the
+   top of the folder, not in a subfolder, or the archive won't find it.
+
+The archive reads only the `donor` line. The file can't change the title or anything else, and the
+archive doesn't keep it in the package. When the catalog record appears, check that it shows
+**Donated by** with the right name.
+
+A few things that trip people up:
+
+- Write each name without commas, for example `John Smith`, not `Smith, John`. The archive treats a
+  comma as the start of the next name.
+- Save the file as plain text. In TextEdit, choose **Format › Make Plain Text** first. Windows can
+  hide a `.txt` on the end of the name, so check that the file isn't called
+  `hitsave-submission.yaml.txt`.
+- If you forget the file, you can add the donor afterwards on the correction page; see
+  [Fix a catalog record](#fix-a-catalog-record).
+
 ## Follow your package in the ledger
 
 1. Open [ledger.hitsave.org](https://ledger.hitsave.org). The **Ledger** page lists every package,
@@ -156,13 +191,15 @@ To fix a title or other details:
    page opens with the fields filled in with what the catalog has now.
 
    ![The Correct catalog metadata form, filled in with the item's current title, MobyGames URL, description, developers and publishers](images/archivist-guide/correct-form.png)
-   <!-- TODO: screenshot predates the prefilled form (2026-11-06); retake. -->
+   <!-- TODO: screenshot predates the prefilled form (2026-11-06); retake. Also lacks the Donated by box (2026-11-08). -->
 
 2. Change only what's wrong. Fields you leave as they are stay unchanged.
    - **Title**
    - **MobyGames URL**: the address of the right game on [MobyGames](https://www.mobygames.com)
    - **Description**
    - **Developers** and **Publishers**, separated by commas. To remove them all, empty the box.
+   - **Donated by**: who donated the physical item, separated by commas. To remove them all, empty
+     the box.
 3. If the archive linked the wrong MobyGames game and there's no right one, tick **Remove the
    MobyGames match**. That removes the MobyGames link and what came with it: the release date, the
    MobyGames rights statement and, unless you changed them here, the developers and publishers. For

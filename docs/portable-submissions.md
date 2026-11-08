@@ -38,10 +38,11 @@ submitter: archivist@example.org
 donor: Anthony Perkins   # optional: who donated the physical item (a list works too)
 ```
 
-`donor` becomes the Omeka item's **Donated by** field (`dcterms:provenance`); names are added to
-any donors already on the item. The same key works for Drive/Wasabi uploads: a
-`hitsave-submission.yaml` with just `donor:` in the upload folder (hitsave-intake copies it into
-the handoff manifest). `submitter` is who sent the files, which isn't always the donor.
+Registration adds each `donor` name to the catalog record's **Donated by** field (Omeka
+`dcterms:provenance`) and keeps any donors already there. Write each name without commas: the
+archive treats a comma as the start of the next name. Drive and Wasabi uploads use the same key;
+see [Credit the person who donated the item](archivist-guide.md#credit-the-person-who-donated-the-item).
+`submitter` is the person who sent the files, who isn't always the donor.
 
 Ledger **`game_key`** (`package_id`) is assigned at ingest — do not set it in the zip manifest.
 
