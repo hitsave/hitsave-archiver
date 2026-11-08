@@ -525,6 +525,18 @@ def is_labelled_press_kit(manifest: dict[str, Any]) -> bool:
     ) is not None
 
 
+def is_press_material(manifest: dict[str, Any]) -> bool:
+    """Catalogued as press material: a labelled press kit, or a disc made for retailers / the trade
+    (Redump Title, e.g. "NBA Live 08: Retailer DVD"), unless Redump files it as software."""
+    from disc_contents_policy import NO_PUBLIC_CATEGORIES, retailer_label
+
+    if is_labelled_press_kit(manifest):
+        return True
+    fields = ((manifest.get("redump") or {}).get("parsed") or {}).get("fields") or {}
+    category = str(fields.get("Category") or manifest.get("dump_category") or "").strip().casefold()
+    return category not in NO_PUBLIC_CATEGORIES and retailer_label(fields.get("Title")) is not None
+
+
 def dump_catalog_config(
     uploader_cfg: dict[str, Any],
     dump_class: str | None = None,
@@ -537,8 +549,8 @@ def dump_catalog_config(
     then by_dump_system.<dump_system> (the system wins; system names match case-insensitively).
     dump_class alone is too coarse: "redump" covers DVD-Video coverdiscs and PS4 game discs alike.
     by_system_category."<System>/<Category>" (Redump Category, e.g. "Sony PlayStation/Coverdiscs")
-    is the most specific and wins over both. A labelled press kit (is_labelled_press_kit) takes the
-    press_kit block over all of them: it's press material whatever the disc.
+    is the most specific and wins over both. Press material (is_press_material: a labelled press kit
+    or a retailer disc) takes the press_kit block over all of them, whatever the disc.
 
       dump_catalog:
         item_set_title: Video Games         # defaults: games

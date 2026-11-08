@@ -9,7 +9,7 @@ Writes into --out:
                              Word/RTF/WRI/Excel/PowerPoint file, .page1.jpg per PDF, .jpg per
                              BMP/PCX/TGA/TIFF image
   listing.json               every file: path, size, mtime, sha256, mime, kind, derived copies
-  result.json                status (ok | too_large | no_image | failed), reason, tool versions
+  result.json                status (ok | no_image | failed), reason, tool versions
 
 The disc image is never changed: raw CD sectors (BIN, MODE1/2352 or MODE2/2352) are converted
 into a scratch ISO first. Programs are listed, never run. Nothing here decides whether the
@@ -31,7 +31,6 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont, ImageStat
 
-MAX_BYTES = 1024 ** 3  # extracted files; larger discs get a listing only
 SECTOR = 2048
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 
@@ -316,7 +315,46 @@ def tool_versions() -> dict[str, str]:
     return out
 
 
-def run(package: Path, out: Path, *, max_bytes: int = MAX_BYTES, web_copies: bool = True) -> dict:
+# Encode labels at the end of a video's name: the same clip in several sizes (press asset discs
+# often carry _BIG/_HD_720p/_HI/_LO of each). Higher rank = better web copy source.
+_VARIANT = re.compile(r"[\s_-]+(?P<v>hd[\s_-]?1080[pi]?|1080[pi]|hd[\s_-]?720p?|720p|hd|big|large|high|hi|"
+                      r"med(?:ium)?|sd|small|low|lo)$", re.IGNORECASE)
+
+
+def _variant_rank(label: str) -> int:
+    v = re.sub(r"[\s_-]", "", label.lower())
+    if "1080" in v:
+        return 4
+    if "720" in v or v == "hd":
+        return 3
+    if v in ("big", "large", "high", "hi"):
+        return 2
+    if v in ("med", "medium"):
+        return 1
+    return 0
+
+
+def video_variant_skips(sizes: dict[str, int]) -> set[str]:
+    """Videos to skip for web copies: when one folder holds the same clip in several encodes
+    (name + encode label), only the best one (resolution label, then size) gets an MP4. The others
+    stay in the listing and the bag for download."""
+    groups: dict[tuple[str, str], list[tuple[int, int, str]]] = {}
+    for rel, size in sizes.items():
+        folder, _, name = rel.rpartition("/")
+        stem = name.rsplit(".", 1)[0]
+        m = _VARIANT.search(stem)
+        if not m or not stem[:m.start()]:
+            continue
+        groups.setdefault((folder, stem[:m.start()].casefold()), []).append((_variant_rank(m["v"]), size, rel))
+    skips: set[str] = set()
+    for members in groups.values():
+        if len(members) > 1:
+            best = max(members)
+            skips.update(rel for *_, rel in members if rel != best[2])
+    return skips
+
+
+def run(package: Path, out: Path, *, web_copies: bool = True) -> dict:
     for stale in ("files", "derived"):
         shutil.rmtree(out / stale, ignore_errors=True)
     for stale in ("listing.json", "result.json"):
@@ -342,9 +380,6 @@ def run(package: Path, out: Path, *, max_bytes: int = MAX_BYTES, web_copies: boo
         result.update(volume_label=label, root=root)
         total = listed_total(iso)
         result["listed_bytes"] = total
-        if total > max_bytes:
-            result.update(status="too_large", reason=f"{total} bytes of files, over the {max_bytes} byte limit")
-            return _finish(out, result)
         files_root = out / "files" / root
         try:
             extract(iso, files_root)
@@ -353,7 +388,10 @@ def run(package: Path, out: Path, *, max_bytes: int = MAX_BYTES, web_copies: boo
             return _finish(out, result)
         derived_root = out / "derived"
         entries = []
-        for path in sorted(p for p in files_root.rglob("*") if p.is_file()):
+        all_files = sorted(p for p in files_root.rglob("*") if p.is_file())
+        skip_videos = video_variant_skips({p.relative_to(out / "files").as_posix(): p.stat().st_size
+                                           for p in all_files if kind_of(p.name) == "video"})
+        for path in all_files:
             rel = path.relative_to(out / "files").as_posix()
             entry = {
                 "path": rel,
@@ -363,7 +401,10 @@ def run(package: Path, out: Path, *, max_bytes: int = MAX_BYTES, web_copies: boo
                 "mime": mime_of(path),
                 "kind": kind_of(path.name),
             }
-            if web_copies:
+            if rel in skip_videos:
+                entry["derived"] = {}
+                entry["web_copy_skipped"] = "another encode of the same clip has the web copy"
+            elif web_copies:
                 try:
                     entry["derived"] = make_web_copies(rel, path, derived_root, work)
                 except (OSError, subprocess.TimeoutExpired) as exc:
@@ -395,10 +436,9 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--package", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--max-bytes", type=int, default=int(os.environ.get("DISC_CONTENTS_MAX_BYTES", MAX_BYTES)))
     args = ap.parse_args(argv)
-    result = run(args.package, args.out, max_bytes=args.max_bytes)
-    return 0 if result["status"] in ("ok", "too_large", "no_image") else 1
+    result = run(args.package, args.out)
+    return 0 if result["status"] in ("ok", "no_image") else 1
 
 
 if __name__ == "__main__":

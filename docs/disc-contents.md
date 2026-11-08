@@ -12,9 +12,13 @@ material: images, videos (MP4 web copies), documents (PDF web copies) and the fi
 | Disc | Display |
 |---|---|
 | Labelled press kit (Edition, Comments or folder name: press kit / press disc / EPK / media kit) | `public` |
+| Retailer disc (Redump Title: "Retailer DVD", "Retail Disc", "Trade Kit"…; never the Edition, where "Retail" means the shop release) | `review` |
 | Multimedia, Video, Audio, Bonus Discs, Coverdiscs, or unknown category | `review` (staff decide in the ledger) |
 | Games, Demos, Applications, Educational, Add-Ons, Preproduction | `none`, even with a press kit label |
 | Console and video discs | `skip` |
+
+Labelled press kits and retailer discs are catalogued in the press material item set
+(`dump_catalog.press_kit` in omeka-catalog.yaml, `is_press_material` in dump_catalog_omeka.py).
 
 The decision is on the ledger row (`game_ingest.disc_contents_*`, schema/012). Staff decisions
 (review → public / none) stand when the step runs again.
@@ -49,8 +53,10 @@ Run by the remote-intake sweep after Omeka registration (`remote_intake_disc_con
 1. `build_disc_contents_bag.py classify --slug S` (ingest-worker): decision → ledger. Exit 3 = not shown.
 2. `docker compose run --rm disc-contents --package /data/intake/ready/S --out /output/S`
    (`disc-contents/Dockerfile`, no network): files + web copies under `<output>/disc-contents/S/`.
-   Raw CD sectors (BIN MODE1/MODE2 2352) are read through a scratch ISO; discs with more than
-   1 GiB of files get no contents bag (`too_large`).
+   Raw CD sectors (BIN MODE1/MODE2 2352) are read through a scratch ISO. There is no size cap:
+   a full DVD-ROM needs its size in free space under `<output>/disc-contents/` (files + scratch).
+   When a folder holds the same clip in several encodes (`_BIG` / `_HD_720p` / `_HI` / `_LO`…),
+   only the best one (resolution label, then size) gets an MP4; the others stay downloadable.
 3. `build_disc_contents_bag.py build --slug S` (ingest-worker): ClamAV over every file (malware →
    display `none`), build and validate the bag, verified upload, ledger prefix and summary.
 4. `build_disc_contents_bag.py attach --slug S` (omeka-catalog): Omeka media on the item, public
