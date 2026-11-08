@@ -9,6 +9,7 @@ from typing import Any
 
 import requests
 
+from donor_provenance import PROVENANCE, donor_names, merged_provenance
 from dump_classify import classify_dump_sip, find_submission_info_path
 from package_identity import sort_letter as catalog_sort_letter
 from hitsave_dump_sidecars.redump import (
@@ -263,6 +264,8 @@ def manifest_from_sip_and_handoff(
         "switch": switch_block,
         # Contributor's folder name (hitsave-submission.yaml): one of the press kit labels.
         "folder_name": _handoff_folder_name(handoff),
+        # Who donated the disc (handoff `donor`) -> "Donated by" (dcterms:provenance).
+        "donor": donor_names(handoff.get("donor")) if handoff else [],
     }
     if handoff.get("wasabi"):
         manifest["wasabi"].update(
@@ -341,6 +344,32 @@ def build_switch_values(
 
 
 def build_dump_catalog_values(
+    session: requests.Session,
+    base: str,
+    creds: dict,
+    manifest: dict[str, Any],
+    *,
+    storage_uri_base: str,
+    api,
+    redump_cfg: dict[str, Any] | None = None,
+    existing_item: dict | None = None,
+    ledger_aip_wasabi_prefix: str | None = None,
+    ledger_package_storage_prefix: str | None = None,
+    wasabi_ingest_cfg: dict | None = None,
+) -> tuple[dict[str, list], str]:
+    values, title = _build_dump_catalog_values(
+        session, base, creds, manifest, storage_uri_base=storage_uri_base, api=api, redump_cfg=redump_cfg,
+        existing_item=existing_item, ledger_aip_wasabi_prefix=ledger_aip_wasabi_prefix,
+        ledger_package_storage_prefix=ledger_package_storage_prefix, wasabi_ingest_cfg=wasabi_ingest_cfg,
+    )
+    donors = manifest.get("donor") or []
+    if donors:
+        pid = api.resolve_property_id(session, base, creds, PROVENANCE)
+        values[PROVENANCE] = merged_provenance(existing_item, donors, pid, api.literal_value)
+    return values, title
+
+
+def _build_dump_catalog_values(
     session: requests.Session,
     base: str,
     creds: dict,
