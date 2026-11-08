@@ -48,6 +48,13 @@ _PRESS_KIT = re.compile(
     re.IGNORECASE,
 )
 
+# A disc made for shops (in-store loops, retailer marketing assets), named in the Redump Title.
+# Never read from Edition: "Retail" there just means the shop release of a game.
+_RETAILER = re.compile(
+    r"\bretailers?\b(?!\s*(?:edition|version|release)\b)|\b(?:retail|trade)[\s_-]*(?:dvd|cd|disc|kit)s?\b",
+    re.IGNORECASE,
+)
+
 
 @dataclass(frozen=True)
 class DiscContentsDecision:
@@ -73,6 +80,13 @@ def press_kit_label(*texts: str | None) -> str | None:
     return None
 
 
+def retailer_label(title: str | None) -> str | None:
+    """The title, when it names a disc made for retailers or the trade; else None."""
+    if title and _RETAILER.search(title):
+        return " ".join(title.split())
+    return None
+
+
 def classify(
     *,
     system: str | None,
@@ -80,6 +94,7 @@ def classify(
     edition: str | None = None,
     comments: str | None = None,
     folder_name: str | None = None,
+    title: str | None = None,
 ) -> DiscContentsDecision:
     """Decide from the Redump sidecar fields (System, Category, Edition/Release, Comments) and the
     contributor's folder name."""
@@ -98,6 +113,8 @@ def classify(
         return DiscContentsDecision("retail", NONE, reasons)
     if label:
         return DiscContentsDecision("press_kit", PUBLIC, [f"labelled press kit ({label})"])
+    if retailer_label(title):
+        return DiscContentsDecision("promotional", REVIEW, [f"retailer disc (Title: {retailer_label(title)[:120]}): needs review"])
     if cat_n in REVIEW_CATEGORIES:
         return DiscContentsDecision("promotional", REVIEW, [f"Category {category!r}: needs review"])
     return DiscContentsDecision("promotional", REVIEW, [f"Category {category or '(none)'!r}: unknown, needs review"])
@@ -123,4 +140,5 @@ def classify_submission(fields: dict[str, str], *, folder_name: str | None = Non
         edition=edition_field(fields),
         comments=fields.get("Comments"),
         folder_name=folder_name,
+        title=fields.get("Title"),
     )

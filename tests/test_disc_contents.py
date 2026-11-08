@@ -149,3 +149,29 @@ def test_item_package_lookup_skips_the_disc_contents_media() -> None:
     assert media_is_disc_contents(contents) and not media_is_disc_contents(dump)
     assert not media_is_dip_package(contents, dip_ingester="omeka_dip_package")
     assert media_is_dip_package(dump, dip_ingester="omeka_dip_package")
+
+
+def test_one_web_copy_per_clip_from_the_best_encode() -> None:
+    videos = {
+        "D/Videos/FIBA/NBALIVE08_FIBA_BIG.mov": 63_653_220,
+        "D/Videos/FIBA/NBALIVE08_FIBA_HD_720p.mov": 63_700_000,
+        "D/Videos/FIBA/NBALIVE08_FIBA_HI.mov": 88_900_000,
+        "D/Videos/FIBA/NBALIVE08_FIBA_LO.mov": 8_200_000,
+        "D/Videos/Kiki/GO_TO_MOVES_HD_720p.mov": 1,
+        "D/Videos/Kiki/KIKIS_GO_TO_MOVES_HD_720p.mov": 2,  # a different clip
+        "D/Videos/Other/NBALIVE08_FIBA_LO.mov": 3,  # same name, other folder: its own clip
+        "D/Videos/Commercials/Wait_30_7513.mov": 4,
+    }
+    skips = x.video_variant_skips(videos)
+    assert skips == {"D/Videos/FIBA/NBALIVE08_FIBA_BIG.mov", "D/Videos/FIBA/NBALIVE08_FIBA_HI.mov",
+                     "D/Videos/FIBA/NBALIVE08_FIBA_LO.mov"}
+    # Without a resolution label the largest encode wins.
+    assert x.video_variant_skips({"a/clip_LO.mov": 5, "a/clip_BIG.mov": 9, "a/clip_HI.mov": 7}) == {
+        "a/clip_LO.mov", "a/clip_HI.mov"}
+
+
+def test_no_size_cap() -> None:
+    import inspect
+
+    assert "max_bytes" not in inspect.signature(x.run).parameters
+    assert not hasattr(x, "MAX_BYTES")

@@ -57,3 +57,22 @@ def test_classify_submission_reads_mpf_editions_field() -> None:
     assert p.classify_submission(fields).display == "public"
     assert p.edition_field({"Editions": "Press Kit"}) == "Press Kit"
     assert p.edition_field({}) is None
+
+
+def test_retailer_label_reads_titles_not_editions() -> None:
+    assert p.retailer_label("NBA Live 08: Retailer DVD") == "NBA Live 08: Retailer DVD"
+    assert p.retailer_label("FIFA 08 Retail Disc")
+    assert p.retailer_label("Halo 3 Trade Kit")
+    assert p.retailer_label("Retailers' Sampler")
+    assert not p.retailer_label("Retail")  # a normal Redump edition: the shop release
+    assert not p.retailer_label("Trade Empires")
+    assert not p.retailer_label(None)
+
+
+def test_retailer_disc_goes_to_review_with_a_reason() -> None:
+    fields = {"System": "IBM PC compatible", "Category": "Multimedia", "Title": "NBA Live 08: Retailer DVD"}
+    d = p.classify_submission(fields)
+    assert (d.disc_class, d.display) == ("promotional", "review")
+    assert "retailer disc" in d.reasons[0]
+    games = p.classify_submission({**fields, "Category": "Games"})
+    assert games.display == "none"

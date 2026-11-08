@@ -41,3 +41,12 @@ def test_press_kit_set_beats_system_and_category() -> None:
     assert dump_catalog_config(cfg, "redump", "IBM PC compatible", "Multimedia")["item_set_id"] == 572
     no_rule = {"dump_catalog": {k: v for k, v in BASE.items() if k != "press_kit"}}
     assert dump_catalog_config(no_rule, "redump", "IBM PC compatible", "Multimedia", press_kit=True)["item_set_id"] == 572
+
+
+def test_retailer_discs_are_press_material() -> None:
+    from dump_catalog_omeka import is_press_material
+
+    assert is_press_material(_manifest(Category="Multimedia", Title="NBA Live 08: Retailer DVD"))
+    assert is_press_material(_manifest(Category="Multimedia", Editions="Press Kit"))
+    assert not is_press_material(_manifest(Category="Multimedia", Title="NBA Live 08", Editions="Retail"))
+    assert not is_press_material(_manifest(Category="Demos", Title="Retailer Demo Disc"))  # software
