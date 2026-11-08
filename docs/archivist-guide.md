@@ -190,8 +190,7 @@ To fix a title or other details:
 1. Open the package's item page and click **Correct metadata**. The **Correct catalog metadata**
    page opens with the fields filled in with what the catalog has now.
 
-   ![The Correct catalog metadata form, filled in with the item's current title, MobyGames URL, description, developers and publishers](images/archivist-guide/correct-form.png)
-   <!-- TODO: screenshot predates the prefilled form (2026-11-06); retake. Also lacks the Donated by box (2026-11-08). -->
+   ![The Correct catalog metadata form for the Final Fantasy VII Advent Children trailer disc, filled in with its current title, description, developers, publishers and Donated by: Anthony Perkins](images/archivist-guide/correct-form.png)
 
 2. Change only what's wrong. Fields you leave as they are stay unchanged.
    - **Title**
