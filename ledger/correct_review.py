@@ -152,6 +152,13 @@ def side_effects(changes: list[Change], *, clear_moby: bool, execute: bool) -> l
         if "description" not in fields:
             out.append("For press material, the description goes back to the text from the press kit.")
         out.append("The ledger forgets its MobyGames match for this package.")
+    elif "moby_url" in fields:
+        follow = [FIELD_LABELS[f].lower() for f in _MOBY_NAME_FIELDS if f not in fields]
+        if follow:
+            out.append(
+                f"The {' and '.join(follow)} are replaced with the ones MobyGames lists for the new game. "
+                "If MobyGames lists none, or can't be reached, they stay as they are."
+            )
     if fields & {"title", "moby_url"} or clear_moby:
         if execute:
             out.append("The package's details stored on Wasabi are updated to match.")

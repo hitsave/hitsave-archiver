@@ -25,6 +25,7 @@ CONFIG_ROOT = Path(__import__("os").environ.get("HITSAVE_CONFIG_ROOT", str(REPO_
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from moby_omeka_fields import moby_bibo_uri_rows, public_bibo_uri_rows_without_moby  # noqa: E402
+from moby_web_search import moby_game_id_from_url  # noqa: E402
 from omeka_catalog_common import load_register_dip_omeka_api  # noqa: E402
 from press_material_description import press_material_description  # noqa: E402
 from yaml_config import load_yaml  # noqa: E402
@@ -185,6 +186,53 @@ def _reset_ledger_moby_match(game_key: str) -> None:
         conn.close()
 
 
+def moby_companies_for_url(url: str) -> tuple[list[str], list[str]]:
+    """(developers, publishers) MobyGames lists for the game at *url*, picked as at ingest."""
+    from moby_resolve import MobyClient, load_mobygames_config, moby_credentials_path
+
+    game_id = moby_game_id_from_url(url)
+    if game_id is None:
+        raise ValueError(f"no MobyGames game id in {url!r}")
+    moby_cfg = load_mobygames_config(CONFIG_ROOT)
+    client = MobyClient(moby_cfg, moby_credentials_path(CONFIG_ROOT, moby_cfg))
+    return client.companies(game_id)
+
+
+def names_from_moby(
+    moby_url: str,
+    *,
+    developers: list[str] | None,
+    publishers: list[str] | None,
+    clear_developer: bool,
+    clear_publisher: bool,
+) -> tuple[list[str] | None, list[str] | None]:
+    """Fill developers/publishers the form left alone with the ones MobyGames lists for the new
+    game. Names typed (or cleared) in the form win. A role MobyGames doesn't list, or a failed
+    lookup, leaves the item's current names in place; both are reported on stderr."""
+    want_dev = developers is None and not clear_developer
+    want_pub = publishers is None and not clear_publisher
+    if not (want_dev or want_pub):
+        return developers, publishers
+    try:
+        moby_dev, moby_pub = moby_companies_for_url(moby_url)
+    except Exception as exc:  # noqa: BLE001 - the URL correction itself still goes ahead
+        print(json.dumps({"moby_companies": "lookup failed; developers and publishers left unchanged",
+                          "error": f"{type(exc).__name__}: {exc}"}), file=sys.stderr)
+        return developers, publishers
+    found: dict[str, list[str]] = {}
+    for want, role, names in (("dev", "developers", moby_dev), ("pub", "publishers", moby_pub)):
+        if not (want_dev if want == "dev" else want_pub):
+            continue
+        if names:
+            found[role] = names
+        else:
+            print(json.dumps({"moby_companies": f"MobyGames lists no {role} for this game; {role} left unchanged"}),
+                  file=sys.stderr)
+    if found:
+        print(json.dumps({"moby_companies": found}, indent=2, ensure_ascii=False))
+    return found.get("developers", developers), found.get("publishers", publishers)
+
+
 def apply_omeka_corrections(
     *,
     item_id: int,
@@ -282,7 +330,12 @@ def main() -> None:
         help="Omeka item id or public/admin/site URL containing /item/<id>",
     )
     parser.add_argument("--title")
-    parser.add_argument("--moby-url", help="MobyGames game page URL (public bibo:uri)")
+    parser.add_argument(
+        "--moby-url",
+        help="MobyGames game page URL (public bibo:uri). Also sets dcterms:creator and dcterms:publisher "
+        "to the game's developers and publishers on MobyGames, unless --developer / --publisher "
+        "(or their --clear- flags) are given",
+    )
     parser.add_argument(
         "--clear-moby-url",
         action="store_true",
@@ -385,6 +438,12 @@ def main() -> None:
     clear_publisher = args.clear_publisher or (
         args.clear_moby_url and args.publisher is None
     )
+
+    if moby_url is not None and not args.clear_moby_url:
+        developers, publishers = names_from_moby(
+            moby_url, developers=developers, publishers=publishers,
+            clear_developer=clear_developer, clear_publisher=clear_publisher,
+        )
 
     apply_omeka_corrections(
         item_id=item_id,

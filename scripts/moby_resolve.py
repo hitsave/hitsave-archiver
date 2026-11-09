@@ -621,6 +621,35 @@ class MobyClient:
         game_id = int(chosen.get("game_id") or chosen.get("id"))
         return self.resolve_by_id(game_id, search_title, fallback_title=chosen.get("title"))
 
+    def _companies_for_platforms(
+        self, game_id: int, platforms: list[dict], first_release_date: str | None
+    ) -> tuple[list[str], list[str], list[int]]:
+        """(developers, publishers, platform ids read) from the releases of the chosen platforms."""
+        scope = self.cfg.get("company_platform_scope", "earliest_platform")
+        platform_ids = choose_platform_ids(platforms, first_release_date, scope)
+        developers: list[str] = []
+        publishers: list[str] = []
+        for platform_id in platform_ids:
+            try:
+                plat_detail = self._get(f"games/{game_id}/platforms/{platform_id}")
+            except Exception:
+                continue
+            pubs, devs = companies_from_platform_detail(plat_detail)
+            publishers += [n for n in pubs if n not in publishers]
+            developers += [n for n in devs if n not in developers]
+        return developers, publishers, platform_ids
+
+    def companies(self, game_id: int) -> tuple[list[str], list[str]]:
+        """(developers, publishers) for one game, picked the same way as at ingest. Raises on API errors."""
+        detail = self._get(f"games/{game_id}", {"format": "normal"})
+        game = detail if isinstance(detail, dict) and detail.get("title") else detail.get("game") or detail
+        platforms = game.get("platforms") or []
+        dates = sorted(
+            str(plat[key]) for plat in platforms for key in ("first_release_date", "release_date") if plat.get(key)
+        )
+        developers, publishers, _ = self._companies_for_platforms(game_id, platforms, dates[0] if dates else None)
+        return developers, publishers
+
     def resolve_by_id(
         self,
         game_id: int,
@@ -653,28 +682,9 @@ class MobyClient:
         if dates:
             metadata["first_release_date"] = sorted(dates)[0]
 
-        scope = self.cfg.get("company_platform_scope", "earliest_platform")
-        platform_ids = choose_platform_ids(
-            platforms, metadata.get("first_release_date"), scope
+        all_developers, all_publishers, platform_ids = self._companies_for_platforms(
+            game_id, platforms, metadata.get("first_release_date")
         )
-        all_publishers: list[str] = []
-        all_developers: list[str] = []
-        seen_pub: set[str] = set()
-        seen_dev: set[str] = set()
-        for platform_id in platform_ids:
-            try:
-                plat_detail = self._get(f"games/{game_id}/platforms/{platform_id}")
-            except Exception:
-                continue
-            pubs, devs = companies_from_platform_detail(plat_detail)
-            for name in pubs:
-                if name not in seen_pub:
-                    seen_pub.add(name)
-                    all_publishers.append(name)
-            for name in devs:
-                if name not in seen_dev:
-                    seen_dev.add(name)
-                    all_developers.append(name)
         if all_publishers:
             metadata["publishers"] = all_publishers
         if all_developers:
