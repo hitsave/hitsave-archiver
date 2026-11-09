@@ -61,3 +61,13 @@ def test_verify_flags_any_other_change() -> None:
     assert bra.unexpected_changes(before, after) == []
     after["dcterms:title"] = [lit(1, "Changed")]
     assert bra.unexpected_changes(before, after) == ["dcterms:title"]
+
+
+def test_ledger_only_picks_ledger_items_and_never_lists_omeka() -> None:
+    ledger = {31391: {}, 25: {}}
+    def boom():
+        raise AssertionError("must not list every Omeka item")
+    assert bra.target_ids([], ledger, ledger_only=True, list_all=boom) == [25, 31391]
+    assert bra.target_ids([25814, 31391], ledger, ledger_only=True, list_all=boom) == [31391]
+    assert bra.target_ids([25814], ledger, ledger_only=False, list_all=boom) == [25814]
+    assert bra.target_ids([], ledger, ledger_only=False, list_all=lambda: [1, 2]) == [1, 2]
