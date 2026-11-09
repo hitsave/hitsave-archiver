@@ -47,9 +47,13 @@ ledger_status_for_slug() {
 
 register_omeka() {
   local slug="$1"
-  if "$RI/register-dump-omeka.sh" --slug "$slug"; then
+  local rc=0
+  "$RI/register-dump-omeka.sh" --slug "$slug" || rc=$?
+  if [[ "$rc" -eq 0 ]]; then
     echo "--- omeka ok $slug ---"
     remote_intake_disc_contents "$slug"
+  elif [[ "$rc" -eq 3 ]]; then
+    echo "--- omeka held for review: $slug (an existing item describes the same disc; see the Ledger) ---"
   else
     echo "WARN: omeka register failed for $slug $(date -Is)"
   fi

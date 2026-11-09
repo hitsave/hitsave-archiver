@@ -24,6 +24,7 @@ from dump_catalog_omeka import (  # noqa: E402
     is_press_material,
     manifest_from_sip_and_handoff,
 )
+from dump_catalog_match import HOLD_REASON, hold_note, matches_for_new_item, redump_disc_id  # noqa: E402
 from ingest_kind import resolve_ingest_kind  # noqa: E402
 from moby_omeka_fields import append_moby_fields_to_payload  # noqa: E402
 from moby_resolve import (  # noqa: E402
@@ -43,6 +44,9 @@ from omeka_staff_metadata import load_omeka_catalog_config, require_omeka_api_co
 from preservation_common import load_ingest_config, resolve_game_config  # noqa: E402
 from yaml_config import load_yaml  # noqa: E402
 
+# Exit code when the dump is held for review (another item already describes its Redump disc).
+HELD_EXIT = 3
+
 CONFIG_ROOT = Path(__import__("os").environ.get("HITSAVE_CONFIG_ROOT", str(REPO_ROOT / "config")))
 
 
@@ -56,24 +60,42 @@ def pg_connect(db_cfg: dict):
     )
 
 
-def update_ledger_omeka(game_key: str, item_id: int) -> None:
+def _ledger_update(sql: str, params: tuple) -> None:
     ingest = load_ingest_config()
     db_cfg = load_yaml(Path(ingest["database"]["config_file"]))["postgres"]
     with pg_connect(db_cfg) as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE game_ingest
-                SET omeka_item_id = %s,
-                    omeka_media_id = NULL,
-                    updated_at = NOW()
-                WHERE game_key = %s
-                """,
-                (item_id, game_key),
-            )
+            cur.execute(sql, params)
             if cur.rowcount == 0:
-                raise RuntimeError(f"No game_ingest row for game_key={game_key!r}")
+                raise RuntimeError(f"No game_ingest row for game_key={params[-1]!r}")
         conn.commit()
+
+
+def update_ledger_omeka(game_key: str, item_id: int) -> None:
+    """Record the item; a review hold from an earlier run (block_reason catalog_match) is cleared."""
+    _ledger_update(
+        """
+        UPDATE game_ingest
+        SET omeka_item_id = %s,
+            omeka_media_id = NULL,
+            block_reason = CASE WHEN block_reason = %s THEN NULL ELSE block_reason END,
+            error_message = CASE WHEN block_reason = %s THEN NULL ELSE error_message END,
+            updated_at = NOW()
+        WHERE game_key = %s
+        """,
+        (item_id, HOLD_REASON, HOLD_REASON, game_key),
+    )
+
+
+def hold_for_review(game_key: str, note: str) -> None:
+    """Keep the dump complete but out of Omeka; the Ledger's attention queue lists it."""
+    _ledger_update(
+        """
+        UPDATE game_ingest SET block_reason = %s, error_message = %s, updated_at = NOW()
+        WHERE game_key = %s
+        """,
+        (HOLD_REASON, note, game_key),
+    )
 
 
 def _post_catalog_item(
@@ -188,6 +210,14 @@ def apply_handoff_dump_catalog(
             redump_cfg=dump_cfg,
             wasabi_ingest_cfg=wasabi_ingest_cfg,
         )
+        matches = matches_for_new_item(session, base, creds, rdf_values, existing_item_id=None, api=api)
+        if matches:  # manual tool, no ledger row to hold: just refuse
+            return {
+                "game_key": manifest.get("game_key"),
+                "held": True,
+                "matching_items": [item_id for item_id, _ in matches],
+                "reason": hold_note(redump_disc_id(rdf_values) or "?", matches),
+            }
         item_id = _post_catalog_item(
             session,
             base,
@@ -365,6 +395,18 @@ def apply_dump_catalog(
         apply_item_item_sets(session, base, creds, existing_item_id, [item_set_id], api=api)
         item_id = existing_item_id
     else:
+        matches = matches_for_new_item(
+            session, base, creds, rdf_values, existing_item_id=existing_item_id, api=api
+        )
+        if matches:
+            note = hold_note(redump_disc_id(rdf_values) or "?", matches)
+            hold_for_review(game_key, note)
+            return {
+                "game_key": game_key,
+                "held": True,
+                "matching_items": [item_id for item_id, _ in matches],
+                "reason": note,
+            }
         item_id = _post_catalog_item(
             session,
             base,
@@ -435,6 +477,8 @@ def main() -> None:
         from yaml_config import dumps_json
 
         print(dumps_json(result, indent=2), end="")
+        if result.get("held"):
+            sys.exit(HELD_EXIT)
         return
 
     game_cfg_path = Path(argv[0])
@@ -458,6 +502,8 @@ def main() -> None:
     from yaml_config import dumps_json
 
     print(dumps_json(result, indent=2), end="")
+    if result.get("held"):
+        sys.exit(HELD_EXIT)
 
 
 if __name__ == "__main__":

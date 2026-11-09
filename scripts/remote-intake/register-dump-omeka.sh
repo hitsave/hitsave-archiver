@@ -12,6 +12,7 @@ mkdir -p "$GEN"
 
 # Register or patch one dump on production Omeka (ledger status must be complete).
 # Usage: register-dump-omeka.sh --slug <ready-folder-name> | --game-key <ledger game_key> [--force]
+# Exits 3 when the dump is held for review instead of getting a new item (see below).
 ROOT="$ARCHIVER"
 CFG_DIR="${HOST_OUTPUT:-$ARCHIVER/data/output}/omeka-register"
 
@@ -145,10 +146,21 @@ Path(os.environ["GAME_CFG"]).write_text(yaml.safe_dump(payload, sort_keys=False)
 PY
 
 echo "=== prod omeka $GAME_KEY ($title) $(date -Is) ==="
-remote_intake_archiver_compose run --rm -T --entrypoint python "${OMEKA_CATALOG_MOUNT[@]}" omeka-catalog \
+# Exit 3: held for review, because another item already links this dump's Redump disc page
+# (scripts/dump_catalog_match.py). The ledger row says which item. To create the new item anyway:
+# HITSAVE_ALLOW_NEW_CATALOG_ITEM=1 register-dump-omeka.sh --game-key KEY
+apply_rc=0
+remote_intake_archiver_compose run --rm -T --entrypoint python "${OMEKA_CATALOG_MOUNT[@]}" \
+  -e HITSAVE_ALLOW_NEW_CATALOG_ITEM omeka-catalog \
   /app/scripts/apply_dump_catalog_omeka.py \
   "/output/omeka-register/${GAME_KEY}.yaml" \
-  "$handoff_container"
+  "$handoff_container" || apply_rc=$?
+if [[ "$apply_rc" -eq 3 ]]; then
+  echo "=== omeka HELD $GAME_KEY: another item already describes this Redump disc (see the Ledger) $(date -Is) ==="
+  exit 3
+elif [[ "$apply_rc" -ne 0 ]]; then
+  exit "$apply_rc"
+fi
 # Bag gallery media (Scans/ and other packaged previews) on the item page; idempotent (patches an
 # existing omeka_dip_package media). A failure here leaves the catalog item in place.
 remote_intake_archiver_compose run --rm -T --entrypoint python "${OMEKA_CATALOG_MOUNT[@]}" omeka-catalog \

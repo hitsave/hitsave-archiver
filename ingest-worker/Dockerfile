@@ -65,6 +65,7 @@ COPY scripts/batch-expand-preservation.py \
     scripts/donor_provenance.py \
     scripts/dump_platforms.py \
     scripts/apply_dump_catalog_omeka.py \
+    scripts/dump_catalog_match.py \
     scripts/batch_ledger.py \
     scripts/ledger_health_report.py \
     scripts/package_identity.py \

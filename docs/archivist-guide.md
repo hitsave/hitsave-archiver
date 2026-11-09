@@ -168,6 +168,21 @@ sidecar, or move the folder to the right inbox. The archive notices the change a
 its own; it doesn't retry a folder that hasn't changed. The list updates after every inbox check,
 so a fixed package drops off within about 30 minutes after the archive takes it in.
 
+### If a complete package has no catalog record
+
+Many discs were catalogued by hand, with photos and a link to their redump.info page, before anyone
+dumped them. When a dump arrives for one of those discs, the archive keeps the dump safe on Wasabi
+but doesn't create a second catalog record. Instead, it holds the package for review:
+
+- The package is `complete`, with no catalog item number.
+- **block_reason** says `catalog_match`.
+- The **Error** column names the existing record, for example
+  `Not registered in Omeka: item 16396 (…) already describes redump.info disc 58251`.
+- The package is in the **Attention queue** on the **Health** page.
+
+Tell an admin. They decide whether to add the dump to the existing record or to give it a record of
+its own. The archive doesn't try again on its own.
+
 ## Leave the inbox and processed folders to the archive
 
 When a package reaches `complete`, the archive moves its folder from the inbox to
