@@ -91,7 +91,8 @@ def check_image(path: Path) -> IntegrityResult:
         with Image.open(path) as img:
             img.load()  # full decode: catches truncated data
     except UnidentifiedImageError:
-        return IntegrityResult("damaged", "pillow", "not a readable image (unknown or corrupt header)")
+        # Pillow lacks some valid variants (CMYK+alpha TIFF, for one); let ffmpeg decide.
+        return _image_via_ffmpeg(path)
     except (OSError, SyntaxError, ValueError, EOFError) as exc:
         return IntegrityResult("damaged", "pillow", _short(str(exc)))
     finally:
@@ -106,6 +107,16 @@ def _display_name(target: Path | str) -> str:
         from urllib.parse import unquote, urlparse
         return Path(unquote(urlparse(text).path)).name
     return Path(text).name
+
+
+def _image_via_ffmpeg(path: Path) -> IntegrityResult:
+    """Second opinion for an image Pillow can't identify: a full ffmpeg decode."""
+    if shutil.which("ffmpeg") is None:
+        return IntegrityResult("unchecked", "pillow", "Pillow can't read this image variant; ffmpeg missing")
+    proc = _run(["ffmpeg", "-v", "error", "-xerror", "-i", str(path), "-f", "null", "-"], path)
+    if proc.returncode == 0:
+        return IntegrityResult("ok", "ffmpeg", "Pillow can't read this image variant; ffmpeg decoded it")
+    return IntegrityResult("damaged", "pillow", "not a readable image (unknown or corrupt header)")
 
 
 def _run(cmd: list[str], target: Path | str) -> subprocess.CompletedProcess:
