@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """One-time: add In Copyright (dcterms:rights) and the access level (dcterms:accessRights) to items.
 
-    backfill-rights-access.py --out DIR [--execute] [--item ID ...] [--limit N]
+    backfill-rights-access.py --out DIR [--execute] [--ledger-only] [--item ID ...] [--limit N]
+
+--ledger-only: only items that have a ledger row (packages the archive ingested). Older items
+made by hand in Omeka, such as listings of owned games and hardware, are left alone.
 
 Rights: every item without a RightsStatements.org value gets In Copyright (InC). A statement
 already on the item (staff set InC-EDU by hand, for example) is kept, and so is the MobyGames
@@ -54,6 +57,16 @@ def updated_body(item: dict, ledger: dict | None, pids: dict[str, int]) -> tuple
     return body, sorted(changed)
 
 
+def target_ids(explicit: list[int], ledger: dict[int, dict], *, ledger_only: bool, list_all) -> list[int]:
+    """Items to look at: --item ids (only ledger ones with --ledger-only), else ledger items, else all."""
+    if explicit:
+        ids = sorted(set(explicit))
+        return [i for i in ids if i in ledger] if ledger_only else ids
+    if ledger_only:
+        return sorted(ledger)
+    return list_all()
+
+
 def unexpected_changes(before: dict, after: dict) -> list[str]:
     return sorted(k for k in set(before) | set(after)
                   if k not in IGNORED_ON_VERIFY and before.get(k) != after.get(k))
@@ -71,6 +84,7 @@ def main() -> int:
     ap.add_argument("--execute", action="store_true")
     ap.add_argument("--item", type=int, action="append", default=[], help="only these items (repeatable)")
     ap.add_argument("--limit", type=int, default=0, help="stop after N changed items")
+    ap.add_argument("--ledger-only", action="store_true", help="only items with a ledger row")
     args = ap.parse_args()
 
     config_root = Path(os.environ.get("HITSAVE_CONFIG_ROOT", str(REPO_ROOT / "config")))
@@ -93,8 +107,8 @@ def main() -> int:
                            "WHERE omeka_item_id IS NOT NULL")
         ledger = {int(r[0]): {"ingest_kind": r[1], "disc_contents_display": r[2]} for r in cur.fetchall()}
 
-    ids = sorted(set(args.item))
-    if not ids:
+    def list_all() -> list[int]:
+        out: list[int] = []
         page = 1
         while True:
             r = session.get(api.api_url(base, "items", creds), params={"per_page": 100, "page": page,
@@ -102,16 +116,21 @@ def main() -> int:
                             timeout=120)
             r.raise_for_status()
             batch = r.json()
-            ids.extend(int(d["o:id"]) for d in batch)
+            out.extend(int(d["o:id"]) for d in batch)
             if len(batch) < 100:
-                break
+                return out
             page += 1
+
+    ids = target_ids(args.item, ledger, ledger_only=args.ledger_only, list_all=list_all)
 
     (args.out / "backups").mkdir(parents=True, exist_ok=True)
     report, failed, counts = [], 0, {"items": len(ids), "unchanged": 0}
     for item_id in ids:
         url = api.api_url(base, f"items/{item_id}", creds)
         before = session.get(url, headers=headers, timeout=120)
+        if before.status_code == 404:  # ledger row pointing at an item that's gone
+            counts["missing"] = counts.get("missing", 0) + 1
+            continue
         before.raise_for_status()
         before = before.json()
         body, changed = updated_body(before, ledger.get(item_id), pids)
