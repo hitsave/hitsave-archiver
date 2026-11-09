@@ -11,6 +11,7 @@ Full OAIS mapping, pipeline, and Omeka access: **[oais-bagit-preservation-plan.m
 | Check | Tool |
 |-------|------|
 | Bag structure + manifests | `bagit-python` (`bag.validate()`) |
+| Damaged files | `file_integrity.py` at build; `check-integrity-wasabi.py` for older packages ([damaged-files.md](./damaged-files.md)) |
 | Ingest gate | `build-bagit-package.py` after `make_bag` |
 | Periodic fixity | `wasabi-fixity-check.py` on the Wasabi copy, every package at most every 90 days ([storage-retention.md](./storage-retention.md#fixity-schedule-wasabi-copy)); `fixity-check.py` for local bags |
 
@@ -25,6 +26,7 @@ Events are only ever added. A later change adds a new event file and one tagmani
 | `ingestion` | `build-bagit-package.py` | Every new bag |
 | `message digest calculation` | `build-bagit-package.py` | Every new bag |
 | `format identification` | `build-bagit-package.py` | Every new bag. The outcome is `failure` if Siegfried didn't run |
+| `validation` | `build-bagit-package.py`, `check-integrity-wasabi.py` | When a bag has images, PDFs, video/audio or archives. The outcome is `fail` if any is damaged |
 | `virus check` | `ingest-folder.py`, `rescan-virus-unscanned.py`, `add_catalogue_scans_wasabi.py` | Before upload, and on a rescan |
 | `metadata modification` | `apply_dvd_menu_bag_previews.py`, `refresh_bag_previews_wasabi.py`, `sync_dump_bag_metadata_from_ledger.py`, `patch-press-catalog-omeka-and-bag.py` | Each time the script changes a bag's tag files |
 
