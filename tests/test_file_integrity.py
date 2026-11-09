@@ -274,9 +274,9 @@ def test_png_with_a_large_metadata_chunk_is_not_damaged(tmp_path: Path) -> None:
 
 @pytest.mark.skipif(not HAVE_FFMPEG, reason="ffmpeg not installed")
 def test_image_pillow_cannot_identify_is_ok_when_ffmpeg_decodes_it(tmp_path: Path, monkeypatch) -> None:
-    # Stands in for CMYK+alpha TIFFs: valid, but Pillow has no mode for them.
+    # A valid image Pillow has no mode for (TIFFs now go to libtiff first, so a WebP stands in).
     from PIL import Image as PILImage, UnidentifiedImageError
-    path = tmp_path / "cmyka.tif"
+    path = tmp_path / "odd.webp"
     PILImage.new("RGB", (32, 32), "green").save(path)
     real_open = PILImage.open
     def refuse(fp, *a, **k):
@@ -294,3 +294,98 @@ def test_html_saved_as_jpg_is_still_damaged(tmp_path: Path) -> None:
     path.write_text('<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN"><html><body>404</body></html>')
     res = fi.check_file(path)
     assert res.status == "damaged"
+
+
+HAVE_TIFFINFO = shutil.which("tiffinfo") is not None
+
+
+def _cmyka_tiff(path: Path, width: int = 64, height: int = 48) -> Path:
+    """An uncompressed CMYK+alpha TIFF (5 samples, one strip per 8 rows): valid, but Pillow
+    has no mode for it. Written by hand because nothing in the image can write one."""
+    import struct
+    rows_per_strip, spp = 8, 5
+    strip_bytes = [min(rows_per_strip, height - y) * width * spp for y in range(0, height, rows_per_strip)]
+    pixels = bytes((i * 7) % 251 for i in range(sum(strip_bytes)))
+    n_strips = len(strip_bytes)
+    entries = 13
+    ifd_at = 8
+    extra_at = ifd_at + 2 + entries * 12 + 4
+    bps_at = extra_at
+    offsets_at = bps_at + 2 * spp
+    counts_at = offsets_at + 4 * n_strips
+    data_at = counts_at + 4 * n_strips
+    offsets, pos = [], data_at
+    for n in strip_bytes:
+        offsets.append(pos)
+        pos += n
+    def entry(tag, typ, count, value):
+        return struct.pack("<HHII", tag, typ, count, value)
+    ifd = [
+        entry(256, 4, 1, width), entry(257, 4, 1, height),
+        entry(258, 3, spp, bps_at), entry(259, 3, 1, 1), entry(262, 3, 1, 5),
+        entry(273, 4, n_strips, offsets_at), entry(277, 3, 1, spp), entry(278, 4, 1, rows_per_strip),
+        entry(279, 4, n_strips, counts_at), entry(284, 3, 1, 1), entry(332, 3, 1, 1),
+        entry(338, 3, 1, 2), entry(339, 3, 1, 1),
+    ]
+    assert len(ifd) == entries
+    blob = (b"II*\x00" + struct.pack("<I", ifd_at) + struct.pack("<H", entries) + b"".join(ifd)
+            + struct.pack("<I", 0) + struct.pack("<" + "H" * spp, *([8] * spp))
+            + struct.pack("<" + "I" * n_strips, *offsets) + struct.pack("<" + "I" * n_strips, *strip_bytes)
+            + pixels)
+    path.write_bytes(blob)
+    return path
+
+
+@pytest.mark.skipif(not HAVE_TIFFINFO, reason="libtiff tools not installed")
+def test_cmyk_alpha_tiff_is_ok_through_libtiff(tmp_path: Path) -> None:
+    res = fi.check_file(_cmyka_tiff(tmp_path / "30_many_hd.tif"))
+    assert res == fi.IntegrityResult("ok", "libtiff")
+
+
+@pytest.mark.skipif(not HAVE_TIFFINFO, reason="libtiff tools not installed")
+def test_cut_off_tiff_is_damaged_with_the_libtiff_message(tmp_path: Path) -> None:
+    res = fi.check_file(_truncate(_cmyka_tiff(tmp_path / "scan.tif"), keep=0.7))
+    assert res.status == "damaged" and res.check == "libtiff"
+    assert "strip" in res.detail.lower()
+    assert str(tmp_path) not in res.detail
+
+
+@pytest.mark.skipif(not HAVE_TIFFINFO, reason="libtiff tools not installed")
+def test_corrupt_compressed_tiff_is_damaged(tmp_path: Path) -> None:
+    # The image must compress: zeros written into raw (stored) data can't be told apart
+    # from pixels by any tool.
+    path = tmp_path / "scan.tiff"
+    Image.linear_gradient("L").resize((600, 400)).convert("RGB").save(path, compression="tiff_adobe_deflate")
+    data = bytearray(path.read_bytes())
+    mid = len(data) // 2
+    data[mid:mid + 64] = bytes(64)
+    path.write_bytes(bytes(data))
+    assert fi.check_file(path).status == "damaged"
+
+
+@pytest.mark.skipif(not HAVE_TIFFINFO, reason="libtiff tools not installed")
+def test_text_renamed_to_tif_is_damaged(tmp_path: Path) -> None:
+    path = tmp_path / "scan.TIF"
+    path.write_text("not a tiff")
+    res = fi.check_file(path)
+    assert res.status == "damaged" and res.check == "libtiff"
+
+
+@pytest.mark.skipif(not HAVE_TIFFINFO, reason="libtiff tools not installed")
+def test_tiff_over_the_pixel_cap_is_still_checked(tmp_path: Path, monkeypatch) -> None:
+    # libtiff decodes one strip at a time, so a huge scan needs no pixel cap.
+    monkeypatch.setattr(fi, "MAX_IMAGE_PIXELS", 100)
+    assert fi.check_file(_cmyka_tiff(tmp_path / "poster.tif")).status == "ok"
+
+
+def test_tiff_falls_back_to_pillow_without_libtiff_tools(tmp_path: Path, monkeypatch) -> None:
+    path = tmp_path / "scan.tif"
+    Image.new("RGB", (32, 32), "green").save(path)
+    real_which = shutil.which
+    monkeypatch.setattr(fi.shutil, "which", lambda name: None if name == "tiffinfo" else real_which(name))
+    assert fi.check_file(path) == fi.IntegrityResult("ok", "pillow")
+
+
+def test_missing_tools_names_tiffinfo(monkeypatch) -> None:
+    monkeypatch.setattr(fi.shutil, "which", lambda name: None)
+    assert "tiffinfo" in fi.missing_tools()

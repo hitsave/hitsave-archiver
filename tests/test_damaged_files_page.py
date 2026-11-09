@@ -46,6 +46,9 @@ def test_plain_problem_wording() -> None:
     assert dfp.plain_problem("moov atom not found") == "Cut off: the end of the file is missing"
     assert dfp.plain_problem("not a readable image (unknown or corrupt header)") == "Not a readable file of this type"
     assert dfp.plain_problem("broken data stream when reading image file") == "Damaged data inside the file"
+    assert dfp.plain_problem("TIFFFillStrip: Read error on strip 24; got 63830 bytes, expected 64026.") == "Cut off: the end of the file is missing"
+    assert dfp.plain_problem("Not a TIFF or MDI file, bad magic number 28526 (0x6f6e)") == "Not a readable file of this type"
+    assert dfp.plain_problem("ZIPDecode: Decoding error at scanline 252") == "Damaged data inside the file"
 
 
 def test_html_escapes_names_links_items_and_says_how_to_help() -> None:

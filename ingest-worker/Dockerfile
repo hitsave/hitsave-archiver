@@ -14,6 +14,7 @@ RUN apk add --no-cache \
       libpq-16 \
       7zip \
       qpdf \
+      tiff \
     && curl -fsSL -o /tmp/siegfried.zip \
       "https://github.com/richardlehane/siegfried/releases/download/v${SIEGFRIED_VERSION}/siegfried_${SIEGFRIED_RELEASE}_linux64.zip" \
     && 7zz x -y "/tmp/siegfried.zip" "sf" -o/usr/local/bin \
