@@ -270,3 +270,27 @@ def test_png_with_a_large_metadata_chunk_is_not_damaged(tmp_path: Path) -> None:
     before = (PngImagePlugin.MAX_TEXT_CHUNK, PngImagePlugin.MAX_TEXT_MEMORY)
     assert fi.check_file(path).status == "ok"
     assert (PngImagePlugin.MAX_TEXT_CHUNK, PngImagePlugin.MAX_TEXT_MEMORY) == before
+
+
+@pytest.mark.skipif(not HAVE_FFMPEG, reason="ffmpeg not installed")
+def test_image_pillow_cannot_identify_is_ok_when_ffmpeg_decodes_it(tmp_path: Path, monkeypatch) -> None:
+    # Stands in for CMYK+alpha TIFFs: valid, but Pillow has no mode for them.
+    from PIL import Image as PILImage, UnidentifiedImageError
+    path = tmp_path / "cmyka.tif"
+    PILImage.new("RGB", (32, 32), "green").save(path)
+    real_open = PILImage.open
+    def refuse(fp, *a, **k):
+        raise UnidentifiedImageError("cannot identify image file")
+    monkeypatch.setattr(PILImage, "open", refuse)
+    res = fi.check_file(path)
+    monkeypatch.setattr(PILImage, "open", real_open)
+    assert res.status == "ok" and res.check == "ffmpeg"
+    assert "Pillow" in res.detail
+
+
+@pytest.mark.skipif(not HAVE_FFMPEG, reason="ffmpeg not installed")
+def test_html_saved_as_jpg_is_still_damaged(tmp_path: Path) -> None:
+    path = tmp_path / "deadbang.jpg"
+    path.write_text('<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN"><html><body>404</body></html>')
+    res = fi.check_file(path)
+    assert res.status == "damaged"
