@@ -78,7 +78,7 @@ def main() -> int:
             public = media_visibility(args.display, bool(item_body.get("o:is_public")))
             set_resource_public(session, base, creds, "media", int(media_id), is_public=public, api=api)
         if item_body is not None:
-            # "Disc contents public. ..." or "Not public, ..." on the item (dcterms:accessRights).
+            # "Disc contents public" or "Not public, ..." on the item (dcterms:accessRights).
             access = disc_contents_access_update(item_body, display_public=args.display == "public",
                                                  access_pid=api.resolve_property_id(session, base, creds, ACCESS))
             if access:

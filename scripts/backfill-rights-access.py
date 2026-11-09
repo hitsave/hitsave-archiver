@@ -6,7 +6,7 @@
 Rights: every item without a RightsStatements.org value gets In Copyright (InC). A statement
 already on the item (staff set InC-EDU by hand, for example) is kept, and so is the MobyGames
 credit. Access, from the ledger row: press material "Public"; dumps "Not public, request access
-if needed", or "Disc contents public. ..." when their disc contents are shown. Items with no
+if needed", or "Disc contents public" when their disc contents are shown. Items with no
 ledger row (made by hand in Omeka) get rights only; their access is left for staff. An existing
 access value is never replaced.
 

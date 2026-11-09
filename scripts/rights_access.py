@@ -8,7 +8,7 @@ Other dcterms:rights values (the MobyGames credit) are kept alongside it.
 dcterms:accessRights says whether the public can see the files:
   Public                                    press material
   Not public, request access if needed      dumps (the disc image is never shown)
-  Disc contents public. Disc image not ...  a dump whose disc contents are shown
+  Disc contents public                      a dump whose disc contents are shown
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ IN_COPYRIGHT_LABEL = "In Copyright"
 
 PUBLIC = "Public"
 NOT_PUBLIC = "Not public, request access if needed"
-CONTENTS_PUBLIC = "Disc contents public. Disc image not public, request access if needed"
+CONTENTS_PUBLIC = "Disc contents public"
 
 
 def is_rights_statement(row: dict) -> bool:
