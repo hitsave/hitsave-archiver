@@ -32,6 +32,9 @@ from yaml_config import dumps_json, load_yaml  # noqa: E402
 PREMIS_NS = "http://www.loc.gov/premis/v3"
 
 
+from premis_events import PremisEvent, repository_code, stage_event  # noqa: E402
+
+
 def pg_connect(db_cfg: dict):
     return psycopg.connect(
         host=db_cfg["host"],
@@ -173,6 +176,18 @@ def sync_bag_from_ledger(
         tagmanifest = update_manifest_digest(
             tagmanifest, "metadata/premis/virus-check-event.xml", sha256_hex(premis_bytes)
         )
+    event_rel, event_bytes, tagmanifest = stage_event(tagmanifest, PremisEvent(
+        event_type="metadata modification",
+        detail=(
+            f"Synced bag-info.txt and metadata/submission.json with the ledger: package_id {game_key}, "
+            f"storage {aip}" + (" (and the package id in the virus-check event)" if premis_bytes is not None else "")
+            + ". Payload unchanged."
+        ),
+        program="sync_dump_bag_metadata_from_ledger.py",
+        package_id=game_key,
+        package_uuid=str(new_sub.get("package_uuid") or ""),
+        repository_code=str(new_sub.get("repository_code") or repository_code()),
+    ), "ledger-sync")
     tagmanifest_bytes = tagmanifest.encode("utf-8")
 
     plan = {
@@ -180,7 +195,7 @@ def sync_bag_from_ledger(
         "bucket": bucket,
         "prefix": prefix,
         "wasabi_uri": aip,
-        "files": ["metadata/submission.json", "bag-info.txt", "tagmanifest-sha256.txt"],
+        "files": ["metadata/submission.json", "bag-info.txt", event_rel, "tagmanifest-sha256.txt"],
     }
     if premis_bytes is not None:
         plan["files"].insert(1, "metadata/premis/virus-check-event.xml")
@@ -192,6 +207,7 @@ def sync_bag_from_ledger(
     uploads = [
         (sub_key, sub_bytes),
         (bag_info_key, bag_info_bytes),
+        (f"{prefix}/{event_rel}", event_bytes),
         (tagmanifest_key, tagmanifest_bytes),
     ]
     if premis_bytes is not None:

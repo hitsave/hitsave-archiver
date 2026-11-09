@@ -16,6 +16,7 @@ Normative machine config: `config/preservation/packaging.yaml`, `config/preserva
 | **Access** | Omeka item + `omeka_dip_package` media; DipViewer reads `metadata/inventory.json` over S3 |
 | **Fixity** | `manifest-sha256.txt` in the bag; verified at upload (size + ETag per object), again before a local copy is pruned, and by `wasabi-fixity-check.py` on the Wasabi copy at most every 90 days ([storage-retention.md](./storage-retention.md)) |
 | **Integrity scan** | ClamAV before packaging; result recorded as PREMIS events under `metadata/premis/` |
+| **Provenance** | PREMIS events under `metadata/premis/` for ingestion, digests, format identification and every later change to the bag ([preservation-packaging-standard.md](./preservation-packaging-standard.md#premis-events)) |
 
 ---
 
@@ -72,7 +73,7 @@ Provenance is copied into each bag (`bag-info.txt`, `metadata/submission.json`) 
 ├── metadata/
 │   ├── submission.json
 │   ├── inventory.json
-│   ├── premis/virus-check-event.xml    (ClamAV result; rescans add more events)
+│   ├── premis/                         (one PREMIS event per file: ingestion, digests, format identification, virus check, later changes)
 │   └── hitsave/                        (preview-manifest.json, browse images, thumbnails for Omeka)
 └── data/                           ← press files (relative paths preserved)
 ```

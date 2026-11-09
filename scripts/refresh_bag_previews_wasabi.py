@@ -51,6 +51,7 @@ from upload_bag_wasabi import (  # noqa: E402
     resolve_config_path,
 )
 from yaml_config import load_yaml  # noqa: E402
+from premis_events import PremisEvent, add_event_file, repository_code  # noqa: E402
 
 
 def ledger_rows(game_keys: list[str], ingest_cfg: dict) -> dict[str, tuple[str, int | None]]:
@@ -201,6 +202,18 @@ def main() -> None:
                 "kept_previews": foreign,
             }
             if execute:
+                add_event_file(files, work, PremisEvent(
+                    event_type="metadata modification",
+                    detail=(
+                        f"Rebuilt the preview images in metadata/hitsave/ from the payload scans "
+                        f"({summary['gallery']} gallery, {summary['display']} display)"
+                        + (f"; kept previews made from the disc image: {', '.join(foreign)}" if foreign else "")
+                        + ". Payload and payload manifest unchanged."
+                    ),
+                    program="refresh_bag_previews_wasabi.py",
+                    package_id=package_id,
+                    repository_code=repository_code(),
+                ), "previews-refresh")
                 apply_to_wasabi(files, prefix, ingest_config_path=ingest_path, s3=s3)
                 summary["uploaded"] = True
                 if media_id:
