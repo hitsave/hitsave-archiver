@@ -175,3 +175,11 @@ def test_no_size_cap() -> None:
 
     assert "max_bytes" not in inspect.signature(x.run).parameters
     assert not hasattr(x, "MAX_BYTES")
+
+
+def test_data_track_skips_cue_with_missing_file(tmp_path: Path) -> None:
+    # The dumper renamed FFVIIAC.bin to its Redump name and left the old cue in the upload.
+    (tmp_path / "FFVIIAC.cue").write_text('FILE "FFVIIAC.bin" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n')
+    (tmp_path / "Game (USA).cue").write_text('FILE "Game (USA).bin" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n')
+    (tmp_path / "Game (USA).bin").write_bytes(b"\0" * 2352)
+    assert x.data_track(tmp_path) == (tmp_path / "Game (USA).bin", "MODE2/2352")

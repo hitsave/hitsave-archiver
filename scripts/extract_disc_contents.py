@@ -67,10 +67,15 @@ _CUE_TRACK = re.compile(r"^\s*TRACK\s+(\d+)\s+(\S+)", re.IGNORECASE)
 
 
 def data_track(package: Path) -> tuple[Path, str] | None:
-    """(image file, mode) of the disc's first data track: an .iso, or the first data TRACK of a .cue."""
+    """(image file, mode) of the disc's first data track: an .iso, or the first data TRACK of a .cue.
+
+    Prefers a cue whose data track file exists: a dumper who renamed the image to its Redump name
+    may have left the old cue, pointing at a file that's gone, next to the new one.
+    """
     isos = sorted(p for p in package.iterdir() if p.suffix.lower() == ".iso")
     if isos:
         return isos[0], "MODE1/2048"
+    found: list[tuple[Path, str]] = []
     for cue in sorted(p for p in package.iterdir() if p.suffix.lower() == ".cue"):
         current = None
         for line in cue.read_text(encoding="utf-8", errors="replace").splitlines():
@@ -80,8 +85,9 @@ def data_track(package: Path) -> tuple[Path, str] | None:
                 continue
             t = _CUE_TRACK.match(line)
             if t and current is not None and t.group(2).upper() != "AUDIO":
-                return current, t.group(2).upper()
-    return None
+                found.append((current, t.group(2).upper()))
+                break
+    return next((track for track in found if track[0].is_file()), found[0] if found else None)
 
 
 def to_iso(image: Path, mode: str, dest: Path) -> Path:
