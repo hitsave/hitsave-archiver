@@ -8,7 +8,7 @@ from typing import Any, Callable
 from urllib.parse import urlencode
 
 from damaged_panel import render_damaged_panel
-from formatting import fmt_ts, item_href, status_badge
+from formatting import ark_url, fmt_ts, item_href, status_badge
 from site_ui import render_page_shell
 
 ConnectFn = Callable[[], Any]
@@ -32,7 +32,7 @@ def row_links(game_key: str, item_id, *, admin_base: str, site_base: str) -> tup
     if not item_id:
         return key_html, ""
     admin = html.escape(f"{admin_base}/item/{item_id}/show")
-    public = html.escape(f"{site_base}/item/{item_id}")
+    public = html.escape(ark_url(site_base, item_id))
     return key_html, (
         f'<a href="{admin}" target="_blank" rel="noopener">admin ↗</a> '
         f'<a href="{public}" target="_blank" rel="noopener">site ↗</a>'
@@ -81,7 +81,7 @@ def _catalog_panel(row: dict[str, Any], *, admin_base: str, site_base: str, is_p
         )
     ref = urlencode({"omeka_ref": str(item_id)})
     admin = html.escape(f"{admin_base}/item/{item_id}/show")
-    public = html.escape(f"{site_base}/item/{item_id}")
+    public = html.escape(ark_url(site_base, item_id))
     if status == "quarantine":
         # Publishing would undo the quarantine behind the ledger's back; releasing is an admin job.
         forms = ""

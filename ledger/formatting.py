@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import html
 from datetime import datetime, timezone
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 ERROR_PREVIEW_CHARS = 120
 ERROR_FULL_MAX = 2000
@@ -27,6 +27,17 @@ def fmt_ts(value) -> str:
             value = value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     return str(value)
+
+
+ARK_NAAN = "78322"
+
+
+def ark_url(site_base: str, item_id) -> str:
+    """The item's public ARK link (the ARK number is the Omeka item id). ARKs resolve at the
+    site root, so any /s/<slug> path in *site_base* is dropped. Hidden items show there too
+    when you're signed in to Omeka."""
+    parts = urlsplit(site_base)
+    return f"{parts.scheme}://{parts.netloc}/ark:/{ARK_NAAN}/{int(item_id)}"
 
 
 def item_href(game_key: str) -> str:

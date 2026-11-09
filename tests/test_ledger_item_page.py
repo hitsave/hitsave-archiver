@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, urlparse
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "ledger"))
 
-from formatting import fmt_ts, item_href  # noqa: E402
+from formatting import ark_url, fmt_ts, item_href  # noqa: E402
 from item_page import fetch_item, render_item_not_found, render_item_page, row_links  # noqa: E402
 from omeka_status import fetch_item_is_public  # noqa: E402
 
@@ -173,7 +173,8 @@ def test_visibility_forms_return_to_item_and_confirm() -> None:
 def test_links_to_omeka_and_actions() -> None:
     page = _page(_row(), True)
     assert f"{ADMIN}/item/1234/show" in page
-    assert f"{SITE}/item/1234" in page
+    assert "https://archive.hitsave.org/ark:/78322/1234" in page
+    assert f"{SITE}/item/1234" not in page
     assert "/correct?omeka_ref=1234" in page
     assert "/quarantine?omeka_ref=1234" in page
 
@@ -264,3 +265,14 @@ def test_item_page_says_public_items_are_on_the_public_page() -> None:
 def test_item_page_has_no_damaged_panel_without_damaged_files() -> None:
     assert "Damaged files" not in _page(_row(inventory_json={"files": [{"path": "data/a.jpg", "integrity": {"status": "ok"}}]}), True)
     assert "Damaged files" not in _page(_row(), True)
+
+
+def test_ark_url_sits_at_the_site_root_whatever_the_site_slug() -> None:
+    assert ark_url("https://archive.hitsave.org/s/hitsave", 27834) == "https://archive.hitsave.org/ark:/78322/27834"
+    assert ark_url("https://archive.hitsave.org", "5") == "https://archive.hitsave.org/ark:/78322/5"
+    assert ark_url("https://archive.hitsave.org/", 5) == "https://archive.hitsave.org/ark:/78322/5"
+
+
+def test_row_links_site_link_is_the_ark() -> None:
+    _, actions_html = row_links("a b", 5, admin_base=ADMIN, site_base=SITE)
+    assert 'href="https://archive.hitsave.org/ark:/78322/5"' in actions_html
