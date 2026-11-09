@@ -165,7 +165,8 @@ def main() -> None:
         cur = conn.execute(
             "SELECT game_key, omeka_item_id, inventory_json FROM game_ingest "
             "WHERE status = 'complete' AND omeka_item_id IS NOT NULL "
-            "AND inventory_json::text LIKE '%%\"damaged\"%%' ORDER BY game_key"
+            "AND jsonb_path_exists(inventory_json::jsonb, "
+            "'$.files[*].integrity ? (@.status == \"damaged\")') ORDER BY game_key"
         )
         cols = [d.name for d in cur.description]
         rows = [dict(zip(cols, r)) for r in cur.fetchall()]
