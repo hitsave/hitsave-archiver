@@ -39,6 +39,7 @@ from ingest_kind import storage_profile_for_kind  # noqa: E402
 from submission_sources import resolve_submission_source  # noqa: E402
 from dip_package_previews import add_dvd_menu_preview, load_preview_config, write_hitsave_previews  # noqa: E402
 from format_identification import FormatRun, identify_tree  # noqa: E402
+from premis_events import PremisEvent, write_event  # noqa: E402
 
 INVENTORY_VERSION = 1
 
@@ -354,10 +355,73 @@ def build_bagit_package(
         print(f"  DVD menu preview: {menu_jpg}")
     if preview_manifest:
         print(f"  Packaged previews: {len(preview_manifest.get('grid', {}))} grid thumbs")
+    write_build_events(
+        bag_dir,
+        rows=rows,
+        formats=formats,
+        submission=submission_json,
+        program="build-bagit-package.py",
+        metadata_dir=meta_dir,
+    )
     bag = bagit.Bag(str(bag_dir))
     bag.save(manifests=True)
     validate_bag(bag_dir)
     return inventory, submission_json
+
+
+def write_build_events(
+    bag_dir: Path,
+    *,
+    rows: list[FileRow],
+    formats: FormatRun,
+    submission: dict,
+    program: str,
+    metadata_dir: str = "metadata",
+) -> None:
+    """PREMIS events for what the build did: ingestion, digests, format identification."""
+    common = dict(
+        program=program,
+        package_id=str(submission["package_id"]),
+        package_uuid=str(submission.get("package_uuid") or ""),
+        repository_code=str(submission.get("repository_code") or "hitsave"),
+    )
+    source = submission.get("submission_source_id") or "no submission record"
+    write_event(bag_dir, PremisEvent(
+        event_type="ingestion",
+        when=submission["ingested_at"],
+        detail=(
+            f"Packaged {len(rows)} payload files from {submission.get('source_folder_name') or submission.get('sip_path')} "
+            f"(submission {source}) as an RFC 8493 BagIt bag."
+        ),
+        **common,
+    ), "ingestion", metadata_dir)
+    write_event(bag_dir, PremisEvent(
+        event_type="message digest calculation",
+        when=submission["ingested_at"],
+        detail=(
+            f"SHA-256 of {len(rows)} payload files, read from the submission and written to "
+            f"manifest-sha256.txt by bagit-python {bagit.VERSION}."
+        ),
+        **common,
+    ), "message-digest-calculation", metadata_dir)
+    if formats.status == "disabled":
+        return
+    if formats.status == "ok":
+        identified = sum(1 for r in rows if (h := formats.hits.get(r.rel)) is not None and h.puid)
+        outcome, note = "success", (
+            f"{identified} of {len(rows)} payload files matched a PRONOM format; "
+            "per-file results are in metadata/inventory.json."
+        )
+    else:
+        outcome, note = "failure", f"Format identification did not run: {formats.error}"
+    write_event(bag_dir, PremisEvent(
+        event_type="format identification",
+        when=formats.identified_at or submission["ingested_at"],
+        detail=f"{formats.tool} against PRONOM" + (f", signature {formats.signature}" if formats.signature else "") + ".",
+        outcome=outcome,
+        outcome_note=note,
+        **common,
+    ), "format-identification", metadata_dir)
 
 
 def main() -> None:

@@ -35,6 +35,7 @@ from upload_bag_wasabi import (  # noqa: E402
     upload_file_to_s3,
 )
 from yaml_config import dumps_json, load_yaml  # noqa: E402
+from premis_events import PremisEvent, repository_code, stage_event  # noqa: E402
 
 register_api = load_register_dip_omeka_api()
 
@@ -228,13 +229,25 @@ def patch_wasabi_bag(
     tagmanifest = s3_get_bytes(client, bucket, tagmanifest_key).decode("utf-8")
     tagmanifest = update_manifest_digest(tagmanifest, "bag-info.txt", sha256_hex(bag_info_bytes))
     tagmanifest = update_manifest_digest(tagmanifest, "metadata/submission.json", sha256_hex(sub_bytes))
+    event_rel, event_bytes, tagmanifest = stage_event(tagmanifest, PremisEvent(
+        event_type="metadata modification",
+        detail=(
+            f"Catalog correction: title {former_title!r} -> {title!r} ({correction_summary}; "
+            f"reference {reference_uri}). Updated metadata/submission.json (catalog_notes) and "
+            "bag-info.txt External-Description. Payload unchanged."
+        ),
+        program="patch-press-catalog-omeka-and-bag.py",
+        package_id=game_key,
+        package_uuid=str(submission.get("package_uuid") or ""),
+        repository_code=str(submission.get("repository_code") or repository_code()),
+    ), "catalog-correction")
     tagmanifest_bytes = tagmanifest.encode("utf-8")
 
     plan = {
         "game_key": game_key,
         "bucket": bucket,
         "prefix": prefix,
-        "files": ["metadata/submission.json", "bag-info.txt", "tagmanifest-sha256.txt"],
+        "files": ["metadata/submission.json", "bag-info.txt", event_rel, "tagmanifest-sha256.txt"],
         "execute": execute,
     }
     if not execute:
@@ -244,6 +257,7 @@ def patch_wasabi_bag(
     for key, body in (
         (sub_key, sub_bytes),
         (bag_info_key, bag_info_bytes),
+        (f"{prefix}/{event_rel}", event_bytes),
         (tagmanifest_key, tagmanifest_bytes),
     ):
         tmp = Path("/tmp") / f"press-catalog-patch-{hashlib.sha256(key.encode()).hexdigest()[:12]}"

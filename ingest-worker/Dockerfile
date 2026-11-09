@@ -71,6 +71,7 @@ COPY scripts/batch-expand-preservation.py \
     scripts/package_identity.py \
     scripts/package_ledger.py \
     scripts/format_identification.py \
+    scripts/premis_events.py \
     scripts/source_content_policy.py \
     scripts/normalize_display_title.py \
     scripts/ingest-folder.py \

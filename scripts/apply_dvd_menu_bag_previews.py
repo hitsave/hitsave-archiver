@@ -58,6 +58,7 @@ from upload_bag_wasabi import (  # noqa: E402
     verify_uploaded_object,
 )
 from yaml_config import load_yaml  # noqa: E402
+from premis_events import PremisEvent, add_event_file, repository_code  # noqa: E402
 
 
 @dataclass
@@ -165,6 +166,25 @@ def build_preview_files(menu_jpg: Path, package_id: str, work: Path, *, kind: st
     return {
         p.relative_to(work).as_posix(): p for p in sorted(hitsave.rglob("*")) if p.is_file()
     }
+
+
+KIND_LABELS = {"menu": "DVD menu still", "contact_sheet": "contact sheet of the main title"}
+
+
+def record_preview_change(
+    files: dict[str, Path], work: Path, *, package_id: str, kind: str, still: Path, program: str
+) -> str:
+    """Add a PREMIS event for this preview change to the upload map; returns its bag relpath."""
+    return add_event_file(files, work, PremisEvent(
+        event_type="metadata modification",
+        detail=(
+            f"Set the browse preview in metadata/hitsave/ to a {KIND_LABELS.get(kind, kind)} ({still.name}), "
+            "rendered from the disc image by the dvd-menu-preview tool. Payload and payload manifest unchanged."
+        ),
+        program=program,
+        package_id=package_id,
+        repository_code=repository_code(),
+    ), "dvd-menu-preview")
 
 
 def apply_to_wasabi(
@@ -297,6 +317,8 @@ def main() -> None:
                     files[manifest_rel].write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
                     kept = [k for k in merged["gallery_file_keys"] if k != "menu"]
                     print(f"  kept existing payload previews {kept}", flush=True)
+                record_preview_change(files, Path(work), package_id=row.package_id, kind=kind, still=menu_jpg,
+                                      program="apply_dvd_menu_bag_previews.py")
                 if cfg.get("upload_wasabi", True):
                     apply_to_wasabi(files, row.package_storage_prefix, ingest_config_path=ingest_config)
                 bag_dir = bag_root / row.game_key
