@@ -27,9 +27,20 @@ from hitsave_dump_sidecars.switch import (
 from ingest_kind import ingest_kind_spec
 
 
+# Instruction text that the Redump submission template or the dumping tool leaves in a field the
+# dumper didn't fill in. Never a real value: these never reach the catalog.
+_PLACEHOLDER_PREFIXES = ("(optional)", "(required", "add languages here")
+_PLACEHOLDER_MARKERS = ("(change this)",)  # e.g. Languages: SILENCE! (CHANGE THIS)
+
+
+def _is_placeholder(value: str) -> bool:
+    text = " ".join(value.split()).casefold()
+    return text.startswith(_PLACEHOLDER_PREFIXES) or any(m in text for m in _PLACEHOLDER_MARKERS)
+
+
 def _redump_field(fields: dict[str, str], key: str) -> str | None:
     raw = (fields.get(key) or "").strip()
-    if not raw or raw.startswith("(OPTIONAL)") or raw.startswith("(REQUIRED"):
+    if not raw or _is_placeholder(raw):
         return None
     return raw
 
@@ -47,14 +58,7 @@ def _omeka_format_from_redump(field: str, value: str | None) -> str | None:
 
 
 def _redump_languages(fields: dict[str, str]) -> str | None:
-    """Redump template leaves Languages unset as an instruction line — not a real value."""
-    raw = _redump_field(fields, "Languages")
-    if raw is None:
-        return None
-    normalized = " ".join(raw.split()).casefold()
-    if normalized.startswith("add languages here"):
-        return None
-    return raw
+    return _redump_field(fields, "Languages")
 
 
 def switch_catalog_title(source_dir: Path, sw: Any, omeka_title: str) -> str:
@@ -460,7 +464,7 @@ def build_redump_values(
     else:
         disc_id = None
         title = fallback_title
-        foreign = fields.get("Foreign Title (Non-latin)")
+        foreign = _redump_field(fields, "Foreign Title (Non-latin)")
         extra_alts = alternates
 
     values: dict[str, list] = {}
