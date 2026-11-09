@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any, Callable
 from urllib.parse import urlencode
 
+from damaged_panel import render_damaged_panel
 from formatting import fmt_ts, item_href, status_badge
 from site_ui import render_page_shell
 
@@ -151,6 +152,7 @@ def render_item_page(
  · updated {html.escape(fmt_ts(row.get("updated_at")))}</p>
 {_catalog_panel(row, admin_base=admin_base, site_base=site_base, is_public=is_public)}
 {_problems_panel(row)}
+{render_damaged_panel(row, is_public=is_public)}
 {_fields_table(row)}
 <p><a href="/">← Back to the ledger</a></p>"""
     return render_page_shell(title=title, active="ledger", inner=inner, status_config=status_config)

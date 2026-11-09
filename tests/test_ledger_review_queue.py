@@ -227,3 +227,19 @@ def test_empty_and_unavailable_pages() -> None:
     assert "Nothing left to review" in render_review_empty(counts={"": 0}, moby="", status_config={}).decode()
     page = html.unescape(render_review_unavailable(status_config={}).decode())
     assert "Couldn't get the list of hidden items from Omeka" in page
+
+
+def test_review_page_warns_about_damaged_files_before_publishing() -> None:
+    row = dict(ROW, inventory_json={"files": [
+        {"path": "data/Foo/shot.jpg", "size_bytes": 9,
+         "integrity": {"status": "damaged", "check": "pillow", "detail": "not a readable image (unknown or corrupt header)"}},
+    ]})
+    page = html.unescape(_page(row=row))
+    assert "Damaged files (1)" in page and "shot.jpg" in page
+    assert "Not a readable file of this type" in page
+    assert "once this record is published" in page
+    assert page.index("Damaged files (1)") < page.index("Publish and next")
+
+
+def test_review_page_has_no_damaged_notice_without_damaged_files() -> None:
+    assert "Damaged files" not in _page()

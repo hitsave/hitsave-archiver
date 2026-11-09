@@ -49,3 +49,4 @@ def test_health_queries_share_the_flag_conditions() -> None:
     assert lhr.FLAG_CONDITIONS["attention"][0] in lhr.ATTENTION_SELECT
     assert lhr.FLAG_CONDITIONS["failed_or_error"][0] in lhr.FAILED_OR_ERROR_SQL
     assert lhr.FLAG_CONDITIONS["no_omeka"][0] in lhr.COMPLETE_MISSING_OMEKA_SQL
+    assert lhr.FLAG_CONDITIONS["damaged"][0] in lhr.DAMAGED_COUNT_SQL

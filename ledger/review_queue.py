@@ -8,6 +8,7 @@ from typing import Any, Callable
 from urllib.parse import urlencode
 
 from correct_review import current_values
+from damaged_panel import render_damaged_panel
 from formatting import item_href, moby_badge, status_badge
 from site_ui import render_page_shell
 
@@ -192,6 +193,7 @@ def render_review_page(
 <p><a href="{html.escape(item_href(key))}"><code>{html.escape(key)}</code></a> · {status_badge(row.get("status"))}
  · Omeka item {item_id} · <a href="{admin}" target="_blank" rel="noopener">Omeka admin ↗</a></p>
 {details}
+{render_damaged_panel(row, is_public=False)}
 <form method="post" action="/review/publish" class="actions review-actions">
 <input type="hidden" name="omeka_ref" value="{item_id}">
 <input type="hidden" name="moby" value="{html.escape(moby)}">

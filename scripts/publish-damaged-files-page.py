@@ -21,37 +21,18 @@ import json
 import os
 import sys
 from datetime import date
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Callable
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+from damaged_listing import DAMAGED_SQL, damaged_files, plain_problem  # noqa: E402,F401
+
 DEFAULT_CONTACT = (
     '<a href="https://hitsave.org/contact-us/">contact us</a> or tell us on '
     '<a href="https://discord.gg/TCKT6uA">Discord</a>'
 )
-CUT_OFF = ("truncat", "startxref", "trailer", "moov atom not found", "unexpected end", "eof", "end of data",
-           "end of file", "read error on strip", "read error on tile")
-NOT_THIS_TYPE = ("not a readable", "unknown or corrupt header", "can't open as archive", "not a pdf",
-                 "invalid data found when processing input", "bad magic number")
-
-
-def plain_problem(detail: str | None) -> str:
-    text = (detail or "").lower()
-    if any(m in text for m in CUT_OFF):
-        return "Cut off: the end of the file is missing"
-    if any(m in text for m in NOT_THIS_TYPE):
-        return "Not a readable file of this type"
-    return "Damaged data inside the file"
-
-
-def _type(entry: dict) -> str:
-    name = (entry.get("format") or {}).get("name")
-    if name:
-        return str(name)
-    ext = PurePosixPath(str(entry["path"])).suffix.lstrip(".").upper()
-    return ext or "Unknown"
 
 
 def damaged_entries(rows: list[dict], *, item_title: Callable[[int], str | None]) -> list[dict]:
@@ -59,26 +40,12 @@ def damaged_entries(rows: list[dict], *, item_title: Callable[[int], str | None]
     items = []
     for row in rows:
         item_id = row.get("omeka_item_id")
-        damaged = [f for f in (row.get("inventory_json") or {}).get("files") or []
-                   if (f.get("integrity") or {}).get("status") == "damaged"]
-        if not item_id or not damaged:
+        files = damaged_files(row.get("inventory_json"))
+        if not item_id or not files:
             continue
         title = item_title(int(item_id))
         if not title:
             continue
-        files = []
-        for f in damaged:
-            rel = PurePosixPath(str(f["path"]))
-            parts = rel.parts[1:] if rel.parts and rel.parts[0] == "data" else rel.parts
-            files.append({
-                "name": parts[-1],
-                "folder": "/".join(parts[:-1]),
-                "size_bytes": int(f.get("size_bytes") or 0),
-                "type": _type(f),
-                "problem": plain_problem(f["integrity"].get("detail")),
-                "detail": f["integrity"].get("detail") or "",
-            })
-        files.sort(key=lambda x: (x["folder"].lower(), x["name"].lower()))
         items.append({"item_id": int(item_id), "title": title, "files": files})
     items.sort(key=lambda i: (i["title"].lower(), i["item_id"]))
     return items
@@ -165,8 +132,7 @@ def main() -> None:
         cur = conn.execute(
             "SELECT game_key, omeka_item_id, inventory_json FROM game_ingest "
             "WHERE status = 'complete' AND omeka_item_id IS NOT NULL "
-            "AND jsonb_path_exists(inventory_json::jsonb, "
-            "'$.files[*].integrity ? (@.status == \"damaged\")') ORDER BY game_key"
+            f"AND {DAMAGED_SQL} ORDER BY game_key"
         )
         cols = [d.name for d in cur.description]
         rows = [dict(zip(cols, r)) for r in cur.fetchall()]
