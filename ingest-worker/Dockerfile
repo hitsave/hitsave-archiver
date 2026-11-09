@@ -13,6 +13,7 @@ RUN apk add --no-cache \
       ffmpeg-7 \
       libpq-16 \
       7zip \
+      qpdf \
     && curl -fsSL -o /tmp/siegfried.zip \
       "https://github.com/richardlehane/siegfried/releases/download/v${SIEGFRIED_VERSION}/siegfried_${SIEGFRIED_RELEASE}_linux64.zip" \
     && 7zz x -y "/tmp/siegfried.zip" "sf" -o/usr/local/bin \
@@ -72,6 +73,7 @@ COPY scripts/batch-expand-preservation.py \
     scripts/package_ledger.py \
     scripts/format_identification.py \
     scripts/premis_events.py \
+    scripts/file_integrity.py \
     scripts/source_content_policy.py \
     scripts/normalize_display_title.py \
     scripts/ingest-folder.py \

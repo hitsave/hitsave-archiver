@@ -40,6 +40,7 @@ from submission_sources import resolve_submission_source  # noqa: E402
 from dip_package_previews import add_dvd_menu_preview, load_preview_config, write_hitsave_previews  # noqa: E402
 from format_identification import FormatRun, identify_tree  # noqa: E402
 from premis_events import PremisEvent, write_event  # noqa: E402
+from file_integrity import IntegrityResult, check_file, summarize, validation_event  # noqa: E402
 
 INVENTORY_VERSION = 1
 
@@ -124,6 +125,7 @@ def build_inventory(
     excluded: list[dict] | None = None,
     *,
     formats: FormatRun | None = None,
+    integrity: dict[str, IntegrityResult] | None = None,
 ) -> dict:
     """Per-file inventory. With *formats* (keyed like FileRow.rel), each file gets a PRONOM
     ``format`` record and the inventory says which tool identified them, or why it couldn't."""
@@ -147,6 +149,8 @@ def build_inventory(
             if hit is not None:
                 entry["format"] = hit.record()
             format_counts[(hit.puid if hit else None) or "unidentified"] += 1
+        if integrity and rec.rel in integrity:
+            entry["integrity"] = integrity[rec.rel].record()
         files.append(entry)
     inventory = {
         "manifest_version": INVENTORY_VERSION,
@@ -161,6 +165,8 @@ def build_inventory(
         inventory["format_identification"] = formats.record()
         if format_counts:
             inventory["summary"]["by_format"] = dict(sorted(format_counts.items()))
+    if integrity:
+        inventory["summary"]["integrity"] = summarize(integrity)
     if excluded:
         # Left out of the payload by policy (dotfiles, desktop.ini, OCR debug); recorded so the
         # bag says what the submission contained that it does not.
@@ -246,6 +252,15 @@ def build_bagit_package(
     elif formats.status == "ok":
         unidentified = sum(1 for rec in rows if (h := formats.hits.get(rec.rel)) is None or h.puid is None)
         print(f"  Format identification: {formats.tool}, {len(rows) - unidentified}/{len(rows)} identified")
+    # Damaged files are preserved as received; the check only records them.
+    integrity = {rec.rel: res for rec in rows if (res := check_file(rec.path)) is not None}
+    if integrity:
+        counts = summarize(integrity)
+        print(f"  Integrity check: {counts['checked']} checked, {counts['damaged']} damaged, "
+              f"{counts['unchecked']} unchecked")
+        for rel, res in integrity.items():
+            if res.status == "damaged":
+                print(f"    DAMAGED {rel}: {res.detail}")
 
     ingested_at = iso_now()
     submission = resolve_submission_source(source)
@@ -296,7 +311,7 @@ def build_bagit_package(
                 "package_storage_prefix": dump_classification.package_storage_prefix,
             }
         )
-    inventory = build_inventory(rows, payload_dir, excluded, formats=formats)
+    inventory = build_inventory(rows, payload_dir, excluded, formats=formats, integrity=integrity)
 
     bag_info: dict[str, str] = {
         "Bag-Software": "HitSave build-bagit-package.py",
@@ -359,6 +374,7 @@ def build_bagit_package(
         bag_dir,
         rows=rows,
         formats=formats,
+        integrity=integrity,
         submission=submission_json,
         program="build-bagit-package.py",
         metadata_dir=meta_dir,
@@ -377,8 +393,9 @@ def write_build_events(
     submission: dict,
     program: str,
     metadata_dir: str = "metadata",
+    integrity: dict[str, IntegrityResult] | None = None,
 ) -> None:
-    """PREMIS events for what the build did: ingestion, digests, format identification."""
+    """PREMIS events for what the build did: ingestion, digests, format identification, validation."""
     common = dict(
         program=program,
         package_id=str(submission["package_id"]),
@@ -404,6 +421,11 @@ def write_build_events(
         ),
         **common,
     ), "message-digest-calculation", metadata_dir)
+    if integrity:
+        write_event(bag_dir, validation_event(
+            {f"{submission.get('payload_dir') or 'data'}/{rel}": res for rel, res in integrity.items()},
+            when=submission["ingested_at"], **common,
+        ), "validation", metadata_dir)
     if formats.status == "disabled":
         return
     if formats.status == "ok":
