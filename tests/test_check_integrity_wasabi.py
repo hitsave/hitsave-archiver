@@ -168,3 +168,19 @@ def test_recheck_damaged_picks_up_files_marked_damaged() -> None:
                      {"path": "data/b.png", "integrity": {"status": "ok"}}]}
     assert ciw.checkable_files(inv) == []
     assert [f["path"] for f in ciw.checkable_files(inv, recheck_damaged=True)] == ["data/a.png"]
+
+
+def test_recheck_ext_redoes_every_file_with_that_extension() -> None:
+    inv = {"files": [{"path": "data/a.TIF", "integrity": {"status": "ok", "check": "pillow"}},
+                     {"path": "data/b.tiff", "integrity": {"status": "damaged"}},
+                     {"path": "data/c.jpg", "integrity": {"status": "ok"}},
+                     {"path": "data/d.txt"}]}
+    assert ciw.checkable_files(inv) == []
+    exts = ciw.parse_extensions(["tif,.TIFF"])
+    assert exts == frozenset({".tif", ".tiff"})
+    assert [f["path"] for f in ciw.checkable_files(inv, recheck_ext=exts)] == ["data/a.TIF", "data/b.tiff"]
+
+
+def test_parse_extensions_ignores_blanks() -> None:
+    assert ciw.parse_extensions([]) == frozenset()
+    assert ciw.parse_extensions([" , pdf ,", ".PNG"]) == frozenset({".pdf", ".png"})
