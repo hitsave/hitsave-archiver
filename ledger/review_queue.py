@@ -152,6 +152,7 @@ def render_review_page(
     moby: str,
     status_config: dict,
     admin_base: str,
+    site_base: str,
 ) -> bytes:
     rid = int(row["id"])
     item_id = int(row["omeka_item_id"])
@@ -159,6 +160,7 @@ def render_review_page(
     here = _queue_href(moby, rid - 1)  # come back to this record after correcting it
     back = urlencode({"omeka_ref": str(item_id), "return_to": here})
     admin = html.escape(f"{admin_base}/item/{item_id}/show")
+    public = html.escape(f"{site_base}/item/{item_id}")  # hidden items show there when signed in to Omeka
     if item is not None:
         cur = current_values(item)
         desc = cur["description"]
@@ -191,7 +193,8 @@ def render_review_page(
 <p class="muted">{left} left in this view</p>
 <h2>{html.escape(title)}</h2>
 <p><a href="{html.escape(item_href(key))}"><code>{html.escape(key)}</code></a> · {status_badge(row.get("status"))}
- · Omeka item {item_id} · <a href="{admin}" target="_blank" rel="noopener">Omeka admin ↗</a></p>
+ · Omeka item {item_id} · <a href="{public}" target="_blank" rel="noopener">Public page ↗</a>
+ · <a href="{admin}" target="_blank" rel="noopener">Omeka admin ↗</a></p>
 {details}
 {render_damaged_panel(row, is_public=False)}
 <form method="post" action="/review/publish" class="actions review-actions">
