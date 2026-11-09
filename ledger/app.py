@@ -490,8 +490,8 @@ def render_health(*, sort: str = "updated_at", sort_dir: str = "desc") -> bytes:
 <h2>Flags</h2>
 <div class="summary">{flag_chips}</div>
 <h2>{attention_heading}</h2>
-<p>Failed or quarantined packages, complete packages without a catalog record, and anything with an
-error. <a href="/?flag=attention">See all {attention_total} on the Ledger</a>, where you can search
+<p>Failed packages, complete packages without a catalog record, and anything else with an error.
+Quarantined packages aren't listed: the <code>quarantine</code> status chip shows them. <a href="/?flag=attention">See all {attention_total} on the Ledger</a>, where you can search
 and page through them.</p>
 {_render_attention_table(rows, sort=sort, sort_dir=sort_dir)}
 <h2 id="intake-failures">Intake failures{f' ({len(intake_open)})' if intake_here else ''}</h2>

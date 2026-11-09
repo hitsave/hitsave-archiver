@@ -146,8 +146,9 @@ A few things that trip people up:
    description.
 
 The **Health** page shows the same packages from the other side: counts by status, and an
-**Attention queue** of every package that needs someone, such as quarantined or failed packages and
-complete packages without a catalog record. Below it, **Intake failures** lists packages the archive
+**Attention queue** of every package that needs someone, such as failed packages, complete packages
+without a catalog record, and packages held for review. Quarantined packages aren't in it, because
+someone already decided about them; click the `quarantine` chip to see them. Below it, **Intake failures** lists packages the archive
 rejected before they reached the ledger. If both lists are empty, nothing needs you.
 
 ![The top of the Health page: counts by status and the flags that need attention](images/archivist-guide/health-summary.png)

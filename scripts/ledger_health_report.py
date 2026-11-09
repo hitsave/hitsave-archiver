@@ -38,9 +38,12 @@ ORDER BY status
 
 # Named row conditions shared by the health counts, the attention queue and the ledger app's
 # ?flag= filter, so a count and the rows behind it can't drift apart. name -> (SQL, label).
+# A quarantine is a decision already made (its note lives in error_message), so quarantined
+# packages never count as errors or as needing attention; the status chip lists them.
+NOT_QUARANTINED = "status <> 'quarantine'"
 FLAG_CONDITIONS: dict[str, tuple[str, str]] = {
     "failed_or_error": (
-        "(status = 'failed' OR (error_message IS NOT NULL AND error_message <> ''))",
+        f"({NOT_QUARANTINED} AND (status = 'failed' OR (error_message IS NOT NULL AND error_message <> '')))",
         "failed or has an error",
     ),
     "no_omeka": (
@@ -48,9 +51,9 @@ FLAG_CONDITIONS: dict[str, tuple[str, str]] = {
         "complete, no catalog record",
     ),
     "attention": (
-        "(status IN ('failed', 'quarantine')"
+        f"({NOT_QUARANTINED} AND (status = 'failed'"
         " OR (status = 'complete' AND omeka_item_id IS NULL)"
-        " OR (error_message IS NOT NULL AND error_message <> ''))",
+        " OR (error_message IS NOT NULL AND error_message <> '')))",
         "needs attention",
     ),
     "damaged": (DAMAGED_SQL, "has damaged files"),
