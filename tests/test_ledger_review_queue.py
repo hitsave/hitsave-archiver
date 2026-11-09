@@ -248,10 +248,10 @@ def test_review_page_has_no_damaged_notice_without_damaged_files() -> None:
 
 def test_review_page_links_the_public_item_page_first() -> None:
     page = _page()
-    public = f'href="{SITE}/item/345"'
+    public = 'href="https://archive.hitsave.org/ark:/78322/345"'
     assert public in page and "Public page" in page
     assert page.index(public) < page.index(f'href="{ADMIN}/item/345/show"')
 
 
 def test_review_page_links_the_public_page_even_without_omeka_details() -> None:
-    assert f'href="{SITE}/item/345"' in _page(item=None)
+    assert 'href="https://archive.hitsave.org/ark:/78322/345"' in _page(item=None)

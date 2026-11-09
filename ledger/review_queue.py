@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 
 from correct_review import current_values
 from damaged_panel import render_damaged_panel
-from formatting import item_href, moby_badge, status_badge
+from formatting import ark_url, item_href, moby_badge, status_badge
 from site_ui import render_page_shell
 
 ConnectFn = Callable[[], Any]
@@ -160,7 +160,7 @@ def render_review_page(
     here = _queue_href(moby, rid - 1)  # come back to this record after correcting it
     back = urlencode({"omeka_ref": str(item_id), "return_to": here})
     admin = html.escape(f"{admin_base}/item/{item_id}/show")
-    public = html.escape(f"{site_base}/item/{item_id}")  # hidden items show there when signed in to Omeka
+    public = html.escape(ark_url(site_base, item_id))
     if item is not None:
         cur = current_values(item)
         desc = cur["description"]
