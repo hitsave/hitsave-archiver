@@ -12,6 +12,7 @@ from moby_resolve import (
 )
 from omeka_staff_metadata import is_wasabi_s3_uri
 from press_material_description import press_material_description
+from rights_access import merged_rights
 
 
 def public_bibo_uri_rows_without_moby(item_body: dict | None) -> list[dict]:
@@ -83,9 +84,9 @@ def append_moby_fields_to_payload(
     credit = moby_attribution_for_omeka_rights(
         metadata_json, moby_cfg, omeka_profile=profile
     )
-    payload["dcterms:rights"] = [
-        literal_value(resolve_property_id(session, base, creds, "dcterms:rights"), credit)
-    ]
+    rights_pid = resolve_property_id(session, base, creds, "dcterms:rights")
+    # The credit replaces the old credit, never the item's RightsStatements.org value.
+    payload["dcterms:rights"] = merged_rights(item_body, [literal_value(rights_pid, credit)], rights_pid)
     title = (game_title or metadata_json.get("moby_title") or metadata_json.get("search_title") or "").strip()
     if profile == "game_catalog":
         desc = moby_description_for_omeka(metadata_json, moby_cfg)

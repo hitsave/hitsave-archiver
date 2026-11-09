@@ -38,7 +38,7 @@ def test_portable_manifest_reads_donor(tmp_path: Path) -> None:
 class _Api:
     @staticmethod
     def resolve_property_id(session, base, creds, term):
-        return {"dcterms:provenance": 51}[term]
+        return {"dcterms:provenance": 51, "dcterms:rights": 15, "dcterms:accessRights": 99}[term]
 
     literal_value = staticmethod(lit)
 
