@@ -23,6 +23,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from omeka_catalog_common import load_register_dip_omeka_api, set_resource_public  # noqa: E402
 from yaml_config import load_yaml  # noqa: E402
+from rights_access import ACCESS, disc_contents_access_update  # noqa: E402
 
 CONFIG_ROOT = Path(os.environ.get("HITSAVE_CONFIG_ROOT", str(REPO_ROOT / "config")))
 
@@ -68,11 +69,20 @@ def main() -> int:
         session = requests.Session()
         base = api_cfg["base_url"].rstrip("/")
         public = False
-        if media_id:
+        item_body = None
+        if item_id:
             item = session.get(api.api_url(base, f"items/{int(item_id)}", creds), timeout=120)
             item.raise_for_status()
-            public = media_visibility(args.display, bool(item.json().get("o:is_public")))
+            item_body = item.json()
+        if media_id and item_body is not None:
+            public = media_visibility(args.display, bool(item_body.get("o:is_public")))
             set_resource_public(session, base, creds, "media", int(media_id), is_public=public, api=api)
+        if item_body is not None:
+            # "Disc contents public. ..." or "Not public, ..." on the item (dcterms:accessRights).
+            access = disc_contents_access_update(item_body, display_public=args.display == "public",
+                                                 access_pid=api.resolve_property_id(session, base, creds, ACCESS))
+            if access:
+                api.patch_item_rdf_values(session, base, creds, int(item_id), access, item_body=item_body)
         now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
         note = decision_note(args.display, args.user, now)
         with conn.cursor() as cur:

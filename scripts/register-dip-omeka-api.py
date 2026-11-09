@@ -30,6 +30,7 @@ from moby_resolve import (  # noqa: E402
 from yaml_config import load_yaml  # noqa: E402
 from press_material_description import press_material_description  # noqa: E402
 from donor_provenance import PROVENANCE, donor_names, merged_provenance  # noqa: E402
+from rights_access import apply_to_payload  # noqa: E402
 from normalize_display_title import catalog_item_title  # noqa: E402
 from omeka_dip_media import find_dip_media_id_on_item  # noqa: E402
 from omeka_staff_metadata import (  # noqa: E402
@@ -546,13 +547,13 @@ def main() -> None:
     else:
         desc_text = press_material_description(title, inventory_json)
     extra["dcterms:description"] = [literal_value(desc_pid, desc_text)]
+    existing_body = None
+    if ledger_item_id_existing:
+        got = session.get(api_url(base, f"items/{ledger_item_id_existing}", creds), timeout=120)
+        got.raise_for_status()
+        existing_body = got.json()
     donors = donor_names((game_cfg.get("submission") or {}).get("donor"))
     if donors:
-        existing_body = None
-        if ledger_item_id_existing:
-            got = session.get(api_url(base, f"items/{ledger_item_id_existing}", creds), timeout=120)
-            got.raise_for_status()
-            existing_body = got.json()
         extra[PROVENANCE] = merged_provenance(
             existing_body, donors, resolve_property_id(session, base, creds, PROVENANCE), literal_value
         )
@@ -569,8 +570,12 @@ def main() -> None:
             resolve_property_id=resolve_property_id,
             game_title=title,
             inventory_json=inventory_json,
+            item_body=existing_body,
             omeka_profile=omeka_profile,
         )
+    # In Copyright unless the item already has a rights statement; access from the kind.
+    apply_to_payload(extra, existing_body, kind=ledger_ingest_kind or "press_material",
+                     resolve_pid=lambda term: resolve_property_id(session, base, creds, term))
 
     ext_dip = _external_dip_helpers()
 

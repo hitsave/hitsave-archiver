@@ -375,6 +375,13 @@ def cmd_attach(args) -> int:
             )
             update_ledger(conn, row["game_key"], disc_contents_media_id=media_id)
         bump_previews_version(int(media_id), version)
+        item_body = item.json()
+        from rights_access import ACCESS, disc_contents_access_update
+
+        access = disc_contents_access_update(item_body, display_public=row["disc_contents_display"] == PUBLIC,
+                                             access_pid=api.resolve_property_id(session, base, creds, ACCESS))
+        if access:
+            api.patch_item_rdf_values(session, base, creds, int(row["omeka_item_id"]), access, item_body=item_body)
     print(json.dumps({"game_key": row["game_key"], "media_id": int(media_id), "public": is_public}))
     return 0
 

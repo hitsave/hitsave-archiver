@@ -10,6 +10,7 @@ from typing import Any
 import requests
 
 from donor_provenance import PROVENANCE, donor_names, merged_provenance
+from rights_access import apply_to_payload
 from dump_classify import classify_dump_sip, find_submission_info_path
 from package_identity import sort_letter as catalog_sort_letter
 from hitsave_dump_sidecars.redump import (
@@ -370,6 +371,8 @@ def build_dump_catalog_values(
     if donors:
         pid = api.resolve_property_id(session, base, creds, PROVENANCE)
         values[PROVENANCE] = merged_provenance(existing_item, donors, pid, api.literal_value)
+    apply_to_payload(values, existing_item, kind="dump",
+                     resolve_pid=lambda term: api.resolve_property_id(session, base, creds, term))
     return values, title
 
 

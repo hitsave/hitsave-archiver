@@ -254,7 +254,35 @@ has them now. **Omeka admin** opens the record there if you want to look at the 
 The list of hidden records is refreshed every few minutes, so records published or hidden in the
 Omeka admin show up (or drop out) shortly after.
 
-## Publish or hide a catalog record
+## Rights and access on a catalog record
+
+Every catalog record shows two fields that the archive fills in:
+
+- **Rights**: [In Copyright](http://rightsstatements.org/vocab/InC/1.0/), a standard statement from
+  RightsStatements.org. Almost everything we hold is still under copyright, so every record gets
+  it.
+- **Access Rights**: whether the public can see the files.
+  - **Public**: press material. Anyone can view the files.
+  - **Not public, request access if needed**: dumps. The disc image is never shown.
+  - **Disc contents public. Disc image not public, request access if needed**: a dump whose disc
+    contents are shown. The archive changes this when someone publishes or hides the contents on
+    the ledger's Disc contents page.
+
+### Use Educational Use Permitted only with the developer's permission
+
+A few press kits came from the developers themselves, who told us people may use them for
+teaching and research. Only for those, change the Rights value by hand:
+
+1. Open the record in the Omeka admin and click **Edit**.
+2. In **Rights**, replace the In Copyright link with
+   `http://rightsstatements.org/vocab/InC-EDU/1.0/` and label it
+   `In Copyright - Educational Use Permitted`.
+3. Click **Save**.
+
+The archive never replaces a RightsStatements.org value that is already on a record, so your
+change stays. Don't use this statement for material the rights holder didn't give us permission
+for: a press kit sent to journalists isn't permission for educational use.
+
 
 New catalog records are private. The item page shows whether a record is **Public** or **Private**
 right now. When you've checked a record, click **Publish** on its item page and confirm; the record
