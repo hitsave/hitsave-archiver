@@ -230,3 +230,37 @@ def test_row_links_point_to_item_page_without_mutating_actions() -> None:
 
 def test_fmt_ts_parses_iso_strings() -> None:
     assert fmt_ts("2026-11-06T13:34:59.123456+01:00") == "2026-11-06 12:34 UTC"
+
+
+# damaged files
+
+DAMAGED_INVENTORY = {"files": [
+    {"path": "data/Kit/Scans/<b>.jpg", "size_bytes": 10,
+     "integrity": {"status": "damaged", "check": "pillow", "detail": "image file is truncated (2 bytes not processed)"}},
+    {"path": "data/Kit/ok.jpg", "size_bytes": 5, "integrity": {"status": "ok"}},
+    {"path": "data/Kit/A.pdf", "size_bytes": 2_000,
+     "integrity": {"status": "damaged", "check": "qpdf", "detail": "can't find PDF header"}},
+]}
+
+
+def test_item_page_lists_damaged_files_above_the_fields() -> None:
+    page = _page(_row(inventory_json=DAMAGED_INVENTORY), True)
+    assert "Damaged files (2)" in page
+    assert "Kit/Scans" in page and "&lt;b&gt;.jpg" in page and "<b>.jpg" not in page
+    assert "Cut off: the end of the file is missing" in page
+    assert "can&#x27;t find PDF header" in page
+    assert page.index("Damaged files (2)") < page.index("All fields")
+    assert "kept as received" in page
+
+
+def test_item_page_says_public_items_are_on_the_public_page() -> None:
+    public = _page(_row(inventory_json=DAMAGED_INVENTORY), True)
+    private = _page(_row(inventory_json=DAMAGED_INVENTORY), False)
+    assert "https://archive.hitsave.org/damaged-files" in public
+    assert "listed on the public" in public
+    assert "once this record is published" in private
+
+
+def test_item_page_has_no_damaged_panel_without_damaged_files() -> None:
+    assert "Damaged files" not in _page(_row(inventory_json={"files": [{"path": "data/a.jpg", "integrity": {"status": "ok"}}]}), True)
+    assert "Damaged files" not in _page(_row(), True)

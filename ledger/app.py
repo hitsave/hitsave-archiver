@@ -464,7 +464,12 @@ def render_health(*, sort: str = "updated_at", sort_dir: str = "desc") -> bytes:
         status_chip(str(st), n, active=False)
         for st, n in sorted(by_status.items(), key=lambda x: str(x[0]))
     )
-    flag_chips = flag_chip("failed_or_error", failed_n) + flag_chip("no_omeka", missing_omeka)
+    damaged_n = summary.get("damaged_files") or 0
+    flag_chips = (
+        flag_chip("failed_or_error", failed_n)
+        + flag_chip("no_omeka", missing_omeka)
+        + flag_chip("damaged", damaged_n)
+    )
     rows = fetch_attention_rows(connect, sort=sort, sort_dir=sort_dir)
     with connect() as conn:
         attention_total = ledger_attention_count(conn)

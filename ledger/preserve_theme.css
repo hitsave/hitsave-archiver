@@ -590,6 +590,10 @@ button[disabled] {
   border-color: rgba(255, 138, 138, 0.45);
 }
 
+.panel-warn {
+  border-color: var(--hs-warn);
+}
+
 button.btn-danger {
   background: var(--hs-danger-bg);
   border: 1px solid rgba(255, 138, 138, 0.55);

@@ -76,6 +76,7 @@ COPY scripts/batch-expand-preservation.py \
     scripts/premis_events.py \
     scripts/rights_access.py \
     scripts/file_integrity.py \
+    scripts/damaged_listing.py \
     scripts/source_content_policy.py \
     scripts/normalize_display_title.py \
     scripts/ingest-folder.py \
