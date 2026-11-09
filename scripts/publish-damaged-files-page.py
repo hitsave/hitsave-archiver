@@ -32,9 +32,9 @@ DEFAULT_CONTACT = (
     '<a href="https://discord.gg/TCKT6uA">Discord</a>'
 )
 CUT_OFF = ("truncat", "startxref", "trailer", "moov atom not found", "unexpected end", "eof", "end of data",
-           "end of file")
+           "end of file", "read error on strip", "read error on tile")
 NOT_THIS_TYPE = ("not a readable", "unknown or corrupt header", "can't open as archive", "not a pdf",
-                 "invalid data found when processing input")
+                 "invalid data found when processing input", "bad magic number")
 
 
 def plain_problem(detail: str | None) -> str:

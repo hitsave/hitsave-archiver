@@ -26,6 +26,7 @@ MEDIA_EXT = {
     ".mp3", ".wav", ".aif", ".aiff", ".ogg", ".wma", ".m4a", ".flac",
 }
 ARCHIVE_EXT = {".zip", ".7z", ".rar"}
+TIFF_EXT = {".tif", ".tiff"}
 
 # Larger images are not decoded: 500 MP of RGBA is 2 GB of RAM.
 MAX_IMAGE_PIXELS = 500_000_000
@@ -69,6 +70,8 @@ def _short(text: str) -> str:
 
 
 def check_image(path: Path) -> IntegrityResult:
+    if Path(path).suffix.lower() in TIFF_EXT and shutil.which("tiffinfo"):
+        return check_tiff(path)
     from PIL import Image, ImageFile, PngImagePlugin, UnidentifiedImageError
 
     # dip_package_previews sets LOAD_TRUNCATED_IMAGES = True process-wide (so previews of
@@ -99,6 +102,21 @@ def check_image(path: Path) -> IntegrityResult:
         (ImageFile.LOAD_TRUNCATED_IMAGES, Image.MAX_IMAGE_PIXELS,
          PngImagePlugin.MAX_TEXT_CHUNK, PngImagePlugin.MAX_TEXT_MEMORY) = saved
     return IntegrityResult("ok", "pillow")
+
+
+def check_tiff(path: Path) -> IntegrityResult:
+    """Decode every strip or tile of every page with libtiff, the reference TIFF library.
+
+    Pillow has no mode for some valid TIFFs (CMYK+alpha) and doesn't notice some broken
+    compressed data. libtiff reads one strip at a time, so a huge scan needs no pixel cap.
+    tiffinfo -D exits 1 on a read or decode error and 0 otherwise (warnings about unknown
+    tags are not damage).
+    """
+    proc = _run(["tiffinfo", "-D", str(path)], path)
+    if proc.returncode == 0:
+        return IntegrityResult("ok", "libtiff")
+    errors = [line for line in proc.stderr.splitlines() if "warning" not in line.lower()]
+    return IntegrityResult("damaged", "libtiff", _short("\n".join(errors) or proc.stderr))
 
 
 def _display_name(target: Path | str) -> str:
@@ -187,7 +205,7 @@ def check_archive(path: Path) -> IntegrityResult:
 
 def missing_tools() -> list[str]:
     """External programs the checks need that aren't on PATH."""
-    needed = ["qpdf", "ffprobe", "ffmpeg"]
+    needed = ["qpdf", "ffprobe", "ffmpeg", "tiffinfo"]
     missing = [tool for tool in needed if shutil.which(tool) is None]
     if shutil.which("7zz") is None and shutil.which("7z") is None:
         missing.append("7zz")

@@ -9,10 +9,16 @@ as damaged so that it can be replaced if someone has an intact copy.
 
 | Kind | Tool | A file is damaged when |
 |------|------|------------------------|
-| Images (JPEG, PNG, GIF, TIFF, BMP, WebP, TGA, PCX) | Pillow | It doesn't open, a PNG chunk checksum fails, or the image data ends early |
+| TIFF | `tiffinfo -D` (libtiff) | libtiff can't read or decode a strip or tile on any page |
+| Other images (JPEG, PNG, GIF, BMP, WebP, TGA, PCX) | Pillow | It doesn't open, a PNG chunk checksum fails, or the image data ends early |
 | PDF | `qpdf --check` | qpdf reports errors, or warnings that mean content is lost (no trailer, a stream it can't recover) |
 | Video and audio | `ffprobe`, then `ffmpeg` decoding the last 15 seconds | ffprobe finds no duration, or the end of the file doesn't decode |
 | Archives (ZIP, 7z, RAR) | `7zz t` | 7-Zip reports an error |
+
+TIFFs go to libtiff, the reference TIFF library, because Pillow can't open some valid TIFFs
+(CMYK with an alpha channel, common in print-ready art) and doesn't notice every broken
+compressed strip. libtiff reads one strip at a time, so large scans have no size limit. When
+Pillow can't identify any other image, a full `ffmpeg` decode decides.
 
 Other files, such as disc images, text and programs, aren't checked. Dumps are verified against
 their Redump or No-Intro hashes instead.
@@ -22,8 +28,8 @@ Each checked file gets one of three statuses:
 - `ok`: the file opened and decoded without errors. A PDF that qpdf repaired without losing
   content is `ok`, with `"detail": "recoverable: …"`.
 - `damaged`: the tool reported the file as cut off, corrupt, or not the format its name says.
-- `unchecked`: the check couldn't answer, for example because the file has a password, the image
-  is over 500 megapixels, or the tool timed out.
+- `unchecked`: the check couldn't answer, for example because the file has a password, a non-TIFF
+  image is over 500 megapixels, or the tool timed out.
 
 A check never stops a package from being preserved.
 
@@ -45,7 +51,7 @@ damaged file in the sweep log.
 `scripts/check-integrity-wasabi.py` checks packages on Wasabi. Images, PDFs and archives are
 downloaded, and their bytes must match the bag's `manifest-sha256.txt`. Video and audio are read
 from a presigned URL, so ffmpeg fetches only the parts it needs. The script refuses to run if
-qpdf, ffprobe, ffmpeg or 7-Zip is missing. `--recheck-unchecked` checks files recorded as
+qpdf, ffprobe, ffmpeg, tiffinfo or 7-Zip is missing. `--recheck-unchecked` checks files recorded as
 `unchecked` again. Disc-contents bags have no ledger row, so this script doesn't cover them yet.
 
 ```sh
