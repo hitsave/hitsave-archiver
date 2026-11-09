@@ -166,3 +166,28 @@ def test_attribution_appends_suffix_when_sentence_does_not_name_mobygames() -> N
     assert moby_attribution_text(None, {"attribution_suffix": "Data by MobyGames.com"}) == (
         "Data by MobyGames.com"
     )
+
+
+def test_companies_reads_the_chosen_platform_releases(monkeypatch) -> None:
+    from moby_resolve import MobyClient
+
+    client = MobyClient.__new__(MobyClient)
+    client.cfg = {"company_platform_scope": "earliest_platform"}
+    pages = {
+        "games/77": {"title": "Game", "platforms": [
+            {"platform_id": 3, "first_release_date": "2001-05-01"},
+            {"platform_id": 9, "first_release_date": "1999-02-01"},
+        ]},
+        "games/77/platforms/9": {"releases": [{"companies": [
+            {"company_name": "Dev Co", "role": "Developed by"},
+            {"company_name": "Pub Co", "role": "Published by"},
+            {"company_name": "Pub Co", "role": "Published by"},
+        ]}]},
+    }
+    asked = []
+    def fake_get(path, params=None):
+        asked.append(path)
+        return pages[path]
+    client._get = fake_get
+    assert client.companies(77) == (["Dev Co"], ["Pub Co"])
+    assert asked == ["games/77", "games/77/platforms/9"]

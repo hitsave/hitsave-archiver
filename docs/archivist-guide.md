@@ -210,7 +210,9 @@ To fix a title or other details:
 
 2. Change only what's wrong. Fields you leave as they are stay unchanged.
    - **Title**
-   - **MobyGames URL**: the address of the right game on [MobyGames](https://www.mobygames.com)
+   - **MobyGames URL**: the address of the right game on [MobyGames](https://www.mobygames.com).
+     The developers and publishers then change to the ones MobyGames lists for that game, unless
+     you change them here too.
    - **Description**
    - **Developers** and **Publishers**, separated by commas. To remove them all, empty the box.
    - **Donated by**: who donated the physical item, separated by commas. To remove them all, empty

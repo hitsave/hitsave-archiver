@@ -168,3 +168,14 @@ def test_donor_sets_clears_and_maps_to_windmill() -> None:
     assert "donated" not in moby
     kept = " ".join(side_effects([Change("donor", "a", "b", "set")], clear_moby=True, execute=True))
     assert "developers and publishers from the match are removed" in kept
+
+
+def test_new_moby_url_says_developers_and_publishers_follow() -> None:
+    url = [Change("moby_url", "https://www.mobygames.com/game/1/a/", "https://www.mobygames.com/game/2/b/", "set")]
+    both = " ".join(side_effects(url, clear_moby=False, execute=True))
+    assert "developers and publishers" in both and "MobyGames lists" in both
+    typed = url + [Change("developer", "Old", "Mine", "set")]
+    one = " ".join(side_effects(typed, clear_moby=False, execute=True))
+    assert "publishers" in one and "developers and publishers" not in one
+    all_typed = typed + [Change("publisher", "", "", "clear")]
+    assert "MobyGames lists" not in " ".join(side_effects(all_typed, clear_moby=False, execute=True))
