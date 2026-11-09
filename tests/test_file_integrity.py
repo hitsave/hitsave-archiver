@@ -258,3 +258,15 @@ def test_bag_with_nothing_to_check_has_no_validation_event(tmp_path: Path, monke
     bag, inventory = _build(tmp_path, monkeypatch, sip)
     assert "integrity" not in inventory["summary"]
     assert not list((bag / "metadata" / "premis").glob("validation-*.xml"))
+
+
+def test_png_with_a_large_metadata_chunk_is_not_damaged(tmp_path: Path) -> None:
+    import os
+    from PIL import PngImagePlugin
+    info = PngImagePlugin.PngInfo()
+    info.add_text("XML:com.adobe.xmp", os.urandom(800_000).hex(), zip=True)  # ~1.6 MB once inflated
+    path = tmp_path / "logo.png"
+    Image.new("RGB", (40, 40), "blue").save(path, pnginfo=info)
+    before = (PngImagePlugin.MAX_TEXT_CHUNK, PngImagePlugin.MAX_TEXT_MEMORY)
+    assert fi.check_file(path).status == "ok"
+    assert (PngImagePlugin.MAX_TEXT_CHUNK, PngImagePlugin.MAX_TEXT_MEMORY) == before

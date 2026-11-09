@@ -161,3 +161,10 @@ def test_missing_tools_are_reported(monkeypatch) -> None:
     import file_integrity as fi
     monkeypatch.setattr(fi.shutil, "which", lambda name: None if name in ("qpdf", "7zz", "7z") else f"/usr/bin/{name}")
     assert fi.missing_tools() == ["qpdf", "7zz"]
+
+
+def test_recheck_damaged_picks_up_files_marked_damaged() -> None:
+    inv = {"files": [{"path": "data/a.png", "integrity": {"status": "damaged", "detail": "MAX_TEXT_CHUNK"}},
+                     {"path": "data/b.png", "integrity": {"status": "ok"}}]}
+    assert ciw.checkable_files(inv) == []
+    assert [f["path"] for f in ciw.checkable_files(inv, recheck_damaged=True)] == ["data/a.png"]

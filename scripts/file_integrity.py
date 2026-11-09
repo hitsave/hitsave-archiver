@@ -30,6 +30,7 @@ ARCHIVE_EXT = {".zip", ".7z", ".rar"}
 # Larger images are not decoded: 500 MP of RGBA is 2 GB of RAM.
 MAX_IMAGE_PIXELS = 500_000_000
 TIMEOUT_SECONDS = 900
+PNG_TEXT_LIMIT = 256 * 1024 * 1024
 DETAIL_MAX = 300
 
 
@@ -68,15 +69,20 @@ def _short(text: str) -> str:
 
 
 def check_image(path: Path) -> IntegrityResult:
-    from PIL import Image, ImageFile, UnidentifiedImageError
+    from PIL import Image, ImageFile, PngImagePlugin, UnidentifiedImageError
 
     # dip_package_previews sets LOAD_TRUNCATED_IMAGES = True process-wide (so previews of
     # cut-off scans still render). This check must see truncation, so it decodes strictly
     # and puts both globals back afterwards.
-    saved = (ImageFile.LOAD_TRUNCATED_IMAGES, Image.MAX_IMAGE_PIXELS)
+    # Pillow also refuses PNG text chunks (XMP, ICC) over 1 MB as a safety limit; a large
+    # metadata chunk isn't damage, so those limits are raised for the check too.
+    saved = (ImageFile.LOAD_TRUNCATED_IMAGES, Image.MAX_IMAGE_PIXELS,
+             PngImagePlugin.MAX_TEXT_CHUNK, PngImagePlugin.MAX_TEXT_MEMORY)
     try:
         ImageFile.LOAD_TRUNCATED_IMAGES = False
         Image.MAX_IMAGE_PIXELS = None  # size is capped below instead
+        PngImagePlugin.MAX_TEXT_CHUNK = PNG_TEXT_LIMIT
+        PngImagePlugin.MAX_TEXT_MEMORY = PNG_TEXT_LIMIT
         with Image.open(path) as img:
             pixels = img.width * img.height
             if pixels > MAX_IMAGE_PIXELS:
@@ -89,7 +95,8 @@ def check_image(path: Path) -> IntegrityResult:
     except (OSError, SyntaxError, ValueError, EOFError) as exc:
         return IntegrityResult("damaged", "pillow", _short(str(exc)))
     finally:
-        ImageFile.LOAD_TRUNCATED_IMAGES, Image.MAX_IMAGE_PIXELS = saved
+        (ImageFile.LOAD_TRUNCATED_IMAGES, Image.MAX_IMAGE_PIXELS,
+         PngImagePlugin.MAX_TEXT_CHUNK, PngImagePlugin.MAX_TEXT_MEMORY) = saved
     return IntegrityResult("ok", "pillow")
 
 

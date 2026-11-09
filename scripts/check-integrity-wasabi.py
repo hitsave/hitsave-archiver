@@ -74,11 +74,14 @@ def update_manifest_line(text: str, relpath: str, digest: str) -> str:
     return "".join(lines)
 
 
-def checkable_files(inventory: dict | None, *, recheck_unchecked: bool = False) -> list[dict]:
-    """Inventory entries a checker exists for and that have no result yet (or only "unchecked")."""
+def checkable_files(
+    inventory: dict | None, *, recheck_unchecked: bool = False, recheck_damaged: bool = False
+) -> list[dict]:
+    """Inventory entries a checker exists for and that have no result yet (or a status to redo)."""
     def due(f: dict) -> bool:
         status = (f.get("integrity") or {}).get("status")
-        return status is None or (recheck_unchecked and status == "unchecked")
+        return (status is None or (recheck_unchecked and status == "unchecked")
+                or (recheck_damaged and status == "damaged"))
     return [f for f in (inventory or {}).get("files") or []
             if due(f) and fi.kind_for(Path(str(f.get("path") or ""))) is not None]
 
@@ -124,10 +127,12 @@ def process_package(
     workdir: Path,
     presign: Callable[[str, str], str] | None = None,
     recheck_unchecked: bool = False,
+    recheck_damaged: bool = False,
 ) -> dict:
     key = str(row["game_key"])
     prefix = str(row["package_storage_prefix"] or "").strip("/")
-    todo = checkable_files(row.get("inventory_json"), recheck_unchecked=recheck_unchecked)
+    todo = checkable_files(row.get("inventory_json"), recheck_unchecked=recheck_unchecked,
+                           recheck_damaged=recheck_damaged)
     res: dict = {"game_key": key}
     if not todo:
         res["status"] = "skipped: nothing to check"
@@ -193,6 +198,8 @@ def main() -> None:
     ap.add_argument("--workdir", default="/output/tmp")
     ap.add_argument("--report", default="")
     ap.add_argument("--recheck-unchecked", action="store_true", help="check files recorded as unchecked again")
+    ap.add_argument("--recheck-damaged", action="store_true",
+                    help="check files recorded as damaged again (after a checker fix)")
     args = ap.parse_args()
     if missing := fi.missing_tools():
         raise SystemExit(f"missing {', '.join(missing)}: rebuild the ingest-worker image first")
@@ -228,7 +235,8 @@ def main() -> None:
         rows = [dict(zip(cols, r)) for r in cur.fetchall()]
 
     def todo(row: dict) -> list[dict]:
-        return checkable_files(row["inventory_json"], recheck_unchecked=args.recheck_unchecked)
+        return checkable_files(row["inventory_json"], recheck_unchecked=args.recheck_unchecked,
+                               recheck_damaged=args.recheck_damaged)
 
     def download_bytes(row: dict) -> int:
         return sum(int(f.get("size_bytes") or 0) for f in todo(row)
@@ -259,7 +267,7 @@ def main() -> None:
         bucket = wasabi_bucket_for_storage_prefix(wasabi, prefix, ingest_kind=row["ingest_kind"])
         try:
             res = process_package(s3, row=row, bucket=bucket, execute=args.execute, workdir=workdir, presign=presign,
-                                  recheck_unchecked=args.recheck_unchecked)
+                                  recheck_unchecked=args.recheck_unchecked, recheck_damaged=args.recheck_damaged)
         except Exception as exc:  # noqa: BLE001
             return {"game_key": row["game_key"], "status": f"error: {exc}"}
         if "inventory_json" in res:
