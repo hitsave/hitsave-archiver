@@ -160,7 +160,7 @@ def render_review(qs: dict[str, list[str]]) -> bytes | str:
         params = {k: v for k, v in (("moby", moby), ("after", str(row["id"]))) if v}
         return "/review?" + urlencode(params)
     return render_review_page(
-        row=row, item=item, counts=counts, moby=moby, status_config=CONFIG, admin_base=ADMIN
+        row=row, item=item, counts=counts, moby=moby, status_config=CONFIG, admin_base=ADMIN, site_base=SITE
     )
 
 

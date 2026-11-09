@@ -20,6 +20,7 @@ from review_queue import (  # noqa: E402
 )
 
 ADMIN = "https://archive.hitsave.org/admin"
+SITE = "https://archive.hitsave.org"
 
 
 # --- fetch_private_item_ids -------------------------------------------------------------------
@@ -182,7 +183,7 @@ COUNTS = {"ok": 3, "ambiguous": 1, "": 4}
 
 
 def _page(**over):
-    kw = dict(row=ROW, item=ITEM, counts=COUNTS, moby="ok", status_config={}, admin_base=ADMIN)
+    kw = dict(row=ROW, item=ITEM, counts=COUNTS, moby="ok", status_config={}, admin_base=ADMIN, site_base=SITE)
     kw.update(over)
     return render_review_page(**kw).decode()
 
@@ -243,3 +244,14 @@ def test_review_page_warns_about_damaged_files_before_publishing() -> None:
 
 def test_review_page_has_no_damaged_notice_without_damaged_files() -> None:
     assert "Damaged files" not in _page()
+
+
+def test_review_page_links_the_public_item_page_first() -> None:
+    page = _page()
+    public = f'href="{SITE}/item/345"'
+    assert public in page and "Public page" in page
+    assert page.index(public) < page.index(f'href="{ADMIN}/item/345/show"')
+
+
+def test_review_page_links_the_public_page_even_without_omeka_details() -> None:
+    assert f'href="{SITE}/item/345"' in _page(item=None)
