@@ -38,6 +38,7 @@ from preservation_common import (  # noqa: E402
 from ingest_kind import storage_profile_for_kind  # noqa: E402
 from submission_sources import resolve_submission_source  # noqa: E402
 from dip_package_previews import add_dvd_menu_preview, load_preview_config, write_hitsave_previews  # noqa: E402
+from format_identification import FormatRun, identify_tree  # noqa: E402
 
 INVENTORY_VERSION = 1
 
@@ -116,23 +117,36 @@ def collect_files(
     return rows
 
 
-def build_inventory(rows: list[FileRow], payload_dir: str, excluded: list[dict] | None = None) -> dict:
+def build_inventory(
+    rows: list[FileRow],
+    payload_dir: str,
+    excluded: list[dict] | None = None,
+    *,
+    formats: FormatRun | None = None,
+) -> dict:
+    """Per-file inventory. With *formats* (keyed like FileRow.rel), each file gets a PRONOM
+    ``format`` record and the inventory says which tool identified them, or why it couldn't."""
     files = []
     ext_counts: Counter[str] = Counter()
+    format_counts: Counter[str] = Counter()
     total_bytes = 0
     for rec in rows:
         data_path = f"{payload_dir}/{rec.rel}"
         ext = Path(rec.rel).suffix.lower().lstrip(".") or "(none)"
         ext_counts[ext] += 1
         total_bytes += rec.size
-        files.append(
-            {
-                "path": data_path,
-                "size_bytes": rec.size,
-                "sha256": rec.sha256,
-                "mime": rec.mime,
-            }
-        )
+        entry = {
+            "path": data_path,
+            "size_bytes": rec.size,
+            "sha256": rec.sha256,
+            "mime": rec.mime,
+        }
+        if formats is not None and formats.status == "ok":
+            hit = formats.hits.get(rec.rel)
+            if hit is not None:
+                entry["format"] = hit.record()
+            format_counts[(hit.puid if hit else None) or "unidentified"] += 1
+        files.append(entry)
     inventory = {
         "manifest_version": INVENTORY_VERSION,
         "files": files,
@@ -142,6 +156,10 @@ def build_inventory(rows: list[FileRow], payload_dir: str, excluded: list[dict] 
             "by_extension": dict(sorted(ext_counts.items())),
         },
     }
+    if formats is not None and formats.status != "disabled":
+        inventory["format_identification"] = formats.record()
+        if format_counts:
+            inventory["summary"]["by_format"] = dict(sorted(format_counts.items()))
     if excluded:
         # Left out of the payload by policy (dotfiles, desktop.ini, OCR debug); recorded so the
         # bag says what the submission contained that it does not.
@@ -220,6 +238,13 @@ def build_bagit_package(
         dest = bag_dir / rec.rel
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(rec.path, dest)
+    # Staged files sit at bag_dir/<rel>, so Siegfried's paths match FileRow.rel.
+    formats = identify_tree(bag_dir)
+    if formats.status == "failed":
+        print(f"  WARNING: format identification failed (recorded in inventory.json): {formats.error}")
+    elif formats.status == "ok":
+        unidentified = sum(1 for rec in rows if (h := formats.hits.get(rec.rel)) is None or h.puid is None)
+        print(f"  Format identification: {formats.tool}, {len(rows) - unidentified}/{len(rows)} identified")
 
     ingested_at = iso_now()
     submission = resolve_submission_source(source)
@@ -270,7 +295,7 @@ def build_bagit_package(
                 "package_storage_prefix": dump_classification.package_storage_prefix,
             }
         )
-    inventory = build_inventory(rows, payload_dir, excluded)
+    inventory = build_inventory(rows, payload_dir, excluded, formats=formats)
 
     bag_info: dict[str, str] = {
         "Bag-Software": "HitSave build-bagit-package.py",

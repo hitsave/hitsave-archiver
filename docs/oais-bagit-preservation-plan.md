@@ -79,6 +79,7 @@ Provenance is copied into each bag (`bag-info.txt`, `metadata/submission.json`) 
 
 - Validate after build: `bagit-python` (`bag.validate()` in `build-bagit-package.py`).
 - **`metadata/inventory.json`**: per-file `path`, `size_bytes`, `sha256`, `mime`; Omeka indexes browseable files from this file on S3.
+- **Format identification**: before the bag is made, Siegfried identifies every payload file against PRONOM. Each inventory entry gets a `format` record (`puid`, `name`, `version`, `mime`, `basis`). A file PRONOM can't identify has `"puid": null` and Siegfried's warning. The inventory's `format_identification` block names the Siegfried version and signature file, and `summary.by_format` counts files per PUID. If Siegfried fails, the bag is still built: `format_identification.status` is `failed` and `error` says why. The `mime` field still comes from the file extension, because the viewer uses it.
 - **`metadata/submission.json`**: `package_id`, `package_storage_prefix`, `wasabi_key`, submission ids, ingest timestamps (see builder output).
 
 ---
