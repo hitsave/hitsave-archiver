@@ -264,9 +264,8 @@ Every catalog record shows two fields that the archive fills in:
 - **Access Rights**: whether the public can see the files.
   - **Public**: press material. Anyone can view the files.
   - **Not public, request access if needed**: dumps. The disc image is never shown.
-  - **Disc contents public. Disc image not public, request access if needed**: a dump whose disc
-    contents are shown. The archive changes this when someone publishes or hides the contents on
-    the ledger's Disc contents page.
+  - **Disc contents public**: a dump whose disc contents are shown. The archive changes this when
+    someone publishes or hides the contents on the ledger's Disc contents page.
 
 ### Use Educational Use Permitted only with the developer's permission
 

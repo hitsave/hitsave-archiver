@@ -46,8 +46,7 @@ def test_statement_detection_accepts_https_and_trailing_variants() -> None:
 def test_access_labels() -> None:
     assert ra.access_label("press_material") == "Public"
     assert ra.access_label("dump") == "Not public, request access if needed"
-    assert ra.access_label("dump", disc_contents_public=True) == (
-        "Disc contents public. Disc image not public, request access if needed")
+    assert ra.access_label("dump", disc_contents_public=True) == "Disc contents public"
 
 
 def test_access_kept_unless_forced() -> None:
