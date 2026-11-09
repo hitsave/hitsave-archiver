@@ -74,14 +74,28 @@ def update_manifest_line(text: str, relpath: str, digest: str) -> str:
     return "".join(lines)
 
 
+def parse_extensions(values: list[str]) -> frozenset[str]:
+    """--recheck-ext values ("tif,.TIFF") as lowercased extensions with a leading dot."""
+    out = set()
+    for value in values:
+        for part in value.split(","):
+            part = part.strip().lower()
+            if part:
+                out.add(part if part.startswith(".") else "." + part)
+    return frozenset(out)
+
+
 def checkable_files(
-    inventory: dict | None, *, recheck_unchecked: bool = False, recheck_damaged: bool = False
+    inventory: dict | None, *, recheck_unchecked: bool = False, recheck_damaged: bool = False,
+    recheck_ext: frozenset[str] = frozenset(),
 ) -> list[dict]:
-    """Inventory entries a checker exists for and that have no result yet (or a status to redo)."""
+    """Inventory entries a checker exists for and that have no result yet (or a status or
+    extension to redo)."""
     def due(f: dict) -> bool:
         status = (f.get("integrity") or {}).get("status")
         return (status is None or (recheck_unchecked and status == "unchecked")
-                or (recheck_damaged and status == "damaged"))
+                or (recheck_damaged and status == "damaged")
+                or Path(str(f.get("path") or "")).suffix.lower() in recheck_ext)
     return [f for f in (inventory or {}).get("files") or []
             if due(f) and fi.kind_for(Path(str(f.get("path") or ""))) is not None]
 
@@ -128,11 +142,12 @@ def process_package(
     presign: Callable[[str, str], str] | None = None,
     recheck_unchecked: bool = False,
     recheck_damaged: bool = False,
+    recheck_ext: frozenset[str] = frozenset(),
 ) -> dict:
     key = str(row["game_key"])
     prefix = str(row["package_storage_prefix"] or "").strip("/")
     todo = checkable_files(row.get("inventory_json"), recheck_unchecked=recheck_unchecked,
-                           recheck_damaged=recheck_damaged)
+                           recheck_damaged=recheck_damaged, recheck_ext=recheck_ext)
     res: dict = {"game_key": key}
     if not todo:
         res["status"] = "skipped: nothing to check"
@@ -200,7 +215,11 @@ def main() -> None:
     ap.add_argument("--recheck-unchecked", action="store_true", help="check files recorded as unchecked again")
     ap.add_argument("--recheck-damaged", action="store_true",
                     help="check files recorded as damaged again (after a checker fix)")
+    ap.add_argument("--recheck-ext", action="append", default=[], metavar="EXT[,EXT]",
+                    help="check every file with these extensions again, whatever its result (after a "
+                         "checker change for that format, e.g. --recheck-ext tif,tiff)")
     args = ap.parse_args()
+    recheck_ext = parse_extensions(args.recheck_ext)
     if missing := fi.missing_tools():
         raise SystemExit(f"missing {', '.join(missing)}: rebuild the ingest-worker image first")
 
@@ -236,7 +255,7 @@ def main() -> None:
 
     def todo(row: dict) -> list[dict]:
         return checkable_files(row["inventory_json"], recheck_unchecked=args.recheck_unchecked,
-                               recheck_damaged=args.recheck_damaged)
+                               recheck_damaged=args.recheck_damaged, recheck_ext=recheck_ext)
 
     def download_bytes(row: dict) -> int:
         return sum(int(f.get("size_bytes") or 0) for f in todo(row)
@@ -267,7 +286,8 @@ def main() -> None:
         bucket = wasabi_bucket_for_storage_prefix(wasabi, prefix, ingest_kind=row["ingest_kind"])
         try:
             res = process_package(s3, row=row, bucket=bucket, execute=args.execute, workdir=workdir, presign=presign,
-                                  recheck_unchecked=args.recheck_unchecked, recheck_damaged=args.recheck_damaged)
+                                  recheck_unchecked=args.recheck_unchecked, recheck_damaged=args.recheck_damaged,
+                                  recheck_ext=recheck_ext)
         except Exception as exc:  # noqa: BLE001
             return {"game_key": row["game_key"], "status": f"error: {exc}"}
         if "inventory_json" in res:

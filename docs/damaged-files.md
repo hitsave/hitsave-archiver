@@ -52,12 +52,15 @@ damaged file in the sweep log.
 downloaded, and their bytes must match the bag's `manifest-sha256.txt`. Video and audio are read
 from a presigned URL, so ffmpeg fetches only the parts it needs. The script refuses to run if
 qpdf, ffprobe, ffmpeg, tiffinfo or 7-Zip is missing. `--recheck-unchecked` checks files recorded as
-`unchecked` again. Disc-contents bags have no ledger row, so this script doesn't cover them yet.
+`unchecked` again, and `--recheck-damaged` checks `damaged` files again after a checker fix.
+`--recheck-ext tif,tiff` checks every file with those extensions again, whatever its result,
+after a checker change for that format. Disc-contents bags have no ledger row, so this script doesn't cover them yet.
 
 ```sh
 docker compose run --rm -T --no-deps -v "$PWD/scripts:/app/scripts:ro" \
   --entrypoint python ingest-worker /app/scripts/check-integrity-wasabi.py \
-  [--execute] [--game-key KEY ...] [--kind press_material] [--limit N] [--max-gb 50] [--report out.json]
+  [--execute] [--game-key KEY ...] [--kind press_material] [--limit N] [--max-gb 50] [--report out.json] \
+  [--recheck-unchecked] [--recheck-damaged] [--recheck-ext EXT[,EXT]]
 ```
 
 Without `--execute`, the script checks files and prints results but writes nothing. With
