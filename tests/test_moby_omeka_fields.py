@@ -30,3 +30,17 @@ def test_moby_bibo_uri_rows_adds_from_game_id_style_url() -> None:
     rows = moby_bibo_uri_rows(None, "https://www.mobygames.com/game/89713", 1, _uri_row)
     assert len(rows) == 1
     assert rows[0].get("is_public") is True
+
+
+def test_moby_bibo_uri_rows_replaces_an_older_moby_url() -> None:
+    item = {
+        "bibo:uri": [
+            {"@id": "https://www.mobygames.com/game/23340"},
+            {"@id": "https://example.org/press-kit"},
+        ]
+    }
+    rows = moby_bibo_uri_rows(item, "https://www.mobygames.com/game/5190/batman-vengeance/", 1, _uri_row)
+    assert [r["@id"] for r in rows] == [
+        "https://example.org/press-kit",
+        "https://www.mobygames.com/game/5190/batman-vengeance/",
+    ]
