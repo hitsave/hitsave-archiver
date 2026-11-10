@@ -184,3 +184,15 @@ def test_recheck_ext_redoes_every_file_with_that_extension() -> None:
 def test_parse_extensions_ignores_blanks() -> None:
     assert ciw.parse_extensions([]) == frozenset()
     assert ciw.parse_extensions([" , pdf ,", ".PNG"]) == frozenset({".pdf", ".png"})
+
+
+def test_disc_contents_row_reads_the_file_list_from_the_bag_on_wasabi(tmp_path: Path) -> None:
+    s3, row = _package(tmp_path)
+    ledger = {"game_key": "some-disc-01", "disc_contents_prefix": f"{PREFIX}/"}
+    dc = ciw.disc_contents_row(s3, "hitsave-dumps", ledger)
+    assert dc["package_storage_prefix"] == PREFIX and dc["ingest_kind"] == "dump" and dc["disc_contents"] is True
+    assert dc["inventory_json"] == row["inventory_json"]
+    res = ciw.process_package(s3, row=dc, bucket="hitsave-dumps", execute=True, workdir=tmp_path)
+    assert res["status"] == "recorded"
+    on_wasabi = json.loads(s3.objects[f"{PREFIX}/metadata/inventory.json"])
+    assert on_wasabi["summary"]["integrity"]["damaged"] == 1

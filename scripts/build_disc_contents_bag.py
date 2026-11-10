@@ -128,6 +128,8 @@ def build_contents_bag(extract_dir: Path, bag_dir: Path, *, source: dict, decisi
         load_preview_config,
         write_hitsave_previews,
     )
+    from file_integrity import check_file
+    from file_integrity import summarize as summarize_integrity
     from yaml_config import dumps_json
 
     listing = json.loads((extract_dir / "listing.json").read_text(encoding="utf-8"))
@@ -172,6 +174,13 @@ def build_contents_bag(extract_dir: Path, bag_dir: Path, *, source: dict, decisi
         previews[key] = (e["kind"], {k: extract_dir / v for k, v in derived.items() if k != "access"}, rec)
         files.append(rec)
 
+    # Same file checks as the dump bags (file_integrity.py); damaged files are kept and recorded.
+    integrity = {}
+    for rec in files:
+        if (checked := check_file(bag_dir / rec["path"])) is not None:
+            rec["integrity"] = checked.record()
+            integrity[rec["path"]] = checked
+
     manifest = write_hitsave_previews(bag_dir, package_id=source["package_id"], config=cfg) or {
         "manifest_version": MANIFEST_VERSION, "package_id": source["package_id"], "browse": {},
         "grid": {}, "display": {}, "files": {}, "gallery_file_keys": [],
@@ -214,6 +223,8 @@ def build_contents_bag(extract_dir: Path, bag_dir: Path, *, source: dict, decisi
         "disc": {k: listing.get(k) for k in ("volume_label", "image", "track_mode")},
         "files": files,
     }
+    if integrity:
+        inventory["summary"]["integrity"] = summarize_integrity(integrity)
     (bag_dir / "metadata" / "inventory.json").write_text(dumps_json(inventory, indent=2), encoding="utf-8")
     submission = {
         "kind": "disc_contents",

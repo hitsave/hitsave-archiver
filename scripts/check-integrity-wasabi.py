@@ -132,6 +132,13 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def disc_contents_row(s3, bucket: str, ledger_row: dict) -> dict:
+    """A dump's disc-contents bag as a package row; its file list lives only in the bag on Wasabi."""
+    prefix = str(ledger_row["disc_contents_prefix"]).strip("/")
+    return {"game_key": str(ledger_row["game_key"]), "ingest_kind": "dump", "package_storage_prefix": prefix,
+            "inventory_json": json.loads(_get(s3, bucket, f"{prefix}/{INVENTORY}")), "disc_contents": True}
+
+
 def process_package(
     s3,
     *,
@@ -207,6 +214,8 @@ def main() -> None:
     ap.add_argument("--execute", action="store_true")
     ap.add_argument("--game-key", action="append", default=[])
     ap.add_argument("--kind", default="")
+    ap.add_argument("--disc-contents", action="store_true",
+                    help="check the dumps' disc-contents bags instead (results go to each bag on Wasabi only)")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--max-gb", type=float, default=0, help="stop adding packages past this many GB to download")
     ap.add_argument("--workers", type=int, default=4)
@@ -248,10 +257,21 @@ def main() -> None:
     if args.kind:
         sql += " AND ingest_kind = %s"
         params.append(args.kind)
+    if args.disc_contents:
+        sql = "SELECT game_key, disc_contents_prefix FROM game_ingest WHERE disc_contents_prefix IS NOT NULL"
+        params = []
+        if args.game_key:
+            sql += " AND game_key = ANY(%s)"
+            params.append(args.game_key)
     with psycopg.connect(**conninfo) as conn:
         cur = conn.execute(sql + " ORDER BY game_key", params)
         cols = [d.name for d in cur.description]
         rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+    if args.disc_contents:
+        from preservation_common import resolve_wasabi_bucket
+
+        dumps_bucket = resolve_wasabi_bucket(wasabi, "dump")
+        rows = [disc_contents_row(s3, dumps_bucket, r) for r in rows]
 
     def todo(row: dict) -> list[dict]:
         return checkable_files(row["inventory_json"], recheck_unchecked=args.recheck_unchecked,
@@ -290,7 +310,9 @@ def main() -> None:
                                   recheck_ext=recheck_ext)
         except Exception as exc:  # noqa: BLE001
             return {"game_key": row["game_key"], "status": f"error: {exc}"}
-        if "inventory_json" in res:
+        if "inventory_json" in res and row.get("disc_contents"):
+            res.pop("inventory_json")  # the ledger keeps only the dump bag's inventory
+        elif "inventory_json" in res:
             with psycopg.connect(**conninfo) as conn:
                 conn.execute("UPDATE game_ingest SET inventory_json = %s WHERE game_key = %s",
                              (Jsonb(res.pop("inventory_json")), row["game_key"]))
