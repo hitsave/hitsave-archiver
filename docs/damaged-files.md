@@ -44,7 +44,8 @@ A check never stops a package from being preserved.
 ## New packages
 
 `build-bagit-package.py` checks every payload file before the bag is made, and prints each
-damaged file in the sweep log.
+damaged file in the sweep log. `build_disc_contents_bag.py` runs the same checks on the files
+taken from a disc and records them in the contents bag's `metadata/inventory.json`.
 
 ## Packages preserved before the check existed
 
@@ -54,13 +55,15 @@ from a presigned URL, so ffmpeg fetches only the parts it needs. The script refu
 qpdf, ffprobe, ffmpeg, tiffinfo or 7-Zip is missing. `--recheck-unchecked` checks files recorded as
 `unchecked` again, and `--recheck-damaged` checks `damaged` files again after a checker fix.
 `--recheck-ext tif,tiff` checks every file with those extensions again, whatever its result,
-after a checker change for that format. Disc-contents bags have no ledger row, so this script doesn't cover them yet.
+after a checker change for that format. `--disc-contents` checks the dumps' disc-contents bags
+instead. Their file list lives only in the bag, so the results go to the bag on Wasabi, not to the
+ledger, and they don't appear on the public page.
 
 ```sh
 docker compose run --rm -T --no-deps -v "$PWD/scripts:/app/scripts:ro" \
   --entrypoint python ingest-worker /app/scripts/check-integrity-wasabi.py \
   [--execute] [--game-key KEY ...] [--kind press_material] [--limit N] [--max-gb 50] [--report out.json] \
-  [--recheck-unchecked] [--recheck-damaged] [--recheck-ext EXT[,EXT]]
+  [--recheck-unchecked] [--recheck-damaged] [--recheck-ext EXT[,EXT]] [--disc-contents]
 ```
 
 Without `--execute`, the script checks files and prints results but writes nothing. With

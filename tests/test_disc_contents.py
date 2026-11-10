@@ -183,3 +183,16 @@ def test_data_track_skips_cue_with_missing_file(tmp_path: Path) -> None:
     (tmp_path / "Game (USA).cue").write_text('FILE "Game (USA).bin" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n')
     (tmp_path / "Game (USA).bin").write_bytes(b"\0" * 2352)
     assert x.data_track(tmp_path) == (tmp_path / "Game (USA).bin", "MODE2/2352")
+
+
+def test_contents_bag_records_file_checks(tmp_path: Path) -> None:
+    inv = b.build_contents_bag(_extracted(tmp_path), tmp_path / "bag", source=SOURCE,
+                               decision=DiscContentsDecision("press_kit", "public", []),
+                               scan={"files_scanned": 4}, preview_cfg=CFG)
+    by_path = {f["path"]: f for f in inv["files"]}
+    assert by_path["data/2002DPK/screenshots/lotus_ss_1.jpg"]["integrity"]["status"] == "ok"
+    assert by_path["data/2002DPK/movies/robocop.mpg"]["integrity"]["status"] == "damaged"  # 4 bytes, not video
+    assert "integrity" not in by_path["data/2002DPK/2002DPK.exe"]  # no checker for programs
+    assert inv["summary"]["integrity"]["damaged"] == 1
+    on_disk = json.loads((tmp_path / "bag" / "metadata" / "inventory.json").read_text())
+    assert on_disk["summary"]["integrity"] == inv["summary"]["integrity"]
