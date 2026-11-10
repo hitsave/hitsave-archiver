@@ -28,7 +28,7 @@ Events are only ever added. A later change adds a new event file and one tagmani
 | `format identification` | `build-bagit-package.py` | Every new bag. The outcome is `failure` if Siegfried didn't run |
 | `validation` | `build-bagit-package.py`, `check-integrity-wasabi.py` | When a bag has images, PDFs, video/audio or archives. The outcome is `fail` if any is damaged |
 | `virus check` | `ingest-folder.py`, `rescan-virus-unscanned.py`, `add_catalogue_scans_wasabi.py` | Before upload, and on a rescan |
-| `metadata modification` | `apply_dvd_menu_bag_previews.py`, `refresh_bag_previews_wasabi.py`, `sync_dump_bag_metadata_from_ledger.py`, `patch-press-catalog-omeka-and-bag.py` | Each time the script changes a bag's tag files |
+| `metadata modification` | `apply_dvd_menu_bag_previews.py`, `refresh_bag_previews_wasabi.py`, `sync_dump_bag_metadata_from_ledger.py`, `patch-press-catalog-omeka-and-bag.py`, `sync-catalog-snapshots.py` | Each time the script changes a bag's tag files |
 
 A script that changes a bag on Wasabi uploads the event file before the new tagmanifest, as it does with every other tag file. Shared code: `scripts/premis_events.py`.
 
@@ -36,6 +36,28 @@ Fixity checks of the Wasabi copy are not written into bags. They stay in the led
 
 
 Unpacked bag trees only — one prefix per package. Press: `press-material/{sort_letter}/{package_id}/`. Dumps: see [dump-preservation.md](./dump-preservation.md).
+
+## Catalog record copies
+
+Each bag keeps dated copies of its catalog record under `metadata/catalog/`, so the package still says what it is if the catalog is lost. Without them, a bag holds the title, type, region, format and donor, but not the description, rights statement, access wording, creator and publisher, ARK, item sets or public/hidden status. The 2026-11-10 restore test found that gap.
+
+Each copy is one file, `catalog-<UTC time>.json`, built from the item's Omeka record by `scripts/catalog_snapshot.py`:
+
+- `about` explains the file in plain words, so a reader doesn't need Omeka or this repository.
+- `values` holds every property, keyed by its Dublin Core (`dcterms:`) or BIBO (`bibo:`) term. A link to another item carries that item's ARK and title. A value marked `public: false` is shown to staff only.
+- `item_sets`, `resource_template` and `resource_class` carry names as well as ids.
+- `ark`, `omeka_item_id`, `public`, `created` and `omeka_modified` identify the record. `taken_at` says when the copy was made.
+
+Copies are only ever added. When the record changes, a new dated file goes next to the older ones, with a `metadata modification` event that names the changed fields. The newest file is the current record. Other archives work the same way: Archivematica adds an "updated" METS section and keeps the original, and OCFL and E-ARK keep earlier versions of an object.
+
+The Windmill job `f/hitsave/sync_catalog_snapshots` runs `scripts/sync-catalog-snapshots.py --execute` daily at 05:30 UTC. It compares each package's Omeka record with the bag's newest copy and writes only to bags whose record changed, so an edit made anywhere (Omeka admin, the ledger's correction box, a script) reaches the bag within a day. Its first run is the backfill. Without `--execute`, it reports what it would add:
+
+```bash
+docker compose run --rm -T --no-deps -v "$PWD/scripts:/app/scripts:ro" \
+  --entrypoint python omeka-catalog /app/scripts/sync-catalog-snapshots.py [--game-key KEY] [--max-writes N] [--execute]
+```
+
+The copies don't replace the Omeka database backups. Item set pages, site pages and the theme exist only there.
 
 ## Omeka
 
