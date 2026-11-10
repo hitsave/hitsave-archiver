@@ -48,9 +48,26 @@ def _moby(monkeypatch, developers, publishers):
     seen = []
     def lookup(url):
         seen.append(url)
-        return developers, publishers
-    monkeypatch.setattr(cc, "moby_companies_for_url", lookup)
+        game = {"moby_game_id": 12345, "moby_title": "Right Game", "moby_url": URL, "first_release_date": "2001-10-31"}
+        if developers:
+            game["developers"] = developers
+        if publishers:
+            game["publishers"] = publishers
+        return game
+    monkeypatch.setattr(cc, "moby_game_for_url", lookup)
     return seen
+
+
+@pytest.fixture
+def ledger(monkeypatch):
+    """The item has a ledger row; records what the ledger match is set to."""
+    set_to: list = []
+    monkeypatch.setattr(cc, "_ledger_row_by_omeka_item_id",
+                        lambda item_id, required=True: {"game_key": "right-game-01", "inventory_json": {}})
+    monkeypatch.setattr(cc, "_set_ledger_moby_match", lambda key, game: set_to.append((key, game)))
+    stub = type("W", (), {"patch_wasabi_bag": staticmethod(lambda **kw: None)})
+    monkeypatch.setattr(cc, "_patch_wasabi_module", lambda: stub)
+    return set_to
 
 
 def test_new_moby_url_replaces_developers_and_publishers(omeka, monkeypatch, capsys) -> None:
@@ -81,7 +98,7 @@ def test_a_role_mobygames_doesnt_list_is_left_alone(omeka, monkeypatch, capsys) 
 def test_failed_lookup_still_corrects_the_url(omeka, monkeypatch, capsys) -> None:
     def broken(url):
         raise RuntimeError("moby_credentials_missing")
-    monkeypatch.setattr(cc, "moby_companies_for_url", broken)
+    monkeypatch.setattr(cc, "moby_game_for_url", broken)
     _main(monkeypatch, "--moby-url", URL)
     assert set(omeka["updates"]) == {"bibo:uri"}
     err = capsys.readouterr().err
@@ -92,3 +109,22 @@ def test_no_lookup_without_a_new_moby_url(omeka, monkeypatch) -> None:
     seen = _moby(monkeypatch, ["X"], ["Y"])
     _main(monkeypatch, "--title", "New title")
     assert seen == []
+
+
+def test_new_moby_url_sets_the_ledger_match_to_the_new_game(omeka, ledger, monkeypatch) -> None:
+    _moby(monkeypatch, ["Right Dev"], ["Right Pub"])
+    _main(monkeypatch, "--moby-url", URL, "--no-execute")
+    assert len(ledger) == 1
+    key, game = ledger[0]
+    assert key == "right-game-01"
+    assert game["moby_game_id"] == 12345 and game["moby_title"] == "Right Game"
+    assert game["first_release_date"] == "2001-10-31"
+    assert game["moby_match_source"] == "staff_correction"
+
+
+def test_failed_lookup_leaves_the_ledger_match_alone(omeka, ledger, monkeypatch) -> None:
+    def broken(url):
+        raise RuntimeError("moby_api_error")
+    monkeypatch.setattr(cc, "moby_game_for_url", broken)
+    _main(monkeypatch, "--moby-url", URL, "--no-execute")
+    assert ledger == []

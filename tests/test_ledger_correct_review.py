@@ -179,3 +179,10 @@ def test_new_moby_url_says_developers_and_publishers_follow() -> None:
     assert "publishers" in one and "developers and publishers" not in one
     all_typed = typed + [Change("publisher", "", "", "clear")]
     assert "MobyGames lists" not in " ".join(side_effects(all_typed, clear_moby=False, execute=True))
+
+
+def test_new_moby_url_says_the_old_link_goes_and_the_ledger_match_follows() -> None:
+    url = [Change("moby_url", "https://www.mobygames.com/game/1/a/", "https://www.mobygames.com/game/2/b/", "set")]
+    said = " ".join(side_effects(url, clear_moby=False, execute=True))
+    assert "replaces the old MobyGames link" in said
+    assert "ledger's MobyGames match" in said

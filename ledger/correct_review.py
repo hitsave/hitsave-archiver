@@ -153,6 +153,10 @@ def side_effects(changes: list[Change], *, clear_moby: bool, execute: bool) -> l
             out.append("For press material, the description goes back to the text from the press kit.")
         out.append("The ledger forgets its MobyGames match for this package.")
     elif "moby_url" in fields:
+        out.append(
+            "The new link replaces the old MobyGames link, and the ledger's MobyGames match (title and "
+            "release date) changes to the new game."
+        )
         follow = [FIELD_LABELS[f].lower() for f in _MOBY_NAME_FIELDS if f not in fields]
         if follow:
             out.append(
