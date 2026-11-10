@@ -13,6 +13,7 @@ against their Redump/No-Intro hashes instead.
 """
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 from collections import Counter
@@ -182,9 +183,32 @@ def check_media(path: Path | str) -> IntegrityResult:
         return IntegrityResult("damaged", "ffprobe", _short(probe.stderr) if probe.stderr.strip() else "no duration")
     # Decode the last 15 seconds: a cut-off file fails here even when its header is intact.
     tail = _run(["ffmpeg", "-v", "error", "-xerror", "-sseof", "-15", "-i", str(path), "-f", "null", "-"], path)
-    if tail.returncode != 0:
-        return IntegrityResult("damaged", "ffmpeg", _short(tail.stderr))
-    return IntegrityResult("ok", "ffprobe")
+    if tail.returncode == 0:
+        return IntegrityResult("ok", "ffprobe")
+    if _first_error_is_mpeg_audio(tail.stderr) and _has_video(path):
+        # The seek lands inside an MP1/MP2/MP3 audio frame, which fails on intact files too (and a
+        # cut that hits only the audio looks the same), so judge the end of the file by its video.
+        video = _run(["ffmpeg", "-v", "error", "-xerror", "-sseof", "-15", "-i", str(path), "-map", "0:v",
+                      "-f", "null", "-"], path)
+        if video.returncode == 0:
+            return IntegrityResult("ok", "ffmpeg", "video checked; MPEG audio can't be checked after a seek")
+        return IntegrityResult("damaged", "ffmpeg", _short(video.stderr))
+    return IntegrityResult("damaged", "ffmpeg", _short(tail.stderr))
+
+
+_MPEG_AUDIO_DECODER = re.compile(r"\b(?:dec:)?mp[123](?:float|fixed)?\s*@")
+
+
+def _first_error_is_mpeg_audio(stderr: str) -> bool:
+    """-xerror stops at the first decoding error; the lines after it are the shutdown."""
+    lines = [line for line in (stderr or "").splitlines() if line.strip()]
+    return bool(lines) and bool(_MPEG_AUDIO_DECODER.search(lines[0]))
+
+
+def _has_video(path: Path | str) -> bool:
+    probe = _run(["ffprobe", "-v", "error", "-select_streams", "v", "-show_entries", "stream=codec_type",
+                  "-of", "csv=p=0", str(path)], path)
+    return "video" in (probe.stdout or "")
 
 
 def _seven_zip() -> str:
