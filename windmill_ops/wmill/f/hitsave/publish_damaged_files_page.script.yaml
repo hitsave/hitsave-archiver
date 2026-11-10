@@ -1,0 +1,17 @@
+summary: Publish the Damaged files page
+description: |
+  Runs `scripts/publish-damaged-files-page.py`: rebuilds the public "Damaged files" page
+  (archive.hitsave.org/damaged-files) from the ledger, listing damaged files of public items.
+  With execute false it only builds the page and prints the counts.
+lock: ''
+kind: script
+language: bash
+schema:
+  $schema: 'https://json-schema.org/draft/2020-12/schema'
+  type: object
+  properties:
+    execute:
+      type: string
+      description: "true: update the page; false: dry run"
+      default: 'true'
+  required: []
