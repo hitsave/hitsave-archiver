@@ -389,3 +389,28 @@ def test_tiff_falls_back_to_pillow_without_libtiff_tools(tmp_path: Path, monkeyp
 def test_missing_tools_names_tiffinfo(monkeypatch) -> None:
     monkeypatch.setattr(fi.shutil, "which", lambda name: None)
     assert "tiffinfo" in fi.missing_tools()
+
+
+def _mpeg(tmp_path: Path, seconds: int = 40) -> Path:
+    """An intact MPEG program stream with MP2 audio, like 2002-era press-kit trailers."""
+    path = tmp_path / "trailer.mpg"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", f"testsrc=duration={seconds}:size=320x240:rate=25",
+                    "-f", "lavfi", "-i", f"sine=frequency=440:duration={seconds}", "-c:v", "mpeg1video", "-b:v", "1M",
+                    "-c:a", "mp2", "-b:a", "192k", "-f", "mpeg", str(path)], check=True)
+    return path
+
+
+@pytest.mark.skipif(not HAVE_FFMPEG, reason="ffmpeg not installed")
+def test_intact_mpeg_with_mp2_audio_is_ok_despite_the_seek(tmp_path: Path) -> None:
+    # Seeking 15 s from the end lands inside an MP2 frame: "Header missing" on an intact file.
+    res = fi.check_file(_mpeg(tmp_path))
+    assert res.status == "ok", res.detail
+
+
+@pytest.mark.skipif(not HAVE_FFMPEG, reason="ffmpeg not installed")
+def test_mpeg_cut_off_inside_the_video_is_still_damaged(tmp_path: Path) -> None:
+    path = _mpeg(tmp_path)
+    cut = tmp_path / "cut.mpg"
+    cut.write_bytes(path.read_bytes()[:-1_000_000])
+    res = fi.check_file(cut)
+    assert res.status == "damaged" and not res.detail.startswith("[mp2")  # found in the video, not the seek

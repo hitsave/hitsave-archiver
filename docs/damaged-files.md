@@ -20,6 +20,13 @@ TIFFs go to libtiff, the reference TIFF library, because Pillow can't open some 
 compressed strip. libtiff reads one strip at a time, so large scans have no size limit. When
 Pillow can't identify any other image, a full `ffmpeg` decode decides.
 
+Seeking 15 seconds from the end of an MPEG file usually lands inside an MP1, MP2 or MP3 audio
+frame, and decoding that frame fails even when the file is intact. When the first error comes from
+one of these audio decoders, the last 15 seconds are decoded again with the video only, and the
+file is judged by the video. Its result says `"detail": "video checked; MPEG audio can't be
+checked after a seek"`. A cut that damages only the audio looks the same as an intact file there,
+so it isn't found.
+
 Other files, such as disc images, text and programs, aren't checked. Dumps are verified against
 their Redump or No-Intro hashes instead.
 
