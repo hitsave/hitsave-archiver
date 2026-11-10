@@ -12,13 +12,19 @@ as damaged so that it can be replaced if someone has an intact copy.
 | TIFF | `tiffinfo -D` (libtiff) | libtiff can't read or decode a strip or tile on any page |
 | Other images (JPEG, PNG, GIF, BMP, WebP, TGA, PCX) | Pillow | It doesn't open, a PNG chunk checksum fails, or the image data ends early |
 | PDF | `qpdf --check` | qpdf reports errors, or warnings that mean content is lost (no trailer, a stream it can't recover) |
-| Video and audio | `ffprobe`, then `ffmpeg` decoding the last 15 seconds | ffprobe finds no duration, or the end of the file doesn't decode |
+| Video and audio | `ffprobe`, then `ffmpeg` decoding the whole file (at ingest) or the last 15 seconds (on Wasabi) | ffprobe finds no duration, or any part of what's decoded fails |
 | Archives (ZIP, 7z, RAR) | `7zz t` | 7-Zip reports an error |
 
 TIFFs go to libtiff, the reference TIFF library, because Pillow can't open some valid TIFFs
 (CMYK with an alpha channel, common in print-ready art) and doesn't notice every broken
 compressed strip. libtiff reads one strip at a time, so large scans have no size limit. When
 Pillow can't identify any other image, a full `ffmpeg` decode decides.
+
+At ingest the files are on local disk, so video and audio are decoded in full, which also finds
+damage in the middle of a file. A full decode can take minutes for a long video and times out
+after an hour (the file is then `unchecked`). For packages already on Wasabi, reading every video
+back would be slow and costly, so `check-integrity-wasabi.py` decodes only the last 15 seconds,
+which finds the commonest damage, a cut-off file, from a few MB of reads.
 
 Seeking 15 seconds from the end of an MPEG file usually lands inside an MP1, MP2 or MP3 audio
 frame, and decoding that frame fails even when the file is intact. When the first error comes from
