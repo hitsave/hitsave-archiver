@@ -63,10 +63,11 @@ def render_html(items: list[dict], *, updated: str, site_slug: str, contact_html
     e = html.escape
     total = sum(len(i["files"]) for i in items)
     out = [
-        "<p>These files reached us damaged: cut off, or with broken data inside. We keep them exactly as we "
-        "received them, and we would like to replace them with intact copies.</p>",
-        f"<p>If you have an intact copy of any file below, please {contact_html}. The file name and size "
-        "usually identify the file. An intact copy is often larger than the damaged one.</p>",
+        # Wording set by the owner on the live page (2026-11-10); every run rewrites the page from here.
+        "<p>These files unfortunately reached us damaged. They were either corrupted, cut off, or with broken "
+        "data inside. We keep them exactly as we received them, and we would like to replace them with intact "
+        "copies if possible.</p>",
+        f"<p>If you have an intact copy of any file below, please {contact_html}.</p>",
     ]
     if not items:
         out.append(f"<p>No damaged files are known. Last checked {e(updated)}.</p>")

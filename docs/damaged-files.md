@@ -87,7 +87,8 @@ in `--out`. Adding the page to the site menu is a one-time step in the Omeka adm
 
 The Windmill job `f/hitsave/publish_damaged_files_page` runs the script with `--execute` every 3
 hours, at 15 minutes past (UTC). An item published from the review queue appears on the page by
-the next run. To update the page sooner, run the job by hand in Windmill.
+the next run. To update the page sooner, run the job by hand in Windmill. Each run replaces the whole page, so
+change its wording in `render_html` in the script, not in the Omeka admin.
 
 ## Replacing a damaged file
 

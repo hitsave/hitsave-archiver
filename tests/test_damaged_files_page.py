@@ -74,3 +74,13 @@ def test_page_body_has_title_and_html_blocks() -> None:
     assert body["o:site"] == {"o:id": 2}
     assert [b["o:layout"] for b in body["o:block"]] == ["pageTitle", "html"]
     assert body["o:block"][1]["o:data"] == {"html": "<p>x</p>"}
+
+
+def test_intro_uses_the_wording_the_owner_set_on_the_page() -> None:
+    html = dfp.render_html([], updated="2026-11-09", site_slug="start", contact_html="contact us")
+    assert html.startswith(
+        "<p>These files unfortunately reached us damaged. They were either corrupted, cut off, or with "
+        "broken data inside. We keep them exactly as we received them, and we would like to replace them "
+        "with intact copies if possible.</p>\n"
+        "<p>If you have an intact copy of any file below, please contact us.</p>\n"
+    )
