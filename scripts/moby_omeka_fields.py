@@ -40,20 +40,13 @@ def moby_bibo_uri_rows(
     property_id: int,
     uri_value: Callable[[int, str], dict],
 ) -> list[dict]:
-    """Public Moby game page in bibo:uri (never mix with Wasabi s3:// storage URIs)."""
-    rows: list[dict] = []
-    seen: set[str] = set()
-    if item_body:
-        for row in item_body.get("bibo:uri") or []:
-            uri = str(row.get("@id") or "").strip()
-            if not uri or is_wasabi_s3_uri(uri):
-                continue
-            if uri in seen:
-                continue
-            seen.add(uri)
-            rows.append(dict(row))
+    """Public Moby game page in bibo:uri (never mix with Wasabi s3:// storage URIs).
+
+    An item links one MobyGames game, so the new URL replaces any MobyGames URL already there.
+    """
+    rows = public_bibo_uri_rows_without_moby(item_body)
     url = moby_url.strip()
-    if url and url not in seen:
+    if url:
         row = uri_value(property_id, url)
         row.setdefault("is_public", True)
         rows.append(row)
