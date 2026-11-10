@@ -414,3 +414,38 @@ def test_mpeg_cut_off_inside_the_video_is_still_damaged(tmp_path: Path) -> None:
     cut.write_bytes(path.read_bytes()[:-1_000_000])
     res = fi.check_file(cut)
     assert res.status == "damaged" and not res.detail.startswith("[mp2")  # found in the video, not the seek
+
+
+def _mp4_with_damaged_middle(tmp_path: Path) -> Path:
+    path = tmp_path / "trailer.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=duration=40:size=320x240:rate=25",
+                    "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(path)], check=True)
+    data = bytearray(path.read_bytes())
+    mid = len(data) // 3
+    data[mid:mid + 20000] = bytes(20000)  # zero out part of the video data; the end stays intact
+    path.write_bytes(bytes(data))
+    return path
+
+
+@pytest.mark.skipif(not HAVE_FFMPEG, reason="ffmpeg not installed")
+def test_local_video_is_decoded_in_full_so_damage_in_the_middle_is_found(tmp_path: Path) -> None:
+    res = fi.check_file(_mp4_with_damaged_middle(tmp_path))
+    assert res.status == "damaged" and res.check == "ffmpeg"
+
+
+@pytest.mark.skipif(not HAVE_FFMPEG, reason="ffmpeg not installed")
+def test_video_read_from_a_url_still_gets_only_the_tail_check(tmp_path: Path) -> None:
+    path = _mp4_with_damaged_middle(tmp_path)
+    assert fi.check_file(path, source=str(path)).status == "ok"  # source = what the Wasabi backfill passes
+
+
+@pytest.mark.skipif(not HAVE_FFMPEG, reason="ffmpeg not installed")
+def test_full_decode_has_its_own_longer_timeout(tmp_path: Path, monkeypatch) -> None:
+    seen = []
+    real = subprocess.run
+    def spy(cmd, **kw):
+        seen.append((cmd[0], kw.get("timeout")))
+        return real(cmd, **kw)
+    monkeypatch.setattr(fi.subprocess, "run", spy)
+    fi.check_file(_mpeg(tmp_path))
+    assert ("ffmpeg", fi.FULL_DECODE_TIMEOUT_SECONDS) in seen and fi.FULL_DECODE_TIMEOUT_SECONDS > fi.TIMEOUT_SECONDS

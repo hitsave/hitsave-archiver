@@ -32,6 +32,8 @@ TIFF_EXT = {".tif", ".tiff"}
 # Larger images are not decoded: 500 MP of RGBA is 2 GB of RAM.
 MAX_IMAGE_PIXELS = 500_000_000
 TIMEOUT_SECONDS = 900
+# A full decode of a local video or audio file at ingest; long videos take minutes.
+FULL_DECODE_TIMEOUT_SECONDS = 3600
 PNG_TEXT_LIMIT = 256 * 1024 * 1024
 DETAIL_MAX = 300
 
@@ -138,10 +140,10 @@ def _image_via_ffmpeg(path: Path) -> IntegrityResult:
     return IntegrityResult("damaged", "pillow", "not a readable image (unknown or corrupt header)")
 
 
-def _run(cmd: list[str], target: Path | str) -> subprocess.CompletedProcess:
+def _run(cmd: list[str], target: Path | str, *, timeout: int = TIMEOUT_SECONDS) -> subprocess.CompletedProcess:
     """Run a checker. Tools quote the path they read (a temp file, or a signed URL in the
     backfill); that is replaced by the bare file name before anything is recorded."""
-    proc = subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=TIMEOUT_SECONDS, check=False)
+    proc = subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=timeout, check=False)
     quoted, name = str(target), _display_name(target)
     proc.stdout = (proc.stdout or "").replace(f"{quoted}: ", "").replace(quoted, name)
     proc.stderr = (proc.stderr or "").replace(f"{quoted}: ", "").replace(quoted, name)
@@ -175,12 +177,22 @@ def check_pdf(path: Path) -> IntegrityResult:
     return IntegrityResult("damaged", "qpdf", _short(proc.stderr or proc.stdout))
 
 
-def check_media(path: Path | str) -> IntegrityResult:
-    """*path* may be an https URL (a presigned Wasabi link): ffmpeg reads only what it needs."""
+def check_media(path: Path | str, *, full: bool = False) -> IntegrityResult:
+    """*path* may be an https URL (a presigned Wasabi link): ffmpeg reads only what it needs.
+
+    full: decode the whole file (local files at ingest), which also finds damage in the middle.
+    Otherwise only the last 15 seconds are decoded, which finds a cut-off file cheaply.
+    """
     probe = _run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)], path)
     duration = (probe.stdout or "").strip()
     if probe.returncode != 0 or not duration or duration == "N/A":
         return IntegrityResult("damaged", "ffprobe", _short(probe.stderr) if probe.stderr.strip() else "no duration")
+    if full:
+        whole = _run(["ffmpeg", "-v", "error", "-xerror", "-i", str(path), "-f", "null", "-"], path,
+                     timeout=FULL_DECODE_TIMEOUT_SECONDS)
+        if whole.returncode != 0:
+            return IntegrityResult("damaged", "ffmpeg", _short(whole.stderr))
+        return IntegrityResult("ok", "ffmpeg")
     # Decode the last 15 seconds: a cut-off file fails here even when its header is intact.
     tail = _run(["ffmpeg", "-v", "error", "-xerror", "-sseof", "-15", "-i", str(path), "-f", "null", "-"], path)
     if tail.returncode == 0:
@@ -249,9 +261,13 @@ def check_file(path: Path, *, source: str | None = None) -> IntegrityResult | No
         return None
     check = {"image": "pillow", "pdf": "qpdf", "media": "ffprobe", "archive": "7z"}[kind]
     try:
-        result = CHECKERS[kind](source or path)
-    except subprocess.TimeoutExpired:
-        return IntegrityResult("unchecked", check, f"timed out after {TIMEOUT_SECONDS} s")
+        if kind == "media":
+            # A local file (ingest) is decoded in full; a URL (the Wasabi backfill) only at the end.
+            result = check_media(source) if source else check_media(path, full=True)
+        else:
+            result = CHECKERS[kind](source or path)
+    except subprocess.TimeoutExpired as exc:
+        return IntegrityResult("unchecked", check, f"timed out after {int(exc.timeout)} s")
     except Exception as exc:  # noqa: BLE001 - a broken tool must not stop ingest
         return IntegrityResult("unchecked", check, _short(f"{type(exc).__name__}: {exc}"))
     return result
