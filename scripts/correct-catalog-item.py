@@ -186,8 +186,9 @@ def _reset_ledger_moby_match(game_key: str) -> None:
         conn.close()
 
 
-def moby_companies_for_url(url: str) -> tuple[list[str], list[str]]:
-    """(developers, publishers) MobyGames lists for the game at *url*, picked as at ingest."""
+def moby_game_for_url(url: str) -> dict:
+    """What the ledger keeps for a MobyGames match (title, developers, publishers, release date),
+    for the game at *url*, picked as at ingest. Raises on API errors."""
     from moby_resolve import MobyClient, load_mobygames_config, moby_credentials_path
 
     game_id = moby_game_id_from_url(url)
@@ -195,11 +196,24 @@ def moby_companies_for_url(url: str) -> tuple[list[str], list[str]]:
         raise ValueError(f"no MobyGames game id in {url!r}")
     moby_cfg = load_mobygames_config(CONFIG_ROOT)
     client = MobyClient(moby_cfg, moby_credentials_path(CONFIG_ROOT, moby_cfg))
-    return client.companies(game_id)
+    result = client.resolve_by_id(game_id)
+    if result.status == "error" or not result.metadata_json:
+        raise RuntimeError((result.metadata_json or {}).get("error") or result.block_reason or "moby_api_error")
+    return result.metadata_json
+
+
+def lookup_moby_game(url: str) -> dict | None:
+    """moby_game_for_url, or None (reported on stderr) when the lookup fails."""
+    try:
+        return moby_game_for_url(url)
+    except Exception as exc:  # noqa: BLE001 - the URL correction itself still goes ahead
+        print(json.dumps({"moby_lookup": "failed; developers, publishers and the ledger match left unchanged",
+                          "error": f"{type(exc).__name__}: {exc}"}), file=sys.stderr)
+        return None
 
 
 def names_from_moby(
-    moby_url: str,
+    game: dict | None,
     *,
     developers: list[str] | None,
     publishers: list[str] | None,
@@ -208,22 +222,16 @@ def names_from_moby(
 ) -> tuple[list[str] | None, list[str] | None]:
     """Fill developers/publishers the form left alone with the ones MobyGames lists for the new
     game. Names typed (or cleared) in the form win. A role MobyGames doesn't list, or a failed
-    lookup, leaves the item's current names in place; both are reported on stderr."""
+    lookup (game is None), leaves the item's current names in place."""
     want_dev = developers is None and not clear_developer
     want_pub = publishers is None and not clear_publisher
-    if not (want_dev or want_pub):
-        return developers, publishers
-    try:
-        moby_dev, moby_pub = moby_companies_for_url(moby_url)
-    except Exception as exc:  # noqa: BLE001 - the URL correction itself still goes ahead
-        print(json.dumps({"moby_companies": "lookup failed; developers and publishers left unchanged",
-                          "error": f"{type(exc).__name__}: {exc}"}), file=sys.stderr)
+    if game is None or not (want_dev or want_pub):
         return developers, publishers
     found: dict[str, list[str]] = {}
-    for want, role, names in (("dev", "developers", moby_dev), ("pub", "publishers", moby_pub)):
-        if not (want_dev if want == "dev" else want_pub):
+    for want, role in ((want_dev, "developers"), (want_pub, "publishers")):
+        if not want:
             continue
-        if names:
+        if names := list(game.get(role) or []):
             found[role] = names
         else:
             print(json.dumps({"moby_companies": f"MobyGames lists no {role} for this game; {role} left unchanged"}),
@@ -231,6 +239,32 @@ def names_from_moby(
     if found:
         print(json.dumps({"moby_companies": found}, indent=2, ensure_ascii=False))
     return found.get("developers", developers), found.get("publishers", publishers)
+
+
+def _set_ledger_moby_match(game_key: str, game: dict) -> None:
+    """Point the ledger's MobyGames match at the corrected game. A MobyGames block reason goes;
+    any other (a quarantine) stays."""
+    ingest_cfg = load_yaml(CONFIG_ROOT / "preservation/ingest.yaml")
+    db_cfg = load_yaml(Path(ingest_cfg["database"]["config_file"]))["postgres"]
+    conn = register_api.pg_connect(db_cfg)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE game_ingest
+                SET moby_game_id = %s,
+                    moby_title = %s,
+                    moby_status = 'ok',
+                    block_reason = CASE WHEN block_reason LIKE 'moby%%' THEN NULL ELSE block_reason END,
+                    metadata_json = %s::jsonb,
+                    updated_at = NOW()
+                WHERE game_key = %s
+                """,
+                (int(game["moby_game_id"]), game.get("moby_title"), json.dumps(game), game_key),
+            )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def apply_omeka_corrections(
@@ -439,9 +473,13 @@ def main() -> None:
         args.clear_moby_url and args.publisher is None
     )
 
+    moby_game = None
     if moby_url is not None and not args.clear_moby_url:
+        moby_game = lookup_moby_game(moby_url)
+        if moby_game is not None:
+            moby_game = {**moby_game, "moby_url": moby_url, "moby_match_source": "staff_correction"}
         developers, publishers = names_from_moby(
-            moby_url, developers=developers, publishers=publishers,
+            moby_game, developers=developers, publishers=publishers,
             clear_developer=clear_developer, clear_publisher=clear_publisher,
         )
 
@@ -458,6 +496,12 @@ def main() -> None:
         donors=donors,
         clear_donor=args.clear_donor,
     )
+
+    if moby_game is not None and ledger is not None:
+        _set_ledger_moby_match(str(ledger["game_key"]), moby_game)
+        print(json.dumps({"ledger_moby_match": {"game_key": ledger["game_key"],
+                                                "moby_game_id": moby_game["moby_game_id"],
+                                                "moby_title": moby_game.get("moby_title")}}, indent=2))
 
     if args.clear_moby_url and args.reset_ledger_moby:
         _reset_ledger_moby_match(str(ledger["game_key"]))
