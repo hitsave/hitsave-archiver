@@ -13,6 +13,8 @@ container path `/archiver`.
 | `ledger_backup` | 02:30 | `pg_dump` of the ledger into `HOST_LEDGER_BACKUPS`, checked with `pg_restore --list`; keeps the newest 30. |
 | `wasabi_fixity_check` | 03:00 | Re-reads packages from Wasabi and verifies every SHA-256. Each package at most every 90 days, up to 300 packages / 150 GB a night ([storage-retention.md](../docs/storage-retention.md#fixity-schedule-wasabi-copy)). |
 | `prune_local_working_copies` | 04:30 | Deletes local bags and `ready/` payloads proven identical on Wasabi (`execute: true`). Holds the remote-intake lock. |
+| `sync_catalog_snapshots` | 05:30 | Adds a dated copy of the catalog record to each bag whose Omeka record changed (`metadata/catalog/`); unchanged bags are only read ([preservation-packaging-standard.md](../docs/preservation-packaging-standard.md#catalog-record-copies)). |
+| `publish_damaged_files_page` | Every 3 h at :15 | Rebuilds the public "Damaged files" page from the ledger ([damaged-files.md](../docs/damaged-files.md)). |
 
 The schedule definitions live in `wmill/schedules/*.schedule.yaml`. There is one Windmill worker
 and it runs one job at a time, so a long job delays the next scheduled one.
