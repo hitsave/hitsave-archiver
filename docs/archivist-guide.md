@@ -326,7 +326,8 @@ dumps/Redump/DVD-Video/Coverdiscs/F/famitsu-wave-dvd-2008-12-gatsugou-tokubetsu-
 └── metadata/
     ├── submission.json            where the material came from and when the archive took it in
     ├── inventory.json             every file: path, size, checksum, file type
-    ├── premis/                    the virus-scan records
+    ├── premis/                    records of what the archive did to the package
+    ├── catalog/                   dated copies of the catalog record (see the addendum)
     └── hitsave/                   preview images and thumbnails for the catalog viewer
 ```
 
@@ -364,3 +365,38 @@ After the archive preserves a package, it keeps checking it:
 - **Every night** it backs up the ledger.
 - **Every night** it deletes working copies on its own servers, but only for packages whose Wasabi
   copy it has checked. Wasabi is the copy that lasts.
+
+## Addendum: the catalog record kept in each package
+
+Each package keeps its own copy of its catalog record, so the package still says what it is if the
+catalog on archive.hitsave.org is ever lost. You don't need to do anything for this to happen.
+
+The copies are in the package's `metadata/catalog/` folder on Wasabi, one file per copy, named
+after the time it was made, for example `catalog-20261111T053012Z.json`. Each copy holds:
+
+- every field of the record: title, description, developers, publishers, Donated by, rights
+  statement, access, region, format, shelf location and the rest
+- the record's ARK and whether it's public or hidden
+- the item sets and template, by name
+- for a link to another record, such as a publisher, that record's ARK and title
+- a short note at the top that explains the file to someone who has never seen the catalog
+
+**When a copy is made:** every night at 05:30 UTC the archive compares each record with the
+newest copy in its package. If the record changed, it adds a new copy. It doesn't matter where the
+change was made: the ledger's **Correct metadata** page, the Omeka admin, or a script. A change
+reaches the package by the next morning. A new package gets its first copy the night after its
+catalog record appears.
+
+**Old copies stay.** A new copy goes next to the older ones and never replaces them, so the folder
+shows what the record said at each point. The newest file is the current record. Each new copy
+also gets a record in `metadata/premis/` that lists which fields changed.
+
+**Hidden fields are included.** A copy holds staff-only fields too, such as the link to the package
+on Wasabi, marked `"public": false`. The catalog viewer never shows anything from
+`metadata/catalog/`, so the public can't see these files.
+
+**What the copies don't hold:** item set pages, site pages, the theme and images uploaded straight
+to the catalog. Those exist only in the catalog's own backups.
+
+If the nightly job fails, it shows as a failed `sync_catalog_snapshots` job on the ledger's
+**Windmill runs** page. Tell an admin. The next night's run picks up anything the failed run missed.
