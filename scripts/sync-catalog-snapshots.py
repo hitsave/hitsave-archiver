@@ -141,6 +141,13 @@ def iso_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def render_report(*, execute: bool, packages: int, counts: dict[str, int], detail: list[dict]) -> str:
+    """The full report, then the totals on one line: Windmill keeps only a bash job's last line as its result."""
+    summary = {"execute": execute, "packages": packages, "counts": counts}
+    full = json.dumps({**summary, "packages_detail": detail}, indent=2, ensure_ascii=False)
+    return f"{full}\n{json.dumps(summary)}\n"
+
+
 def main() -> None:
     import psycopg
     import requests
@@ -230,8 +237,7 @@ def main() -> None:
         counts[status["status"]] = counts.get(status["status"], 0) + 1
         if status["status"] != "unchanged":
             report.append({"game_key": game_key, "omeka_item_id": int(item_id), **status})
-    print(json.dumps({"execute": args.execute, "packages": len(rows), "counts": counts, "packages_detail": report},
-                     indent=2, ensure_ascii=False))
+    print(render_report(execute=args.execute, packages=len(rows), counts=counts, detail=report), end="")
     if counts.get("error"):
         sys.exit(1)
 

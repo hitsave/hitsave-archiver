@@ -170,3 +170,14 @@ def test_items_are_paged_and_filtered_to_ledger_ids() -> None:
     got = scs.ledger_items(fetch_page, {2, 3, 99})
     assert sorted(got) == [2, 3]
     assert seen == [1, 2, 3]
+
+
+def test_report_ends_with_a_one_line_summary_for_windmill() -> None:
+    # Windmill keeps only the last stdout line of a bash job as its result.
+    text = scs.render_report(execute=True, packages=3, counts={"new": 2, "error": 1},
+                             detail=[{"game_key": "a", "status": "new"}])
+    lines = text.rstrip("\n").split("\n")
+    assert json.loads(lines[-1]) == {"execute": True, "packages": 3, "counts": {"new": 2, "error": 1}}
+    full = json.loads("\n".join(lines[:-1]))
+    assert full["packages_detail"] == [{"game_key": "a", "status": "new"}]
+    assert full["counts"] == {"new": 2, "error": 1}
