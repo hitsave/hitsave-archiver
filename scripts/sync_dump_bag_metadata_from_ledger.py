@@ -19,6 +19,7 @@ except ImportError as e:
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+import bag_manifest  # noqa: E402
 from package_identity import parse_package_id  # noqa: E402
 from preservation_common import wasabi_bucket_for_storage_prefix  # noqa: E402
 from upload_bag_wasabi import (  # noqa: E402
@@ -54,24 +55,8 @@ def s3_get_bytes(client, bucket: str, key: str) -> bytes:
 
 
 def update_manifest_digest(manifest_text: str, relpath: str, digest: str) -> str:
-    lines: list[str] = []
-    found = False
-    for line in manifest_text.splitlines():
-        if not line.strip():
-            continue
-        parts = line.split(None, 1)
-        if len(parts) != 2:
-            raise ValueError(f"Unexpected manifest line: {line!r}")
-        _old_digest, path = parts
-        sep = "  " if "  " in line else " "
-        if path == relpath:
-            lines.append(f"{digest}{sep}{path}")
-            found = True
-        else:
-            lines.append(line)
-    if not found:
-        raise ValueError(f"Path {relpath!r} not in manifest")
-    return "\n".join(lines) + "\n"
+    """New digest for one listed path; every line gets the file's first-line separator."""
+    return bag_manifest.replace(manifest_text, relpath, digest)
 
 
 def patch_bag_info_external_description(

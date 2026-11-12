@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+import bag_manifest
 from preservation_common import load_ingest_config
 
 PREMIS_NS = "http://www.loc.gov/premis/v3"
@@ -121,8 +122,7 @@ def add_event_file(files: dict[str, Path], work: Path, event: PremisEvent, slug:
 def add_tagmanifest_line(tagmanifest: str, relpath: str, digest: str) -> str:
     if any(line.split(None, 1)[-1].strip() == relpath for line in tagmanifest.splitlines() if line.strip()):
         raise ValueError(f"{relpath} is already in tagmanifest-sha256.txt")
-    body = tagmanifest if not tagmanifest or tagmanifest.endswith("\n") else tagmanifest + "\n"
-    return f"{body}{digest}  {relpath}\n"
+    return bag_manifest.upsert(tagmanifest, {relpath: digest})
 
 
 def stage_event(tagmanifest: str, event: PremisEvent, slug: str) -> tuple[str, bytes, str]:

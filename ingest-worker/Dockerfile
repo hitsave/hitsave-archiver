@@ -74,6 +74,7 @@ COPY scripts/batch-expand-preservation.py \
     scripts/package_ledger.py \
     scripts/format_identification.py \
     scripts/premis_events.py \
+    scripts/bag_manifest.py \
     scripts/rights_access.py \
     scripts/file_integrity.py \
     scripts/damaged_listing.py \

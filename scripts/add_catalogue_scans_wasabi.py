@@ -51,6 +51,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+import bag_manifest  # noqa: E402
+
 MANIFEST = "manifest-sha256.txt"
 TAGMANIFEST = "tagmanifest-sha256.txt"
 BAG_INFO = "bag-info.txt"
@@ -101,17 +103,9 @@ def set_payload_oxum(bag_info: str, total_bytes: int, file_count: int) -> str:
 
 
 def upsert_lines(manifest_text: str, digests: dict[str, str]) -> str:
-    """Replace or append `<sha256>  <path>` lines for the given paths; keep every other line."""
-    remaining = dict(digests)
-    out = []
-    for line in manifest_text.splitlines():
-        if not line.strip():
-            continue
-        digest, path = line.split(None, 1)
-        path = path.strip()
-        out.append(f"{remaining.pop(path)}  {path}" if path in remaining else line)
-    out.extend(f"{d}  {p}" for p, d in sorted(remaining.items()))
-    return "\n".join(out) + "\n"
+    """Replace or append `<sha256> <path>` lines for the given paths; keep every other line.
+    Every line gets the separator of the file's first line (bag_manifest)."""
+    return bag_manifest.upsert(manifest_text, digests)
 
 
 def plan_payload_additions(manifest: dict[str, str], top: str, new_files: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -194,14 +188,7 @@ def rename_lines(manifest_text: str, renames: dict[str, str]) -> str:
             raise ValueError(f"{old} not in manifest")
         if new in present:
             raise ValueError(f"{new} already in manifest")
-    out = []
-    for line in manifest_text.splitlines():
-        if not line.strip():
-            continue
-        digest, path = line.split(None, 1)
-        path = path.strip()
-        out.append(f"{digest}  {renames.get(path, path)}")
-    return "\n".join(out) + "\n"
+    return bag_manifest.rename(manifest_text, renames)
 
 
 def renamed_inventory(inventory: dict, renames: dict[str, str]) -> dict:

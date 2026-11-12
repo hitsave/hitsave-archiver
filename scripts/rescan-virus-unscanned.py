@@ -33,6 +33,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+import bag_manifest  # noqa: E402
 from clamav_full_scan import MalwareFound, scan_path  # noqa: E402
 from premis_virus_check import (  # noqa: E402
     PREMIS_NS,
@@ -100,8 +101,7 @@ def build_rescan_premis(report: VirusScanReport, *, package_id: str, package_uui
 def add_tagmanifest_line(tagmanifest: str, relpath: str, digest: str) -> str:
     if any(line.split(None, 1)[-1].strip() == relpath for line in tagmanifest.splitlines() if line.strip()):
         raise ValueError(f"{relpath} already in {TAGMANIFEST}")
-    body = tagmanifest if tagmanifest.endswith("\n") or not tagmanifest else tagmanifest + "\n"
-    return f"{body}{digest}  {relpath}\n"
+    return bag_manifest.upsert(tagmanifest, {relpath: digest})
 
 
 def _get(s3, bucket, key) -> bytes:

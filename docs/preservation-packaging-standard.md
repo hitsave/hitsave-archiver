@@ -15,6 +15,10 @@ Full OAIS mapping, pipeline, and Omeka access: **[oais-bagit-preservation-plan.m
 | Ingest gate | `build-bagit-package.py` after `make_bag` |
 | Periodic fixity | `wasabi-fixity-check.py` on the Wasabi copy, every package at most every 90 days ([storage-retention.md](./storage-retention.md#fixity-schedule-wasabi-copy)); `fixity-check.py` for local bags |
 
+### Manifest line format
+
+bagit-python writes payload manifests with two spaces between checksum and path, and tag manifests with one. Both are valid BagIt. Scripts that change a manifest later (`scripts/bag_manifest.py`) write every line with the separator of the file's first line, so each manifest uses one style throughout. That matters for a restore by hand: GNU and uutils `sha256sum -c` read either style, but not both in one file. Older edits added two-space lines to one-space tag manifests; each such file becomes uniform the next time a script rewrites it, which the nightly catalog-copy job does for every bag.
+
 ## PREMIS events
 
 Each bag records what happened to it as PREMIS 3 events, one XML file per event under `metadata/premis/`. Event types come from the [Library of Congress PREMIS vocabulary](https://id.loc.gov/vocabulary/preservation/eventType.html). Each file is named `<slug>-<UTC time>-<first 8 characters of the event id>.xml` and is listed in `tagmanifest-sha256.txt`.
