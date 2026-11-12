@@ -40,6 +40,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = REPO_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+import bag_manifest  # noqa: E402
 from dip_package_previews import (  # noqa: E402
     add_dvd_menu_preview,
     load_preview_config,
@@ -117,22 +118,9 @@ def ledger_lookup(conn, ready_folder: str) -> LedgerRow | None:
 
 
 def upsert_manifest_lines(manifest_text: str, digests: dict[str, str]) -> str:
-    """Replace or append `<sha256>  <path>` lines for the given paths; keep every other line."""
-    remaining = dict(digests)
-    lines: list[str] = []
-    for line in manifest_text.splitlines():
-        if not line.strip():
-            continue
-        parts = line.split(None, 1)
-        if len(parts) != 2:
-            raise ValueError(f"Unexpected manifest line: {line!r}")
-        path = parts[1].strip()
-        if path in remaining:
-            lines.append(f"{remaining.pop(path)}  {path}")
-        else:
-            lines.append(line)
-    lines.extend(f"{digest}  {path}" for path, digest in sorted(remaining.items()))
-    return "\n".join(lines) + "\n"
+    """Replace or append `<sha256> <path>` lines for the given paths; keep every other line.
+    Every line gets the separator of the file's first line (bag_manifest)."""
+    return bag_manifest.upsert(manifest_text, digests)
 
 
 # Shared with packaging (build-bagit-package.py adds intake-time menus the same way).

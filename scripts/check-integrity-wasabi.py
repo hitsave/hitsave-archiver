@@ -36,6 +36,7 @@ from typing import Callable
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+import bag_manifest  # noqa: E402
 import file_integrity as fi  # noqa: E402
 from premis_events import iso_now, sha256_hex, stage_event  # noqa: E402
 
@@ -61,17 +62,9 @@ def parse_manifest(text: str) -> dict[str, str]:
 
 
 def update_manifest_line(text: str, relpath: str, digest: str) -> str:
-    lines, found = [], False
-    for line in text.splitlines(keepends=True):
-        parts = line.strip().split(None, 1)
-        if len(parts) == 2 and parts[1].strip() == relpath:
-            lines.append(f"{digest}  {relpath}\n")
-            found = True
-        else:
-            lines.append(line)
-    if not found:
+    if not any(path == relpath for _, path in bag_manifest.entries(text)):
         raise ValueError(f"{relpath} not in {TAGMANIFEST}")
-    return "".join(lines)
+    return bag_manifest.upsert(text, {relpath: digest})
 
 
 def parse_extensions(values: list[str]) -> frozenset[str]:
