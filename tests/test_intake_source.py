@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib.util
 import sys
 from pathlib import Path
 
@@ -11,9 +10,6 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import intake_source as src  # noqa: E402
 
-_spec = importlib.util.spec_from_file_location("backfill", ROOT / "scripts" / "backfill-intake-source.py")
-backfill = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(backfill)
 
 
 def _manifest(d: Path, data: dict) -> Path:
@@ -49,27 +45,6 @@ def test_no_manifest_vs_no_source(tmp_path: Path) -> None:
     d = _manifest(tmp_path / "legacy", {"game_key": "x", "redump": {"verified_image": "a.iso"}})
     assert src.recorded_source(d) == {}
     assert src.to_ref(src.recorded_source(d)) is None
-
-
-def test_backfill_plan(tmp_path: Path) -> None:
-    _manifest(tmp_path / "redump-a", {"redump": {"drive_folder_id": "D1"}})
-    _manifest(tmp_path / "others-b", {"others": {"wasabi_source_prefix": "Inbox/B"}})
-    _manifest(tmp_path / "redump-legacy", {"redump": {}})
-    rows = [
-        ("redump-a", "/data/intake/ready/redump-a"),
-        ("others-b", "/data/intake/ready/others-b/"),
-        ("redump-legacy", "/data/intake/ready/redump-legacy"),
-        ("redump-gone", "/data/intake/ready/redump-gone"),
-        ("weird", None),
-    ]
-    got = {p.game_key: p.intake_source for p in backfill.plan(rows, tmp_path)}
-    assert got == {
-        "redump-a": "drive:D1",
-        "others-b": "wasabi:Inbox/B",
-        "redump-legacy": None,
-        "redump-gone": None,
-        "weird": None,
-    }
 
 
 def test_local_source() -> None:

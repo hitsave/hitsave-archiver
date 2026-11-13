@@ -17,15 +17,6 @@ When two records describe the same thing:
 A tombstone's ARK still opens its page, which links to the record that replaced it. Because it
 isn't assigned to the site, it doesn't appear in browse, search or faceted browse.
 
-`scripts/hide-tombstones.py` takes every item with `dcterms:isReplacedBy` off the site. It's a dry
-run by default; with `--execute` it backs up each item, updates it, and checks that only its site
-changed.
-
-```sh
-docker compose run --rm -T --no-deps -e HITSAVE_CONFIG_ROOT=/config \
-  -v "$PWD/scripts:/app/scripts:ro" -v "$PWD/.generated/tombstones:/out" \
-  -v "${HITSAVE_PRIVATE_CONFIG}/omeka-catalog.yaml:/config/omeka-catalog.yaml:ro" \
-  --entrypoint python omeka-catalog /app/scripts/hide-tombstones.py --out /out [--execute]
-```
-
-To undo it for one item, put the `o:site` value from its backup back with a full-item update.
+To take a tombstone off the site, set its `o:site` to an empty list in the same full-item update
+that turns it into a tombstone. To put it back, restore the `o:site` value from the backup you took
+before the update.
