@@ -16,7 +16,7 @@ Compose expects `HITSAVE_PRIVATE_CONFIG` (default sibling `../hitsave-archiver-c
 
 **Remote intake lanes:** **`docs/remote-intake-lanes.md`** (intake handoff → archiver; private lane inventory template in `config/preservation/lane-inventory.template.yaml`).
 
-**Ops UI:** the **ledger** app (`ledger/`, image `ghcr.io/hitsave/ledger`) on `:8090`; production at `https://ledger.hitsave.org` behind Caddy + oauth2-proxy (Pocket ID) on luigi (ledger, health, **`/correct`**, **`/quarantine`**, publish/hide) — config in the private repo (`ledger.yaml`, from **`config/ledger.yaml.example`**). **Windmill** (schedules, job logs): **`windmill_ops/README.md`**; Windmill keeps its own copy of each script, so push changes (targeted `script push` / `schedule push`).
+**Ops UI:** the **ledger** app (`ledger/`, image `ghcr.io/hitsave/ledger`) on `:8090`; production at `https://ledger.hitsave.org` behind Caddy + oauth2-proxy (Pocket ID) on luigi (ledger, health, **`/correct`**, **`/quarantine`**, publish/hide) — config in the private repo (`ledger.yaml`, from **`config/ledger.yaml.example`**). **Windmill** (schedules, job logs): **`windmill_ops/README.md`**; Windmill keeps its own copy of each script; after each merge a systemd timer on saturn (`scripts/deploy/deploy-poll.sh`) waits for green checks, then syncs Windmill, rebuilds the ingest-worker/omeka-catalog images and deploys the ledger as needed (**`docs/deploy-on-merge.md`**).
 
 **Storage:** Wasabi is the permanent copy; local bags and `ready/` are pruned after verification — **`docs/storage-retention.md`**. Archivist-facing usage: **`docs/archivist-guide.md`**.
 

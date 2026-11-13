@@ -1,1 +1,3 @@
 u/hitsave/preservation_ledger.resource.yaml
+# Written by `wmill sync`; bash scripts have no dependency locks to track.
+wmill-lock.yaml

@@ -1,23 +1,29 @@
 summary: Sync catalog copies into bags
-description: |
-  Runs `scripts/sync-catalog-snapshots.py`: for every complete package with an Omeka item,
+description: >
+  Runs `scripts/sync-catalog-snapshots.py`: for every complete package with an
+  Omeka item,
+
   compares the item's catalog record with the newest copy in the bag on Wasabi
-  (metadata/catalog/catalog-<UTC time>.json). If the bag has no copy or the record changed,
-  adds a new dated copy, a PREMIS event and their tagmanifest lines. Older copies stay.
+
+  (metadata/catalog/catalog-<UTC time>.json). If the bag has no copy or the
+  record changed,
+
+  adds a new dated copy, a PREMIS event and their tagmanifest lines. Older
+  copies stay.
+
   With execute false it only reports what would be added.
 lock: ''
 kind: script
-language: bash
 schema:
-  $schema: 'https://json-schema.org/draft/2020-12/schema'
+  $schema: https://json-schema.org/draft/2020-12/schema
   type: object
   properties:
     execute:
       type: string
-      description: "true: write to Wasabi; false: dry run"
+      description: 'true: write to Wasabi; false: dry run'
       default: 'true'
     max_writes:
       type: string
-      description: "Stop after this many bags are updated (0: no limit)"
+      description: 'Stop after this many bags are updated (0: no limit)'
       default: '0'
   required: []
