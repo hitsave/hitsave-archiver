@@ -40,7 +40,7 @@ Batch expand writes **minimal** per-game YAML under `config/preservation/generat
 |------|------|--------|
 | `clamd.conf` byte limits | `submissions.yaml` `limits.max_member_bytes` | ClamAV has no YAML import; tune both when changing submission caps |
 | `ledger.yaml` `omeka.public_admin_base` / `public_site_base` | Production `https://archive.hitsave.org` | Status UI Omeka links (use `public_url` + `site_slug` for local test stack only) |
-| `ledger.yaml` `ops.windmill` (`api_url`, `workspace`, `token_file`, `correct_catalog_script`) | Operator copy from [`ledger.yaml.example`](../config/ledger.yaml.example) | `/correct` runs Windmill `correct_catalog_item`; `/ops` script links + completed job list |
+| `ledger.yaml` `ops.windmill` (`api_url`, `workspace`, `token_file`, `correct_catalog_script`, `job_wait_timeout_seconds`) | Operator copy from [`ledger.yaml.example`](../config/ledger.yaml.example) | `/correct` runs Windmill `correct_catalog_item`; `/ops` lists completed jobs, each linked to its log |
 | Private `secrets/windmill-ledger.token` | Windmill personal/workspace token | Bearer token for `ops.windmill.token_file`; file must be world-readable in container (644) |
 | `ledger.yaml` `ledger.default_per_page` / `per_page_options` | e.g. 50, [25, 50, 100, 200] | Ledger table pagination on `/` |
 | Ledger compose mounts | Same private `omeka-catalog.yaml` + `secrets` as `omeka-catalog` | Powers **`/correct`** (runs `correct-catalog-item.py` in-container) |
