@@ -68,7 +68,7 @@ host Docker daemon would create bogus `/config/private/...` paths.
 ## Deploy script changes
 
 Windmill keeps **its own copy** of every script and schedule. After a merge into `main`, the
-deploy timer on saturn makes Windmill match `windmill_ops/wmill/`: it pushes changed scripts
+deploy container on saturn makes Windmill match `windmill_ops/wmill/`: it pushes changed scripts
 and schedules, and deletes any under `f/` that git no longer has. See
 [deploy-on-merge.md](../docs/deploy-on-merge.md).
 

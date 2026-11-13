@@ -91,7 +91,7 @@ def test_ci_reports_none_when_no_checks_ran() -> None:
 
 
 def poll(tmp_path: Path, verdict: str, *, deployed: str, target: str, extra: dict | None = None):
-    """Run deploy-poll.sh with git, gh and the deploy script replaced by fakes."""
+    """Run deploy-poll.sh with git, curl and the deploy script replaced by fakes."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
     (bin_dir / "git").write_text(
@@ -102,8 +102,8 @@ def poll(tmp_path: Path, verdict: str, *, deployed: str, target: str, extra: dic
         '  *"show "*) printf \'#!/bin/sh\\necho "deploy $1" >> "$FAKE_CALLS"\\n\' ;;\n'
         "esac\n"
     )
-    (bin_dir / "gh").write_text(f"#!/bin/sh\necho {verdict}\n")
-    for f in ("git", "gh"):
+    (bin_dir / "curl").write_text(f"#!/bin/sh\necho {verdict}\n")
+    for f in ("git", "curl"):
         (bin_dir / f).chmod(0o755)
     state = tmp_path / "checkout" / ".generated" / "deploy"
     state.mkdir(parents=True, exist_ok=True)
@@ -113,7 +113,7 @@ def poll(tmp_path: Path, verdict: str, *, deployed: str, target: str, extra: dic
     env = {
         "PATH": f"{bin_dir}:{os.environ['PATH']}",
         "HITSAVE_ARCHIVER_DIR": str(tmp_path / "checkout"),
-        # The fake gh prints the verdict itself, so the reader only passes it on.
+        # The fake curl prints the verdict itself, so the reader only passes it on.
         "HITSAVE_DEPLOY_CI_STATUS": "cat",
         "FAKE_CALLS": str(calls),
     }

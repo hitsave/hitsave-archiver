@@ -1,0 +1,29 @@
+# Deploys main to saturn once its checks pass. Start it with scripts/deploy/start-deploy-container.sh.
+# See docs/deploy-on-merge.md.
+#
+# The checkout and the private config are mounted at their host paths, so the image builds,
+# `wmill sync push` and the ledger deploy it starts through the Docker socket see the same
+# paths as on the host.
+name: hitsave-deploy
+services:
+  deploy:
+    build: .
+    image: hitsave/deploy:local
+    container_name: hitsave-deploy
+    restart: unless-stopped
+    # The host's default bridge: no new Docker network (saturn has few address pools left).
+    network_mode: bridge
+    user: "1000:1000"
+    group_add:
+      - "${DOCKER_GID:-987}"
+    environment:
+      HOME: /tmp
+      TZ: UTC
+      HITSAVE_ARCHIVER_DIR: ${ARCHIVER_HOST_PATH:?set ARCHIVER_HOST_PATH}
+      HITSAVE_PRIVATE_CONFIG: ${HITSAVE_PRIVATE_CONFIG_HOST:?set HITSAVE_PRIVATE_CONFIG_HOST}
+      HITSAVE_LEDGER_DEPLOY: /opt/hitsave-bin/deploy-ledger-luigi.sh
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${ARCHIVER_HOST_PATH}:${ARCHIVER_HOST_PATH}
+      - ${HITSAVE_PRIVATE_CONFIG_HOST}:${HITSAVE_PRIVATE_CONFIG_HOST}:ro
+      - ${HITSAVE_BIN_HOST:?set HITSAVE_BIN_HOST}:/opt/hitsave-bin:ro
