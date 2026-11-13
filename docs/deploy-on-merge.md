@@ -6,8 +6,8 @@ deploy the ledger by hand.
 
 ## How saturn finds new commits
 
-Saturn checks GitHub itself. Every 5 minutes, the systemd user timer `hitsave-deploy` runs
-`scripts/deploy/deploy-poll.sh`, which:
+Saturn checks GitHub itself. The `hitsave-deploy` container runs
+`scripts/deploy/deploy-poll.sh` every 5 minutes. The poller:
 
 1. fetches `main` and stops if it is the commit deployed last;
 2. asks GitHub for that commit's checks. It waits while they run, and never deploys a commit
@@ -44,20 +44,22 @@ Each deploy writes its full output to
 `== Done`. The same folder holds:
 
 - `deployed-commit`: the last commit deployed;
-- `failed-commit`: a commit whose deploy or checks failed. The timer leaves it alone.
+- `failed-commit`: a commit whose deploy or checks failed. The container leaves it alone.
 
-To see the timer's recent runs:
+To see what the container did recently:
 
 ```bash
-journalctl --user --unit hitsave-deploy --since today
+docker logs --since 24h hitsave-deploy
 ```
+
+It logs only when something happens, such as a deploy or a commit whose checks failed.
 
 ## When a deploy fails
 
-The log names the step that failed. The timer won't try that commit again, so a broken build
+The log names the step that failed. The container won't try that commit again, so a broken build
 doesn't run every 5 minutes. Fix the cause and do one of these:
 
-- Merge a fix. The timer deploys the new commit and catches up on everything since the last
+- Merge a fix. The container deploys the new commit and catches up on everything since the last
   good deploy.
 - Run the deploy by hand from the checkout on saturn:
 
@@ -81,18 +83,26 @@ Common causes:
   worker by hand: `docker compose up -d --no-deps windmill_worker` in `windmill_ops/docker`.
 - Private config in `hitsave-archiver-config`, including the live `ledger.yaml` on luigi.
 - Omeka, the theme and the viewer module.
+- The deploy container itself. After a change under `deploy/`, run
+  `scripts/deploy/start-deploy-container.sh` again. A change to `scripts/deploy/deploy-poll.sh`
+  or `deploy-saturn.sh` needs nothing: the container reads both from the checkout.
 
-## Install the timer
+## Start the deploy container
 
-Run this once on saturn, as `jonas`, from the live checkout:
+Run this on saturn from the live checkout:
 
 ```bash
-scripts/deploy/install-timer.sh
+scripts/deploy/start-deploy-container.sh
 ```
 
-It writes `hitsave-deploy.service` and `hitsave-deploy.timer` to `~/.config/systemd/user/` and
-starts the timer. The deploy uses `gh` to read the checks, so `gh` must be signed in as `jonas`.
-Check the timer with `systemctl --user list-timers hitsave-deploy.timer`.
+It builds the image `hitsave/deploy:local` from `deploy/` and starts the container
+`hitsave-deploy`, which restarts on its own after a reboot. The container:
 
-To pause deploys, run `systemctl --user stop hitsave-deploy.timer`. To start them again, run
-`systemctl --user start hitsave-deploy.timer`.
+- runs as `jonas` (user 1000) with the `docker` group, and uses the host's Docker socket to
+  build images and run the Windmill CLI and the ledger deploy;
+- mounts the live checkout and `hitsave-archiver-config` at their host paths, so every path
+  means the same inside and outside the container;
+- reads the checks from GitHub's public API without a token.
+
+To pause deploys, run `docker stop hitsave-deploy`. To start them again, run
+`docker start hitsave-deploy`.

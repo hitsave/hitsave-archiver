@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Deploy main to saturn once its checks pass. The systemd user timer hitsave-deploy runs this
-# every 5 minutes (see docs/deploy-on-merge.md).
+# Deploy main to saturn once its checks pass. The hitsave-deploy container runs this every
+# 5 minutes (see docs/deploy-on-merge.md).
 #
 # Saturn only reads from GitHub: it fetches main and asks for the commit's check results.
 # Nothing on GitHub can start anything here.
@@ -33,7 +33,10 @@ if [[ "$(cat "$state/failed-commit" 2>/dev/null)" == "$target" ]]; then
   exit 0
 fi
 
-ci="$(gh api "repos/$repo/commits/$target/check-runs?per_page=100" | $ci_status)"
+# The repo is public, so reading its checks needs no token (60 requests an hour; this uses 12).
+ci="$(curl --fail --silent --show-error --max-time 60 \
+  --header "Accept: application/vnd.github+json" --user-agent hitsave-deploy \
+  "https://api.github.com/repos/$repo/commits/$target/check-runs?per_page=100" | $ci_status)"
 case "$ci" in
   pending)
     exit 0
