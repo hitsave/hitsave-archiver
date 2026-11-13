@@ -24,11 +24,9 @@ and it runs one job at a time, so a long job delays the next scheduled one.
 | Script | Role |
 |---|---|
 | `remote_intake_sweep` | Scheduled sweep (above) |
-| `wasabi_redump_inbox_sweep`, `gdrive_redump_inbox_sweep` | One lane only (manual) |
 | `ledger_backup` | Scheduled ledger dump (above) |
 | `wasabi_fixity_check` | Scheduled Wasabi fixity (above). Run with `max_packages: 0` to only count what's due. |
 | `prune_local_working_copies` | Scheduled prune (above). Set `execute: 'false'` for a read-only report. |
-| `ledger_health_report` | Read-only ledger summary (`scripts/ledger_health_report.py`) |
 | `correct_catalog_item` | Catalog correction. the ledger's **`/correct`** submits this job. |
 | `quarantine_catalog_item` | Manual quarantine (`scripts/curation-quarantine-omeka.py`); the ledger's **`/quarantine`** offers the same form |
 | `batch_resume_omeka` | `run-batch-resume-omeka.sh` (long; manual) |

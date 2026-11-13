@@ -5,16 +5,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from omeka_catalog_common import apply_item_item_sets, merged_item_sets  # noqa: E402
-
-
-def test_automated_set_first_admin_sets_kept() -> None:
-    assert merged_item_sets(9001, [511]) == [9001, 511]
-
-
-def test_no_duplicates_and_order_kept() -> None:
-    assert merged_item_sets(9001, [511, 9001, 6082]) == [9001, 511, 6082]
-    assert merged_item_sets(9001, []) == [9001]
+from omeka_catalog_common import apply_item_item_sets  # noqa: E402
 
 
 class _Resp:

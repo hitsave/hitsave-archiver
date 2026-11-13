@@ -116,26 +116,6 @@ def fetch_redump_disc_titles(
     return parse_disc_page_titles(resp.text)
 
 
-def resolve_redump_disc_id(
-    session: requests.Session,
-    *,
-    sha1: str | None,
-    redump_cfg: dict[str, Any],
-) -> int | None:
-    """
-    Find a redump.info disc id by SHA-1 (GET /discs?q={sha1}).
-
-    Hash search avoids serial/title collisions. Uses only redump.info.
-    Returns None when SHA-1 is missing or search is ambiguous.
-    """
-    digest = normalize_sha1(sha1)
-    if not digest:
-        return None
-
-    resolved = resolve_redump_disc_by_sha1(session, sha1=digest, redump_cfg=redump_cfg)
-    return resolved[0] if resolved else None
-
-
 def resolve_redump_disc_by_sha1(
     session: requests.Session,
     *,

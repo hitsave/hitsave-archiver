@@ -56,30 +56,6 @@ remote_intake_private_intake_dir() {
   echo "$(remote_intake_private_config_host)/intake"
 }
 
-remote_intake_gdrive_config_dir() {
-  if [[ -n "${HITSAVE_INTAKE_CONFIG_DIR:-}" ]]; then
-    echo "$HITSAVE_INTAKE_CONFIG_DIR"
-    return
-  fi
-  if [[ -d "$(remote_intake_private_intake_dir)" ]]; then
-    remote_intake_private_intake_dir
-    return
-  fi
-  echo "$(remote_intake_gdrive_root)/config"
-}
-
-remote_intake_gdrive_secrets_dir() {
-  if [[ -n "${HITSAVE_INTAKE_SECRETS_DIR:-}" ]]; then
-    echo "$HITSAVE_INTAKE_SECRETS_DIR"
-    return
-  fi
-  if [[ -d "$(remote_intake_private_intake_dir)/secrets" ]]; then
-    echo "$(remote_intake_private_intake_dir)/secrets"
-    return
-  fi
-  echo "$(remote_intake_gdrive_root)/secrets"
-}
-
 remote_intake_gdrive_build_context() {
   if [[ -n "${HITSAVE_INTAKE_BUILD_CONTEXT:-}" ]]; then
     echo "$HITSAVE_INTAKE_BUILD_CONTEXT"

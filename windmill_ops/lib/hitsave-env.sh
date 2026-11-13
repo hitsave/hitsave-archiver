@@ -21,7 +21,7 @@ if [[ -f "$HOST_ENV_FILE" ]]; then
   source "$HOST_ENV_FILE"
 fi
 
-# Worker bind mount for in-job reads (ledger_health_report). Compose bind mounts need a host path.
+# Worker bind mount for jobs that read the private config. Compose bind mounts need a host path.
 if [[ -f /config/private/preservation/database.yaml ]]; then
   export HITSAVE_PRIVATE_CONFIG_MOUNT=/config/private
 fi

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-Read-only preservation ledger report for operators.
-
-Windmill worker and SSH: `./scripts/run-ledger-health-report.sh` (direct psycopg, no container).
+Read-only preservation ledger report: status summary, health flags and the attention queue.
+The ledger app imports its queries. Run it by hand with `python scripts/ledger_health_report.py`.
 """
 #requirements:
 #psycopg[binary]
@@ -244,12 +243,6 @@ def ledger_search_count(conn, query: str, *, status: str = "", flag: str = "") -
 def ledger_attention_count(conn) -> int:
     with conn.cursor() as cur:
         cur.execute(f"SELECT COUNT(*)::int FROM game_ingest WHERE {FLAG_CONDITIONS['attention'][0]}")
-        return int(cur.fetchone()[0])
-
-
-def ledger_row_count(conn) -> int:
-    with conn.cursor() as cur:
-        cur.execute(LEDGER_COUNT_SQL)
         return int(cur.fetchone()[0])
 
 

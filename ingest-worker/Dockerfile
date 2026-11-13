@@ -46,11 +46,9 @@ COPY scripts/batch-expand-preservation.py \
     scripts/audit_dump_title_slugs.py \
     scripts/rename_dump_package_slug.py \
     scripts/sync_dump_bag_metadata_from_ledger.py \
-    scripts/rename_bag_payload_folders.py \
     scripts/disc_contents_policy.py \
     scripts/build_disc_contents_bag.py \
     scripts/wasabi_rename.py \
-    scripts/relocate_dump_bags_by_sort_letter.py \
     scripts/export-preservation-catalog.py \
     scripts/config_require.py \
     scripts/yaml_config.py \
@@ -98,7 +96,6 @@ COPY scripts/batch-expand-preservation.py \
     scripts/strip-moby-ddg-mismatches-omeka.py \
     scripts/curation-quarantine-omeka.py \
     scripts/set-omeka-visibility.py \
-    scripts/apply-press-material-description-omeka.py \
     scripts/patch-press-catalog-omeka-and-bag.py \
     scripts/correct-catalog-item.py \
     scripts/moby_resolve.py \
@@ -106,9 +103,6 @@ COPY scripts/batch-expand-preservation.py \
     scripts/moby_web_search.py \
     scripts/apply-moby-ad-blurbs-from-web.py \
     scripts/moby_enrich_game.py \
-    scripts/omeka_backfill_helpers.py \
-    scripts/backfill-ledger-omeka-ids.py \
-    scripts/dedupe-omeka-test-items.py \
     scripts/reset-batch-ledger.py \
     scripts/submission_common.py \
     scripts/ingest-submission.py \

@@ -17,7 +17,7 @@ whose last check failed, are always due. Results are recorded in fixity_run with
 "wasabi:" unless --no-record. Exit 1 if any package fails.
 
 Each package is checked against its ledger row as it is at that moment, not as it was when the
-job started: a run can take hours, and tools such as rename_bag_payload_folders.py rewrite bags
+job started: a run can take hours, and other tools can rewrite bags
 and ledger rows meanwhile. A package whose ledger row or tag manifest changes while it is being
 checked, and that shows problems, is reported as SKIP and not recorded, so the next run checks
 it again.

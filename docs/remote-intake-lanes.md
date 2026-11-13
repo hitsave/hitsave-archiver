@@ -156,12 +156,10 @@ Fill in Drive folder IDs, Wasabi incoming bucket/prefixes, and host env variable
    3. **Ingest:** the same command without `--scan-only`. It reuses the saved report, and its PREMIS event, when the files' sizes and mtimes still match and the scan is under 24 hours old. Otherwise it scans again.
 5. **Catalog** — `scripts/remote-intake/register-dump-omeka.sh` or `register-prod-dumps-omeka.sh` ([intake-handoff.md](./intake-handoff.md)). Items start private.
    - **Disc contents** (data discs only): after registration, `remote_intake_disc_contents` extracts a PC/Mac disc's files into a second bag under `disc-contents/` and attaches it to the item ([disc-contents.md](./disc-contents.md)).
-6. **By hand (operator)** — the same per-folder scripts (`run-gdrive-redump-per-folder.sh`, `run-wasabi-redump-per-folder.sh`) or full-batch wrappers; logs under `.generated/` ([README](../scripts/remote-intake/README.md)).
-7. **Move to `processed/{lane}/` (automatic)** — once the ledger says `complete` (after Omeka register), the runner moves the inbox copy: Drive via `intake move-to-processed --folder-id … --lane …`, Wasabi via `scripts/remote-intake/move_wasabi_package_to_processed.py` (verified copy + delete, idempotent, refuses to overwrite). A failed move leaves the package in the inbox; the next sweep sees it `complete` and retries the move. Quarantined and failed packages are never moved. The older `move-gdrive-redump-to-processed.sh` / `move_wasabi_intake_to_processed.py` are for the legacy prefixes only.
+6. **By hand (operator)** — the same per-folder scripts (`run-gdrive-redump-per-folder.sh`, `run-wasabi-redump-per-folder.sh`); logs under `.generated/` ([README](../scripts/remote-intake/README.md)).
+7. **Move to `processed/{lane}/` (automatic)** — once the ledger says `complete` (after Omeka register), the runner moves the inbox copy: Drive via `intake move-to-processed --folder-id … --lane …`, Wasabi via `scripts/remote-intake/move_wasabi_package_to_processed.py` (verified copy + delete, idempotent, refuses to overwrite). A failed move leaves the package in the inbox; the next sweep sees it `complete` and retries the move. Quarantined and failed packages are never moved.
 
 Sidecar parsers live in the shared `hitsave-dump-sidecars` package (`packages/` in this repo): Redump, No-Intro `dumpinfo.txt`, and Switch `Submission.xml`. A new org sidecar is a parser there plus a lane rule in hitsave-intake.
-
-**Automated spot-check (one package):** `scripts/remote-intake/acceptance-redump-package.sh --slug '<ready-slug>'`.
 
 ### Nintendo Switch dumps (live, `no-intro/` lane)
 
