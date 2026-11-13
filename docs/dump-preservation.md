@@ -55,7 +55,7 @@ Path segments use Redump **System** and **Category** strings with `/` and `\` re
 
 Staff URI (Omeka / ledger): `s3://hitsave-dumps/dumps/Redump/PlayStation/Games/{sort_letter}/{package_id}/`
 
-Redump bags sit under `dumps/Redump/`, like No-Intro under `dumps/No-Intro/`. The 196 bags ingested before 2026-11-02 were moved there with `scripts/relocate_redump_bags_to_redump_prefix.py` (one-shot; Wasabi move, ledger, bag tag files and Omeka media/staff URI, all verified).
+Redump bags sit under `dumps/Redump/`, like No-Intro under `dumps/No-Intro/`. The 196 bags ingested before 2026-11-02 were moved there on that date, together with their ledger rows, bag tag files and catalog links.
 
 ### No-Intro-class dumps
 

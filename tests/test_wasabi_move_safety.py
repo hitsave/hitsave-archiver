@@ -1,7 +1,6 @@
 """Wasabi MOVE/delete paths must never lose objects on partial failure."""
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
 
 import pytest
@@ -103,54 +102,3 @@ def test_verified_move_refuses_non_empty_destination(monkeypatch: pytest.MonkeyP
     with pytest.raises(wasabi_rename.WasabiMoveIncomplete, match="already has objects"):
         wasabi_rename.wasabi_move_prefix_verified(s3, bucket="b", source_prefix="a", destination_prefix="b2")
     assert "a/x.iso" in s3.objects
-
-
-def _load_flatten(monkeypatch: pytest.MonkeyPatch):
-    spec = importlib.util.spec_from_file_location(
-        "flatten", ROOT / "scripts" / "remote-intake" / "flatten-gamewavedvd-wasabi.py"
-    )
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-GW = "GameWaveDVD"
-
-
-def _wrapper_bucket() -> dict[str, bytes]:
-    return {
-        f"{GW}/Vol 1/": b"",
-        f"{GW}/Vol 1/cover.jpg": b"loose",
-        f"{GW}/Vol 1/G_WAVE_01/disc.iso": b"iso",
-        f"{GW}/Vol 1/G_WAVE_01/!submissionInfo.txt": b"info",
-    }
-
-
-def test_flatten_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    flatten = _load_flatten(monkeypatch)
-    s3 = FakeS3(_wrapper_bucket())
-    monkeypatch.setattr(wasabi_rename, "wasabi_move_prefix", fake_move(s3))
-    stats = flatten.run(s3, "b", dry_run=False, overwrite=False)
-    assert stats["errors"] == 0 and stats["hoisted"] == 1
-    assert set(s3.objects) == {f"{GW}/G_WAVE_01/disc.iso", f"{GW}/G_WAVE_01/!submissionInfo.txt", f"{GW}/G_WAVE_01/cover.jpg"}
-
-
-def test_flatten_partial_move_never_deletes_originals(monkeypatch: pytest.MonkeyPatch) -> None:
-    flatten = _load_flatten(monkeypatch)
-    s3 = FakeS3(_wrapper_bucket())
-    left = f"{GW}/Vol 1/G_WAVE_01/disc.iso"
-    monkeypatch.setattr(wasabi_rename, "wasabi_move_prefix", fake_move(s3, skip={left}))
-    stats = flatten.run(s3, "b", dry_run=False, overwrite=False)
-    assert stats["errors"] >= 1 and stats["hoisted"] == 0
-    assert s3.objects[left] == b"iso"  # the old code deleted this with the outer prefix
-
-
-def test_flatten_failed_loose_copy_keeps_source(monkeypatch: pytest.MonkeyPatch) -> None:
-    flatten = _load_flatten(monkeypatch)
-    s3 = FakeS3(_wrapper_bucket())
-    s3.fail_copy.add(f"{GW}/Vol 1/cover.jpg")
-    monkeypatch.setattr(wasabi_rename, "wasabi_move_prefix", fake_move(s3))
-    stats = flatten.run(s3, "b", dry_run=False, overwrite=False)
-    assert stats["errors"] >= 1 and stats["hoisted"] == 0
-    assert s3.objects[f"{GW}/Vol 1/cover.jpg"] == b"loose"
-    assert f"{GW}/Vol 1/G_WAVE_01/disc.iso" in s3.objects  # stopped before the prefix move

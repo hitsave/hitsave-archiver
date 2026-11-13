@@ -32,7 +32,6 @@ Poll JSON under `.generated/` is for sweeps and move-to-processed scripts only. 
 | `move_wasabi_intake_to_processed.py` | Move ledger-complete Wasabi incoming SIP trees under `processed/` (poll-driven batch) |
 | `move-wasabi-redump-to-processed.sh` | Poll Wasabi incoming + MOVE complete packages to `processed/` |
 | `move-wasabi-incoming-prefix-to-processed.sh` | MOVE one incoming prefix tree to `processed/` (`--prefix`, `--execute`) |
-| `flatten-gamewavedvd-wasabi.py` | Flatten nested GameWaveDVD folder layout on incoming Wasabi (dry-run default) |
 | `check-wasabi-inbox-processed.py` | One-off: compare poll JSON vs Wasabi incoming/`processed/` vs ledger-complete rows |
 
 Poll helpers (sweep internals): `gdrive-redump-poll-packages.sh`, `wasabi-redump-poll-packages.sh`.
