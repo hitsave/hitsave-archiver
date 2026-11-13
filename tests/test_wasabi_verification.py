@@ -181,3 +181,52 @@ def test_fixity_detects_stray_and_missing() -> None:
     problems, _, _ = wasabi_fixity.check_package(s3, "b", "dumps/X/pkg", inv)
     assert any("stray payload object: data/extra.bin" in p for p in problems)
     assert any("missing object: bagit.txt" in p for p in problems)
+
+
+# --- checks that overlap with a change to the package ------------------------------------
+
+def _rows(*rows):
+    """load_row stand-in: returns each (inventory, version) in turn, then repeats the last."""
+    calls = list(rows)
+
+    def load_row():
+        return calls.pop(0) if len(calls) > 1 else calls[0]
+    return load_row
+
+
+def test_check_uses_the_ledger_row_as_it_is_at_check_time() -> None:
+    s3, inv = _wasabi_bag()
+    outcome, problems, _, _ = wasabi_fixity.check_fresh(s3, "b", "dumps/X/pkg", _rows((inv, 1)))
+    assert (outcome, problems) == ("pass", [])
+
+
+def test_ledger_row_changed_during_check_is_skipped_not_failed() -> None:
+    s3, _ = _wasabi_bag()
+    old = {"files": [{"path": "data/old-name/disc.iso", "sha256": _sha(b"iso")}]}
+    outcome, problems, _, _ = wasabi_fixity.check_fresh(s3, "b", "dumps/X/pkg", _rows((old, 1), (old, 2)))
+    assert outcome == "skip" and problems
+
+
+def test_tag_manifest_rewritten_during_check_is_skipped_not_failed() -> None:
+    s3, _ = _wasabi_bag()
+    old = {"files": [{"path": "data/old-name/disc.iso", "sha256": _sha(b"iso")}]}
+    seen = []
+
+    def load_row():
+        seen.append(1)
+        if len(seen) == 2:  # the package is rewritten while it is being checked
+            s3.objects["dumps/X/pkg/tagmanifest-sha256.txt"] += b"\n"
+        return old, 1
+    outcome, _, _, _ = wasabi_fixity.check_fresh(s3, "b", "dumps/X/pkg", load_row)
+    assert outcome == "skip"
+
+
+def test_damage_in_an_unchanged_package_still_fails() -> None:
+    s3, inv = _wasabi_bag()
+    s3.objects["dumps/X/pkg/data/disc.iso"] = b"isX"
+    outcome, problems, _, _ = wasabi_fixity.check_fresh(s3, "b", "dumps/X/pkg", _rows((inv, 1)))
+    assert outcome == "fail" and any("SHA-256 mismatch" in p for p in problems)
+
+
+def test_a_package_whose_last_check_failed_is_due_again() -> None:
+    assert "lc.last_outcome = 'fail'" in wasabi_fixity.due_condition()
