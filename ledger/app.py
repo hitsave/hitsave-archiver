@@ -67,8 +67,6 @@ from windmill_client import (
     fetch_completed_jobs,
     windmill_api_settings,
     windmill_job_ui_url,
-    windmill_quick_links,
-    windmill_script_ui_url,
 )
 
 def _config_path() -> Path:
@@ -304,22 +302,6 @@ def list_generated_logs() -> list[Path]:
     return logs[:30]
 
 
-def _windmill_scripts_cfg() -> dict[str, str]:
-    ops = CONFIG.get("ops") or {}
-    wm = ops.get("windmill") or {}
-    scripts = wm.get("scripts") if isinstance(wm.get("scripts"), dict) else {}
-    if not scripts:
-        scripts = ops.get("windmill_scripts") or {}
-    defaults = {
-        "Remote intake sweep": "f/hitsave/remote_intake_sweep",
-        "Batch resume Omeka": "f/hitsave/batch_resume_omeka",
-        "Catalog correction (Windmill)": "f/hitsave/correct_catalog_item",
-        "Quarantine catalog item": "f/hitsave/quarantine_catalog_item",
-    }
-    merged = {**defaults, **{str(k): str(v) for k, v in scripts.items() if v}}
-    return merged
-
-
 def render_ledger(
     q: str = "",
     *,
@@ -500,17 +482,10 @@ and page through them.</p>
 
 def render_ops() -> bytes:
     settings = windmill_api_settings(CONFIG.get("ops") or {})
-    scripts = _windmill_scripts_cfg()
     note_parts: list[str] = []
     jobs_html = ""
     if settings:
         ui = settings["ui_base"]
-        links = windmill_quick_links(ui, scripts)
-        link_bits = " · ".join(
-            f'<a href="{html.escape(href)}" target="_blank" rel="noopener">{html.escape(label)}</a>'
-            for label, href in links
-        )
-        note_parts.append(f'<p class="actions">{link_bits}</p>')
         jobs, err = fetch_completed_jobs(
             api_base=settings["api_base"],
             workspace=settings["workspace"],
