@@ -30,7 +30,7 @@ in its schedule for a read-only report.
 | `ledger_backup` | Scheduled ledger dump (above) |
 | `wasabi_fixity_check` | Scheduled Wasabi fixity (above). Run with `max_packages: 0` to only count what's due. |
 | `prune_local_working_copies` | Scheduled prune (above). Set `execute: 'false'` for a read-only report. |
-| `correct_catalog_item` | Catalog correction. the ledger's **`/correct`** submits this job. |
+| `correct_catalog_item` | Catalog correction. The ledger's **`/correct`** submits this job. |
 | `quarantine_catalog_item` | Manual quarantine (`scripts/curation-quarantine-omeka.py`); the ledger's **`/quarantine`** offers the same form |
 | `batch_resume_omeka` | `run-batch-resume-omeka.sh` (long; manual) |
 
