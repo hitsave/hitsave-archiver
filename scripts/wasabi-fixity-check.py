@@ -12,8 +12,15 @@ copy. This streams each object of a sample of complete packages back from Wasabi
 Packages are picked least-recently-checked first (by previous wasabi fixity_run rows),
 until --max-packages or the --max-gb read budget is reached. With --min-interval-days N, a
 package whose last Wasabi check is newer than N days is not due and is skipped, so a full pass
-runs and then the job idles until packages come due again (never-checked packages are always due). Results are recorded in
-fixity_run with detail prefixed "wasabi:" unless --no-record. Exit 1 if any package fails.
+runs and then the job idles until packages come due again. Never-checked packages, and packages
+whose last check failed, are always due. Results are recorded in fixity_run with detail prefixed
+"wasabi:" unless --no-record. Exit 1 if any package fails.
+
+Each package is checked against its ledger row as it is at that moment, not as it was when the
+job started: a run can take hours, and tools such as rename_bag_payload_folders.py rewrite bags
+and ledger rows meanwhile. A package whose ledger row or tag manifest changes while it is being
+checked, and that shows problems, is reported as SKIP and not recorded, so the next run checks
+it again.
 
 Usage (ingest-worker; scripts mounted so the image need not contain this file):
     docker compose run --rm -T --no-deps -v "$PWD/scripts:/app/scripts:ro" \\
@@ -59,6 +66,36 @@ def list_objects(s3, bucket: str, root: str) -> dict[str, int]:
             if not key.endswith("/"):
                 objs[key[len(root):]] = int(o["Size"])
     return objs
+
+
+def tagmanifest_bytes(s3, bucket: str, prefix: str) -> bytes | None:
+    try:
+        return s3.get_object(Bucket=bucket, Key=prefix.strip("/") + "/tagmanifest-sha256.txt")["Body"].read()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def check_fresh(s3, bucket: str, prefix: str, load_row) -> tuple[str, list[str], int, int]:
+    """Check one package against its current ledger row: (outcome, problems, files_checked, bytes_read).
+
+    load_row() returns (inventory, version) from the ledger now. The outcome is "skip" when the
+    check found problems and the ledger row or the tag manifest changed while it ran.
+    """
+    inventory, version = load_row()
+    before = tagmanifest_bytes(s3, bucket, prefix)
+    problems, checked, read = check_package(s3, bucket, prefix, inventory)
+    if not problems:
+        return "pass", problems, checked, read
+    _, version_after = load_row()
+    if version_after != version or tagmanifest_bytes(s3, bucket, prefix) != before:
+        return "skip", problems, checked, read
+    return "fail", problems, checked, read
+
+
+def due_condition() -> str:
+    """SQL condition on the lateral lc (last wasabi check) for packages due under --min-interval-days."""
+    return ("(lc.last_checked IS NULL OR lc.last_outcome = 'fail' "
+            "OR lc.last_checked < now() - make_interval(days => %s))")
 
 
 def sha256_object(s3, bucket: str, key: str) -> str:
@@ -149,16 +186,16 @@ def main() -> None:
         where.append("g.game_key = ANY(%s)")
         params.append(args.game_key)
     if args.min_interval_days > 0 and not args.game_key:
-        where.append("(lc.last_checked IS NULL OR lc.last_checked < now() - make_interval(days => %s))")
+        where.append(due_condition())
         params.append(args.min_interval_days)
     rows = conn.execute(
         f"""
-        SELECT g.id, g.game_key, g.ingest_kind, g.package_storage_prefix, g.inventory_json,
-               COALESCE(g.total_bytes, 0)
+        SELECT g.id, g.game_key, g.ingest_kind, g.package_storage_prefix, COALESCE(g.total_bytes, 0)
         FROM game_ingest g
         LEFT JOIN LATERAL (
-            SELECT max(checked_at) AS last_checked FROM fixity_run f
+            SELECT f.checked_at AS last_checked, f.outcome AS last_outcome FROM fixity_run f
             WHERE f.game_ingest_id = g.id AND f.detail LIKE '{DETAIL_PREFIX}%%'
+            ORDER BY f.checked_at DESC LIMIT 1
         ) lc ON true
         WHERE {' AND '.join(where)}
         ORDER BY lc.last_checked NULLS FIRST, random()
@@ -169,24 +206,30 @@ def main() -> None:
     budget = int(args.max_gb * 1e9)
     spent = 0
     results = []
-    for gid, game_key, kind, prefix, inv, total_bytes in rows:
+    def ledger_row(gid: int):
+        inv, updated_at, status, current_prefix = conn.execute(
+            "SELECT inventory_json, updated_at, status, package_storage_prefix FROM game_ingest WHERE id = %s",
+            (gid,),
+        ).fetchone()
+        if isinstance(inv, str):
+            inv = json.loads(inv)
+        return inv, (updated_at, status, current_prefix)
+
+    for gid, game_key, kind, prefix, total_bytes in rows:
         if len(results) >= args.max_packages:
             break
         if results and spent + int(total_bytes) > budget:
             continue  # try smaller packages that still fit
-        if isinstance(inv, str):
-            inv = json.loads(inv)
         bucket = wasabi_bucket_for_storage_prefix(wasabi, prefix, ingest_kind=kind)
         t0 = time.time()
-        problems, checked, read = check_package(s3, bucket, prefix, inv)
+        outcome, problems, checked, read = check_fresh(s3, bucket, prefix, lambda: ledger_row(gid))
         spent += read
-        outcome = "fail" if problems else "pass"
         detail = (
             f"{DETAIL_PREFIX} s3://{bucket}/{prefix.strip('/')}/ {checked} files, "
             f"{read / 1e9:.2f} GB, {time.time() - t0:.0f}s"
             + (": " + "; ".join(problems[:20]) if problems else "")
         )
-        if not args.no_record:
+        if outcome != "skip" and not args.no_record:
             conn.execute(
                 "INSERT INTO fixity_run (game_ingest_id, outcome, files_checked, detail) VALUES (%s, %s, %s, %s)",
                 (gid, outcome, checked, detail),
@@ -201,6 +244,7 @@ def main() -> None:
         "packages_due": len(rows),
         "packages_checked": len(results),
         "failed": len(failed),
+        "skipped_changed": sum(r["outcome"] == "skip" for r in results),
         "gb_read": round(spent / 1e9, 2),
         "recorded": not args.no_record,
     }))
