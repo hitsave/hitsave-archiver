@@ -1,28 +1,34 @@
 summary: Wasabi fixity check (sampled)
-description: |
-  Runs `scripts/wasabi-fixity-check.py`: streams a sample of complete packages back from
-  Wasabi (least-recently checked first) and verifies every object's SHA-256 against the
-  bag manifests and the ingest-time ledger inventory; flags missing/stray objects.
-  Writes fixity_run rows (detail "wasabi: …"). Read budget per run: max_gb (Wasabi egress).
+description: >
+  Runs `scripts/wasabi-fixity-check.py`: streams a sample of complete packages
+  back from
+
+  Wasabi (least-recently checked first) and verifies every object's SHA-256
+  against the
+
+  bag manifests and the ingest-time ledger inventory; flags missing/stray
+  objects.
+
+  Writes fixity_run rows (detail "wasabi: …"). Read budget per run: max_gb
+  (Wasabi egress).
 lock: ''
 kind: script
-language: bash
 schema:
-  $schema: 'https://json-schema.org/draft/2020-12/schema'
+  $schema: https://json-schema.org/draft/2020-12/schema
   type: object
   properties:
-    max_packages:
-      type: integer
-      description: Max packages per run
-      default: 300
-    max_gb:
-      type: number
-      description: Max GB read from Wasabi per run
-      default: 150
     kind:
       type: string
       description: Optional ingest_kind filter (dump, press_material, …)
       default: ''
+    max_gb:
+      type: number
+      description: Max GB read from Wasabi per run
+      default: 150
+    max_packages:
+      type: integer
+      description: Max packages per run
+      default: 300
     min_interval_days:
       type: integer
       description: Skip packages checked on Wasabi within this many days (0 = no minimum)

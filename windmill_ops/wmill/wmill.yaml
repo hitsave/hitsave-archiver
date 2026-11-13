@@ -2,7 +2,6 @@ defaultTs: bun
 includes:
   - f/**
   - u/hitsave/**
-  - schedules/**
 skipSecrets: true
 skipVariables: true
 skipResources: false

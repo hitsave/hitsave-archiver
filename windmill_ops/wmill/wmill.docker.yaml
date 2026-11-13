@@ -3,7 +3,6 @@
 defaultTs: bun
 includes:
   - f/**
-  - schedules/**
 skipSecrets: true
 skipVariables: true
 skipResources: true

@@ -1,0 +1,12 @@
+args:
+  execute: 'true'
+  max_writes: '0'
+cron_version: v2
+email: admin@windmill.dev
+enabled: true
+is_flow: false
+no_flow_overlap: false
+schedule: 0 30 5 * * *
+script_path: f/hitsave/sync_catalog_snapshots
+timezone: UTC
+ws_error_handler_muted: false

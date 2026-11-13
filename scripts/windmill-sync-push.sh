@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Push windmill_ops/wmill to the local Windmill instance (scripts + remote_intake_sweep schedule).
+# Make Windmill match windmill_ops/wmill: push changed scripts and schedules, and delete any
+# script or schedule under f/ that git no longer has. Variables, secrets and resources stay as
+# they are. Pass --dry-run to only list the changes. The deploy job runs this after each merge.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -33,12 +35,6 @@ WMILL_ARGS=(
   --workspace "$WS"
 )
 
-docker compose -f "$COMPOSE_DIR/docker-compose.yml" --env-file "$ENV_FILE" --profile cli run --rm windmill_cli \
-  sync push --yes --skip-branch-validation "${WMILL_ARGS[@]}" "$@"
-
-docker compose -f "$COMPOSE_DIR/docker-compose.yml" --env-file "$ENV_FILE" --profile cli run --rm windmill_cli \
-  schedule push schedules/remote_intake_sweep.schedule.yaml f/hitsave/remote_intake_sweep "${WMILL_ARGS[@]}"
-
-# Daily Wasabi fixity check (see the YAML for the read budget).
-docker compose -f "$COMPOSE_DIR/docker-compose.yml" --env-file "$ENV_FILE" --profile cli run --rm windmill_cli \
-  schedule push schedules/wasabi_fixity_check.schedule.yaml f/hitsave/wasabi_fixity_check "${WMILL_ARGS[@]}"
+docker compose -f "$COMPOSE_DIR/docker-compose.yml" --env-file "$ENV_FILE" --profile cli run --rm -T windmill_cli \
+  sync push --yes --skip-branch-validation --include-schedules \
+  --skip-variables --skip-secrets --skip-resources "${WMILL_ARGS[@]}" "$@"

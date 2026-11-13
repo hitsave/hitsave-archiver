@@ -1,0 +1,11 @@
+args:
+  execute: 'true'
+cron_version: v2
+email: admin@windmill.dev
+enabled: true
+is_flow: false
+no_flow_overlap: false
+schedule: 0 15 */3 * * *
+script_path: f/hitsave/publish_damaged_files_page
+timezone: UTC
+ws_error_handler_muted: false

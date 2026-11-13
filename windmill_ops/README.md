@@ -16,8 +16,11 @@ container path `/archiver`.
 | `sync_catalog_snapshots` | 05:30 | Adds a dated copy of the catalog record to each bag whose Omeka record changed (`metadata/catalog/`); unchanged bags are only read ([preservation-packaging-standard.md](../docs/preservation-packaging-standard.md#catalog-record-copies)). |
 | `publish_damaged_files_page` | Every 3 h at :15 | Rebuilds the public "Damaged files" page from the ledger ([damaged-files.md](../docs/damaged-files.md)). |
 
-The schedule definitions live in `wmill/schedules/*.schedule.yaml`. There is one Windmill worker
-and it runs one job at a time, so a long job delays the next scheduled one.
+Each schedule is defined in `wmill/f/hitsave/<name>.schedule.yaml`, next to its script. The
+times are chosen so the daily jobs don't overlap: the ledger backup runs before the fixity
+check, and the prune and catalog copies run after it. The prune deletes local copies only after
+the first scheduled dry run on 2026-11-02 verified 50 of 50 packages; set `execute` to `'false'`
+in its schedule for a read-only report.
 
 ## Scripts (`f/hitsave/`)
 
@@ -64,18 +67,18 @@ host Docker daemon would create bogus `/config/private/...` paths.
 
 ## Deploy script changes
 
-Windmill keeps **its own copy** of every script and schedule. A change in git does nothing until
-you push it. Push only what changed:
+Windmill keeps **its own copy** of every script and schedule. After a merge into `main`, the
+deploy timer on saturn makes Windmill match `windmill_ops/wmill/`: it pushes changed scripts
+and schedules, and deletes any under `f/` that git no longer has. See
+[deploy-on-merge.md](../docs/deploy-on-merge.md).
 
-```bash
-cd windmill_ops/docker && set -a && . ./.env && set +a
-A=(--base-url http://windmill_server:8000 --token "$WMILL_TOKEN" --workspace hitsave-archiver)
-docker compose --profile cli run --rm -T windmill_cli script push f/hitsave/<name>.sh "${A[@]}"
-docker compose --profile cli run --rm -T windmill_cli schedule push schedules/<name>.schedule.yaml f/hitsave/<name> "${A[@]}"
-```
+The files use the layout and formatting that `wmill sync pull` writes, so a deploy pushes only
+what changed. Keep it that way: write a new schedule as `f/hitsave/<name>.schedule.yaml`, and
+put explanations in this README, because Windmill doesn't keep YAML comments.
 
-`./scripts/windmill-sync-push.sh` pushes everything at once. Check a cron expression without
-deploying it with `POST :8089/api/schedules/preview` and a body of `{"schedule", "timezone"}`.
+To see what a deploy would change, run `./scripts/windmill-sync-push.sh --dry-run` from the
+checkout on saturn. Check a cron expression without deploying it with
+`POST :8089/api/schedules/preview` and a body of `{"schedule", "timezone"}`.
 
 ## Config
 
