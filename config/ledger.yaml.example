@@ -30,8 +30,3 @@ ops:
     correct_catalog_script: f/hitsave/correct_catalog_item
     job_wait_timeout_seconds: 900
     token_file: /config/secrets/windmill-ledger.token
-    scripts:
-      Remote intake sweep: f/hitsave/remote_intake_sweep
-      Batch resume Omeka: f/hitsave/batch_resume_omeka
-      Catalog correction: f/hitsave/correct_catalog_item
-      Quarantine catalog item: f/hitsave/quarantine_catalog_item

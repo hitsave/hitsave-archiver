@@ -103,14 +103,6 @@ def fetch_completed_jobs(
     return jobs, None
 
 
-def windmill_quick_links(ui_base: str, scripts: dict[str, str]) -> list[tuple[str, str]]:
-    out: list[tuple[str, str]] = []
-    for label, path in scripts.items():
-        if path:
-            out.append((label, windmill_script_ui_url(ui_base, path)))
-    return out
-
-
 def correct_catalog_script_path(ops: dict[str, Any]) -> str:
     wm = ops.get("windmill") or {}
     if not isinstance(wm, dict):
