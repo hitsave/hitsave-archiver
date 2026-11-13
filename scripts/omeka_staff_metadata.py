@@ -88,21 +88,6 @@ def merge_staff_preservation_uri(
     return {term: rows}
 
 
-def merge_uri_property(
-    item_body: dict,
-    term: str,
-    new_row: dict[str, Any],
-) -> dict[str, list] | None:
-    uri = str(new_row.get("@id") or "")
-    if not uri:
-        return None
-    if item_has_uri(item_body, term, uri):
-        return None
-    merged = [dict(row) for row in (item_body.get(term) or [])]
-    merged.append(new_row)
-    return {term: merged}
-
-
 def _patch_item_aip_uri(
     session: requests.Session,
     base: str,

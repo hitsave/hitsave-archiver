@@ -98,11 +98,6 @@ def resolve_dump_item_set_id(
     )
 
 
-def merged_item_sets(automated: int, existing: list[int]) -> list[int]:
-    """[automated] + existing sets in their current order, without duplicates."""
-    return [automated] + [s for s in dict.fromkeys(existing) if s != automated]
-
-
 def apply_item_item_sets(
     session: requests.Session,
     base: str,
@@ -172,18 +167,6 @@ def resolve_resource_template(
     rc = row.get("o:resource_class") or {}
     class_id = rc.get("o:id")
     return template_id, int(class_id) if class_id is not None else None
-
-
-def resolve_resource_template_id(
-    session: requests.Session,
-    base: str,
-    creds: dict,
-    label: str,
-    *,
-    api: Any,
-) -> int:
-    template_id, _ = resolve_resource_template(session, base, creds, label, api=api)
-    return template_id
 
 
 def apply_item_resource_template(

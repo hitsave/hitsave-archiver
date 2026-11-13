@@ -22,17 +22,9 @@ Poll JSON under `.generated/` is for sweeps and move-to-processed scripts only. 
 |--------|------|
 | `run-gdrive-redump-per-folder.sh` | Drive: stage → ingest → Omeka per package |
 | `run-wasabi-redump-per-folder.sh` | Wasabi incoming: stage → ingest → Omeka per package |
-| `run-gdrive-full-batch.sh` | Rebuild images + Drive per-folder + reconcile |
-| `run-wasabi-redump-full-batch.sh` | Rebuild images + Wasabi per-folder + reconcile |
 | `register-dump-omeka.sh` | One dump on prod Omeka (`--slug` or `--game-key`) |
 | `register-prod-dumps-omeka.sh` | Reconcile ledger `complete` rows missing `omeka_item_id` |
-| `acceptance-redump-package.sh` | Phase 1 spot-check: ledger row + dump validator summary (`--slug` or `--game-key`) |
 | `move_wasabi_package_to_processed.py` | One Wasabi package → `processed/{lane}/` (verified MOVE); the per-folder runner calls it once the ledger is complete |
-| `move-gdrive-redump-to-processed.sh` | Poll Drive inbox; move ledger-complete packages with a disc image to `processed/` (`--execute`) |
-| `move_wasabi_intake_to_processed.py` | Move ledger-complete Wasabi incoming SIP trees under `processed/` (poll-driven batch) |
-| `move-wasabi-redump-to-processed.sh` | Poll Wasabi incoming + MOVE complete packages to `processed/` |
-| `move-wasabi-incoming-prefix-to-processed.sh` | MOVE one incoming prefix tree to `processed/` (`--prefix`, `--execute`) |
-| `check-wasabi-inbox-processed.py` | One-off: compare poll JSON vs Wasabi incoming/`processed/` vs ledger-complete rows |
 
 Poll helpers (sweep internals): `gdrive-redump-poll-packages.sh`, `wasabi-redump-poll-packages.sh`.
 

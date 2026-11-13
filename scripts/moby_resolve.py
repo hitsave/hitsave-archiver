@@ -6,7 +6,6 @@ import html
 import json
 import re
 import time
-import urllib.parse
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path

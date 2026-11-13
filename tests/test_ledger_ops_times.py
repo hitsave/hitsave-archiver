@@ -46,9 +46,3 @@ def test_falls_back_to_created_at(monkeypatch) -> None:
     assert jobs[0]["started_at"] == "2026-11-04T15:30:07Z"
 
 
-def test_utc_display() -> None:
-    u = windmill_client.utc_display
-    assert u("2026-11-04T16:00:00.012345Z") == "2026-11-04 16:00:00"
-    assert u("2026-11-04T11:00:00-05:00") == "2026-11-04 16:00:00"
-    assert u("") == ""
-    assert u("not a time") == "not a time"

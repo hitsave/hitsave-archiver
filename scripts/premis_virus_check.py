@@ -59,18 +59,6 @@ class VirusDetectedError(RuntimeError):
         self.signature = signature
 
 
-def _interpret_clamd_result(path: Path, result: dict | None) -> None:
-    """Raise on malware; None from pyclamd means no infection (clean)."""
-    if result is None:
-        return
-    for _scan_path, status in result.items():
-        code = status[0] if status else ""
-        if code == "FOUND":
-            raise VirusDetectedError(path, str(status[1]))
-        if code and code not in ("OK", "PASS"):
-            raise RuntimeError(f"ClamAV scan error for {path}: {status}")
-
-
 CLAMD_CONF_CANDIDATES = (
     Path("/config/clamav/clamd.conf"),
     Path(__file__).resolve().parents[1] / "config" / "clamav" / "clamd.conf",
@@ -82,27 +70,6 @@ def _parse_clamd_size(value: str) -> int:
     value = value.strip().upper()
     unit = value[-1] if value and value[-1] in "KMG" else ""
     return int(value[: len(value) - len(unit)] or 0) * _SIZE_UNITS[unit]
-
-
-def clamd_size_limit(conf_path: Path | None = None) -> int | None:
-    """
-    Largest file clamd fully scans: min of non-zero MaxFileSize / MaxScanSize in clamd.conf.
-
-    clamd answers OK for files above MaxFileSize *without scanning them* (no
-    AlertExceedsMax), so callers must not count those as scanned. None = no limit known.
-    """
-    paths = [conf_path] if conf_path else list(CLAMD_CONF_CANDIDATES)
-    for path in paths:
-        if path and path.is_file():
-            limits = []
-            for line in path.read_text(encoding="utf-8").splitlines():
-                parts = line.split(None, 1)
-                if len(parts) == 2 and parts[0] in ("MaxFileSize", "MaxScanSize"):
-                    size = _parse_clamd_size(parts[1])
-                    if size > 0:
-                        limits.append(size)
-            return min(limits) if limits else None
-    return None
 
 
 def scan_sip_tree(clamd, root: Path, **scan_kwargs) -> VirusScanReport:

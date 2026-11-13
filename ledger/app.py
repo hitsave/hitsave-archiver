@@ -312,10 +312,7 @@ def _windmill_scripts_cfg() -> dict[str, str]:
         scripts = ops.get("windmill_scripts") or {}
     defaults = {
         "Remote intake sweep": "f/hitsave/remote_intake_sweep",
-        "Wasabi inbox sweep": "f/hitsave/wasabi_redump_inbox_sweep",
-        "GDrive inbox sweep": "f/hitsave/gdrive_redump_inbox_sweep",
         "Batch resume Omeka": "f/hitsave/batch_resume_omeka",
-        "Ledger health report": "f/hitsave/ledger_health_report",
         "Catalog correction (Windmill)": "f/hitsave/correct_catalog_item",
         "Quarantine catalog item": "f/hitsave/quarantine_catalog_item",
     }

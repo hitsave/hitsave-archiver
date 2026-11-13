@@ -11,7 +11,6 @@ from omeka_staff_metadata import (  # noqa: E402
     aip_s3_uri,
     filter_bibo_uri_public,
     merge_staff_preservation_uri,
-    merge_uri_property,
     uri_value_row,
 )
 
@@ -21,16 +20,6 @@ def test_aip_s3_uri() -> None:
         aip_s3_uri(bucket="hitsave-incoming", storage_prefix="press-material/game-a/")
         == "s3://hitsave-incoming/press-material/game-a/"
     )
-
-
-def test_merge_uri_property_appends() -> None:
-    term = "dcterms:relation"
-    row = uri_value_row(99, "s3://b/prefix/", is_public=False)
-    item = {term: [{"type": "uri", "@id": "https://example.org/"}]}
-    out = merge_uri_property(item, term, row)
-    assert out is not None
-    assert len(out[term]) == 2
-    assert out[term][-1]["is_public"] is False
 
 
 def test_filter_bibo_uri_public_removes_s3() -> None:
@@ -62,9 +51,3 @@ def test_merge_staff_preservation_uri_replaces_s3() -> None:
     assert out[term][-1]["is_public"] is False
 
 
-def test_merge_uri_property_idempotent() -> None:
-    term = "dcterms:relation"
-    uri = "s3://hitsave-incoming/press-material/x/"
-    row = uri_value_row(99, uri, is_public=False)
-    item = {term: [{"type": "uri", "@id": uri}]}
-    assert merge_uri_property(item, term, row) is None

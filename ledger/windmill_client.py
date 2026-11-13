@@ -103,22 +103,6 @@ def fetch_completed_jobs(
     return jobs, None
 
 
-def utc_display(value: Any) -> str:
-    """'2026-11-04T16:00:00.388421Z' -> '2026-11-04 16:00:00' (UTC); unparseable values as-is."""
-    from datetime import datetime, timezone
-
-    text = str(value or "").strip()
-    if not text:
-        return ""
-    try:
-        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError:
-        return text
-    if dt.tzinfo is not None:
-        dt = dt.astimezone(timezone.utc)
-    return dt.strftime("%Y-%m-%d %H:%M:%S")
-
-
 def windmill_quick_links(ui_base: str, scripts: dict[str, str]) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
     for label, path in scripts.items():

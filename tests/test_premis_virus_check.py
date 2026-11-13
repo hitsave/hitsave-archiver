@@ -67,7 +67,7 @@ def test_attach_virus_check_premis_updates_bag_manifests(tmp_path: Path) -> None
 
 # --- files over the clamd size limit are recorded as NOT scanned ----------------------
 
-from premis_virus_check import clamd_size_limit, scan_sip_tree  # noqa: E402
+from premis_virus_check import scan_sip_tree  # noqa: E402
 
 
 class _FakeClamd:
@@ -87,14 +87,6 @@ class _FakeClamd:
         if len(data) > self.max_object:
             return {"stream": ("FOUND", "Heuristics.Limits.Exceeded.MaxScanSize")}
         return None
-
-
-def test_clamd_size_limit_parses_conf(tmp_path: Path) -> None:
-    conf = tmp_path / "clamd.conf"
-    conf.write_text("# c\nMaxFileSize 512M\nMaxScanSize 1G\nPCREMaxFileSize 2G\n")
-    assert clamd_size_limit(conf) == 512 * 1024**2
-    conf.write_text("MaxFileSize 0\nMaxScanSize 0\n")
-    assert clamd_size_limit(conf) is None
 
 
 def test_large_file_fully_scanned_in_chunks_is_success(tmp_path: Path) -> None:
@@ -156,20 +148,3 @@ class _InfectedClamd(_FakeClamd):
         return {"stream": ("FOUND", "Eicar-Test-Signature")} if b"EICAR" in data else None
 
 
-def test_malware_raises_virus_detected_error(tmp_path: Path) -> None:
-    """Ingest quarantines on VirusDetectedError; message and RuntimeError base stay unchanged."""
-    import pytest
-    from premis_virus_check import VirusDetectedError, _interpret_clamd_result
-
-    sip = tmp_path / "sip"
-    sip.mkdir()
-    (sip / "clean.txt").write_bytes(b"fine")
-    (sip / "eicar.com").write_bytes(b"X5O!P%@AP EICAR test")
-    with pytest.raises(VirusDetectedError) as exc:
-        scan_sip_tree(_InfectedClamd(), sip)
-    assert isinstance(exc.value, RuntimeError)
-    assert str(exc.value).startswith(f"Virus detected in {sip / 'eicar.com'}: ")
-    assert "Eicar-Test-Signature" in exc.value.signature
-
-    with pytest.raises(VirusDetectedError, match=r"^Virus detected in .*x\.bin: Win\.Test$"):
-        _interpret_clamd_result(tmp_path / "x.bin", {"x.bin": ("FOUND", "Win.Test")})

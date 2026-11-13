@@ -32,5 +32,3 @@ def fetch_attention_rows(
         return ledger_attention(conn, limit=limit, sort=sort, sort_dir=sort_dir, log=False)
 
 
-def attention_sql_for_ops() -> str:
-    return ATTENTION_SQL.strip()

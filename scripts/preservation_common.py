@@ -374,5 +374,3 @@ def iso_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def new_id(prefix: str = "uuid") -> str:
-    return f"{prefix}-{uuid.uuid4()}"

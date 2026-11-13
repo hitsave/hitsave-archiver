@@ -132,17 +132,6 @@ def find_game_config_path(game_key: str, config_root: Path | None = None) -> Pat
     return None
 
 
-def ingest_kind_for_game_key(game_key: str, config_root: Path | None = None) -> str:
-    path = find_game_config_path(game_key, config_root)
-    if path is None:
-        raise ValueError(
-            f"No game config found for {game_key!r} and ingest_kind not provided; "
-            "set ingest_kind on the game YAML or ledger row"
-        )
-    raw = yaml.safe_load(path.read_text()) or {}
-    return resolve_ingest_kind(raw)
-
-
 def resolve_omeka_moby_profile(
     *,
     game_cfg: dict | None = None,
