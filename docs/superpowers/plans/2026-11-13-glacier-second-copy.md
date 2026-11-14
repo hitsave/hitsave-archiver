@@ -19,7 +19,7 @@ Measured on 2026-11-13 by listing every Wasabi bucket:
 | `hitsave-dumps` (dump bags and disc-contents bags) | 8,840 | 1.088 TB | Yes |
 | `hitsave-press-material` | 124,835 | 0.126 TB | Yes |
 | `hitsave-other`, `hitsave-analog` | 0 | 0 | Yes, once they hold packages |
-| `hitsave-incoming` (inbox, `processed/`, press kits waiting for ingest) | 1,336,320 | 5.059 TB | No, see question 1 |
+| `hitsave-incoming` (inbox, `processed/`, press kits waiting for ingest) | 1,336,320 | 5.059 TB | No. The originals are on the on-site share, and each press kit gets a copy when it's ingested. |
 | **Total in scope** | **133,675** | **1.214 TB** | |
 
 Most press-material files are small: 80,459 are under 128 KB.
@@ -49,20 +49,23 @@ Copying out of Wasabi is free while monthly downloads stay below the amount stor
    - The job computes each file's SHA-256 while it streams the file from Wasabi, and compares it with the bag's `manifest-sha256.txt` or `tagmanifest-sha256.txt`. If it differs, the job aborts the upload and records a failure, because the file on Wasabi is damaged.
    - The job also computes a full-file CRC64NVME and sends it with the upload. S3 rejects the upload if the bytes it received don't match. CRC64NVME is the only checksum S3 can check over a whole multipart file; SHA-256 works only per part (AWS docs, "Checking object integrity for data uploads").
    - The job stores the SHA-256 in the file's metadata (`x-amz-meta-sha256`). A HEAD request returns the metadata and the CRC64NVME for archived files without a restore, so the monthly check can compare them with the manifest.
-4. **Versioning and Object Lock in governance mode, with 365 days' retention.** No one can delete or overwrite a stored version for a year, even with the job's access key. A file that changes or disappears on Wasabi gets a new current version, or a delete marker, in S3, and the old version stays for a year. A lifecycle rule then expires old versions. Governance mode, unlike compliance mode, still lets the project owner remove a version that was uploaded by mistake.
+4. **Versioning and Object Lock in governance mode, with 365 days' retention.** No one can delete or overwrite a stored version for a year, even with the job's access key. A file that changes or disappears on Wasabi gets a new current version, or a delete marker, in S3, and the old version stays for a year. A lifecycle rule then expires old versions. The lock never blocks a new version, so changes to a bag are copied the same night. Deep Archive bills every version for at least 180 days anyway, so the second half-year costs only the storage of replaced files: fractions of a cent for tag-file edits, about $0.05 a month for a rebuilt 50 GB bag. Governance mode, unlike compliance mode, still lets the project owner remove a version that was uploaded by mistake.
 5. **The job's access key can add files but never destroy them.** The IAM user gets `s3:PutObject`, `s3:GetObject`, `s3:GetObjectAttributes`, `s3:ListBucket`, `s3:ListBucketVersions`, `s3:DeleteObject` (which only adds a delete marker in a versioned bucket), `s3:RestoreObject`, `s3:AbortMultipartUpload` and `s3:ListMultipartUploadParts`, on this bucket only. It doesn't get `s3:DeleteObjectVersion`, `s3:BypassGovernanceRetention` or any bucket-settings permission. The paid plan allows IAM users and access keys; the managed policies only block groups, login profiles and the `managed/` roles.
-6. **The job runs on saturn and streams through it.** Nothing is written to disk. A copy machine in AWS would avoid saturn's connection, but it adds a server to manage, and 1.2 TB fits in a few nights. See question 3.
+6. **The job runs on saturn and streams through it.** Nothing is written to disk. A copy machine in AWS would avoid saturn's connection, but it adds a server to manage, and saturn has a 1 Gbit line, so 1.2 TB fits in a few nights.
 7. **The ledger tracks copies in a new `package_copy` table.** Checks of the copy go into the existing `fixity_run` table, with detail text starting with `glacier:`, the same way the Wasabi check uses `wasabi:`. The ledger's item page and Health page show the copy's state.
 8. **A copy is up to date when its recorded `tagmanifest-sha256.txt` digest equals the current one on Wasabi.** Every change to a bag rewrites its tag manifest, so this catches catalog snapshots, PREMIS events and rebuilt bags. If the tag manifest changes while the job copies a package, the job records nothing and tries again the next night, as the Wasabi check does since #170.
 9. **The source is a setting.** The job reads the source endpoint and buckets from `ingest.yaml`, so the later move to IDrive e2 doesn't change it.
 
-## Questions for Jonas
+## Decisions
 
-1. **Press kits in `hitsave-incoming` (4.2 TB, 1.33 million files):** are the originals still on the on-site press-material share? If so, they don't need a copy now, because they'll get one when they're ingested. If Wasabi holds the only copy, we should add them as a separate, one-time copy.
-2. **Object Lock for 365 days in governance mode:** is a year the right length? Longer protects better against a stolen key or a bad script. Each extra month also keeps replaced file versions for another month, which costs almost nothing.
-3. **Saturn's upload speed:** the Wasabi check downloads at about 17 MB/s. If saturn uploads at least that fast, the backfill takes about a day of copying. If it's much slower, we can spread it over more nights or use a copy machine in AWS instead.
-4. **Spend limit:** please set a spend limit in AWS Settings, for example $25 per month. Only the project owner can set one, and it stops a runaway job from spending the credits.
-5. **Bucket name:** I suggest `hitsave-preservation-copy`. Bucket names are global, so we'll find out whether it's free when we create it.
+Jonas decided these on 2026-11-14:
+
+- **Press kits in `hitsave-incoming`** aren't copied. The originals are on the on-site press-material share.
+- **Object Lock** keeps every version for 365 days in governance mode.
+- **Saturn's line** is 1 Gbit. The Wasabi check reads at about 17 MB/s per file, so a 300 GB batch takes about five hours.
+- **The bucket** is `hitsave-backup-glacier`. Bucket names are global, so we'll find out whether it's free when we create the stack.
+
+Still open: Jonas sets a spend limit in AWS Settings, for example $25 per month. Only the project owner can set one, and it stops a runaway job from spending the credits.
 
 ## Global Constraints
 
@@ -91,7 +94,7 @@ Copying out of Wasabi is free while monthly downloads stay below the amount stor
 - Test: `tests/test_glacier_copy_template.py`
 
 **Interfaces:**
-- Produces: stack outputs `BucketName` and `WriterUserName`. Parameters `BucketName` (default `hitsave-preservation-copy`) and `RetentionDays` (default 365).
+- Produces: stack outputs `BucketName` and `WriterUserName`. Parameters `BucketName` (default `hitsave-backup-glacier`) and `RetentionDays` (default 365).
 
 - [ ] **Step 1: Write the failing test.** Load the template with `yaml` (handle CloudFormation tags with a loader that accepts unknown tags) and assert:
 
@@ -292,7 +295,7 @@ Each step needs Jonas's OK before it runs.
 
 ## What this plan doesn't do
 
-- Copy `hitsave-incoming` (see question 1).
+- Copy `hitsave-incoming`. Its press kits have originals on the on-site share.
 - Repair damaged files on Wasabi automatically. The restore script fetches and checks a file; putting it back on Wasabi stays a manual step with an OK.
 - Copy the ledger and Omeka database backups. They already go to Google Drive every night. Adding them here later is cheap.
 - Delete the duplicates in `hitsave-incoming/processed/`. The storage plan makes that depend on this copy; it gets its own plan.
