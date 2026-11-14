@@ -1,0 +1,112 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  HitSave second copy of every preservation package in S3 Glacier Deep Archive.
+  See docs/glacier-copy.md. Deploy in us-east-2 with the hitsave profile.
+  The template creates no access key: create it in the console and save it to
+  hitsave-archiver-config/secrets/aws-glacier-copy.yaml.
+
+Parameters:
+  BucketName:
+    Type: String
+    Default: hitsave-backup-glacier
+    Description: Bucket for the copy. Bucket names are global.
+  RetentionDays:
+    Type: Number
+    Default: 365
+    MinValue: 1
+    Description: >-
+      Days each stored version is locked (Object Lock, governance mode). Replaced versions
+      expire this many days after they stop being current, so none expires while locked.
+
+Resources:
+  CopyBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref BucketName
+      ObjectLockEnabled: true
+      ObjectLockConfiguration:
+        ObjectLockEnabled: Enabled
+        Rule:
+          DefaultRetention:
+            Mode: GOVERNANCE
+            Days: !Ref RetentionDays
+      VersioningConfiguration:
+        Status: Enabled
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: abort-incomplete-uploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+          - Id: expire-old-versions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: !Ref RetentionDays
+          - Id: remove-expired-delete-markers
+            Status: Enabled
+            ExpiredObjectDeleteMarker: true
+
+  CopyBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CopyBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt CopyBucket.Arn
+              - !Sub "${CopyBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  WriterUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: hitsave-glacier-copy
+      Policies:
+        - PolicyName: glacier-copy-writer
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ListTheBucket
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:ListBucketVersions
+                Resource: !GetAtt CopyBucket.Arn
+              - Sid: AddReadAndRestoreFiles
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:GetObjectAttributes
+                  - s3:DeleteObject
+                  - s3:RestoreObject
+                  - s3:AbortMultipartUpload
+                  - s3:ListMultipartUploadParts
+                Resource: !Sub "${CopyBucket.Arn}/*"
+
+Outputs:
+  BucketName:
+    Value: !Ref CopyBucket
+  WriterUserName:
+    Value: !Ref WriterUser
