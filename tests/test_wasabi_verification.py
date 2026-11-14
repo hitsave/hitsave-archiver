@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import importlib.util
 import io
 from pathlib import Path
@@ -230,3 +231,56 @@ def test_damage_in_an_unchanged_package_still_fails() -> None:
 
 def test_a_package_whose_last_check_failed_is_due_again() -> None:
     assert "lc.last_outcome = 'fail'" in wasabi_fixity.due_condition()
+
+
+# --- disc-contents bags are checked with their dump ---------------------------------------
+
+def _with_disc_contents(s3: FixityS3, payload: bytes = b"readme") -> None:
+    r = "disc-contents/X/pkg/"
+    inventory = json.dumps({"files": [{"path": "data/README.TXT", "sha256": _sha(b"readme")}]}).encode()
+    s3.objects[r + "data/README.TXT"] = payload
+    s3.objects[r + "metadata/inventory.json"] = inventory
+    s3.objects[r + "manifest-sha256.txt"] = f"{_sha(payload)}  data/README.TXT\n".encode()
+    s3.objects[r + "tagmanifest-sha256.txt"] = (
+        f"{_sha(s3.objects[r + 'manifest-sha256.txt'])}  manifest-sha256.txt\n"
+        f"{_sha(inventory)}  metadata/inventory.json\n"
+    ).encode()
+
+
+def test_dump_with_disc_contents_checks_both_bags() -> None:
+    s3, inv = _wasabi_bag()
+    _with_disc_contents(s3)
+    outcome, problems, checked, _ = wasabi_fixity.check_row(
+        s3, "b", "dumps/X/pkg", "disc-contents/X/pkg", _rows((inv, 1)))
+    assert (outcome, problems) == ("pass", []) and checked == 3 + 3
+
+
+def test_damage_in_the_disc_contents_bag_fails_the_dump() -> None:
+    s3, inv = _wasabi_bag()
+    _with_disc_contents(s3)
+    s3.objects["disc-contents/X/pkg/data/README.TXT"] = b"rotted"
+    outcome, problems, _, _ = wasabi_fixity.check_row(
+        s3, "b", "dumps/X/pkg", "disc-contents/X/pkg", _rows((inv, 1)))
+    assert outcome == "fail"
+    assert "disc contents: SHA-256 mismatch: data/README.TXT" in problems
+
+
+def test_disc_contents_manifest_rewritten_over_changed_bytes_is_caught_by_its_inventory() -> None:
+    s3, inv = _wasabi_bag()
+    _with_disc_contents(s3, payload=b"changed")
+    outcome, problems, _, _ = wasabi_fixity.check_row(
+        s3, "b", "dumps/X/pkg", "disc-contents/X/pkg", _rows((inv, 1)))
+    assert outcome == "fail"
+    assert any(p.startswith("disc contents: manifest digest differs from ingest inventory") for p in problems)
+
+
+def test_missing_disc_contents_bag_fails() -> None:
+    s3, inv = _wasabi_bag()
+    outcome, problems, _, _ = wasabi_fixity.check_row(
+        s3, "b", "dumps/X/pkg", "disc-contents/X/pkg", _rows((inv, 1)))
+    assert outcome == "fail" and any(p.startswith("disc contents: cannot read manifests") for p in problems)
+
+
+def test_dump_without_disc_contents_is_checked_as_before() -> None:
+    s3, inv = _wasabi_bag()
+    assert wasabi_fixity.check_row(s3, "b", "dumps/X/pkg", None, _rows((inv, 1)))[:2] == ("pass", [])

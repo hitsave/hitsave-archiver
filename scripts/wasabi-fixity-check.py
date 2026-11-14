@@ -9,6 +9,9 @@ copy. This streams each object of a sample of complete packages back from Wasabi
     (catches a manifest that was regenerated over changed bytes);
   * no stray payload objects (not in the manifest) and no untracked tag files.
 
+A dump with a disc-contents bag (disc_contents_prefix) has that bag checked in the same run, the
+same way, against the bag's own metadata/inventory.json. Its problems start with "disc contents:".
+
 Packages are picked least-recently-checked first (by previous wasabi fixity_run rows),
 until --max-packages or the --max-gb read budget is reached. With --min-interval-days N, a
 package whose last Wasabi check is newer than N days is not due and is skipped, so a full pass
@@ -41,7 +44,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import psycopg  # noqa: E402
 
-from preservation_common import wasabi_bucket_for_storage_prefix  # noqa: E402
+from preservation_common import resolve_wasabi_bucket, wasabi_bucket_for_storage_prefix  # noqa: E402
 from upload_bag_wasabi import load_wasabi_settings, make_s3_client, resolve_config_path  # noqa: E402
 from yaml_config import load_yaml  # noqa: E402
 
@@ -90,6 +93,41 @@ def check_fresh(s3, bucket: str, prefix: str, load_row) -> tuple[str, list[str],
     if version_after != version or tagmanifest_bytes(s3, bucket, prefix) != before:
         return "skip", problems, checked, read
     return "fail", problems, checked, read
+
+
+DISC_CONTENTS_INVENTORY = "metadata/inventory.json"
+
+
+def bag_inventory(s3, bucket: str, prefix: str) -> dict | None:
+    """A disc-contents bag keeps its file list in the bag itself (metadata/inventory.json)."""
+    try:
+        raw = s3.get_object(Bucket=bucket, Key=f"{prefix.strip('/')}/{DISC_CONTENTS_INVENTORY}")["Body"].read()
+        return json.loads(raw)
+    except Exception:  # noqa: BLE001 - a missing bag shows up as "cannot read manifests"
+        return None
+
+
+def check_row(s3, bucket: str, prefix: str, disc_contents_prefix: str | None, load_row,
+              disc_contents_bucket: str | None = None) -> tuple[str, list[str], int, int]:
+    """Check a package and, for a dump with one, its disc-contents bag: (outcome, problems, files, bytes).
+
+    The disc-contents bag is compared with its own inventory. Its problems start with
+    "disc contents: ". The outcome is "skip" when either bag changed while it was checked.
+    """
+    outcome, problems, checked, read = check_fresh(s3, bucket, prefix, load_row)
+    if not disc_contents_prefix:
+        return outcome, problems, checked, read
+    dc_bucket = disc_contents_bucket or bucket
+
+    def dc_row():
+        _, version = load_row()
+        return bag_inventory(s3, dc_bucket, disc_contents_prefix), version
+
+    dc_outcome, dc_problems, dc_checked, dc_read = check_fresh(s3, dc_bucket, disc_contents_prefix, dc_row)
+    outcomes = {outcome, dc_outcome}
+    combined = "skip" if "skip" in outcomes else "fail" if "fail" in outcomes else "pass"
+    return (combined, problems + [f"disc contents: {p}" for p in dc_problems],
+            checked + dc_checked, read + dc_read)
 
 
 def due_condition() -> str:
@@ -190,7 +228,8 @@ def main() -> None:
         params.append(args.min_interval_days)
     rows = conn.execute(
         f"""
-        SELECT g.id, g.game_key, g.ingest_kind, g.package_storage_prefix, COALESCE(g.total_bytes, 0)
+        SELECT g.id, g.game_key, g.ingest_kind, g.package_storage_prefix, COALESCE(g.total_bytes, 0),
+               g.disc_contents_prefix
         FROM game_ingest g
         LEFT JOIN LATERAL (
             SELECT f.checked_at AS last_checked, f.outcome AS last_outcome FROM fixity_run f
@@ -215,17 +254,21 @@ def main() -> None:
             inv = json.loads(inv)
         return inv, (updated_at, status, current_prefix)
 
-    for gid, game_key, kind, prefix, total_bytes in rows:
+    for gid, game_key, kind, prefix, total_bytes, dc_prefix in rows:
         if len(results) >= args.max_packages:
             break
         if results and spent + int(total_bytes) > budget:
             continue  # try smaller packages that still fit
         bucket = wasabi_bucket_for_storage_prefix(wasabi, prefix, ingest_kind=kind)
         t0 = time.time()
-        outcome, problems, checked, read = check_fresh(s3, bucket, prefix, lambda: ledger_row(gid))
+        dc_bucket = resolve_wasabi_bucket(wasabi, "dump") if dc_prefix else None
+        outcome, problems, checked, read = check_row(s3, bucket, prefix, dc_prefix, lambda: ledger_row(gid),
+                                                     disc_contents_bucket=dc_bucket)
         spent += read
         detail = (
-            f"{DETAIL_PREFIX} s3://{bucket}/{prefix.strip('/')}/ {checked} files, "
+            f"{DETAIL_PREFIX} s3://{bucket}/{prefix.strip('/')}/"
+            + (f" + s3://{dc_bucket}/{dc_prefix.strip('/')}/" if dc_prefix else "")
+            + f" {checked} files, "
             f"{read / 1e9:.2f} GB, {time.time() - t0:.0f}s"
             + (": " + "; ".join(problems[:20]) if problems else "")
         )

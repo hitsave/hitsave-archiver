@@ -25,6 +25,8 @@ anyway. Backups go **from Wasabi** to a third party, never from `/tank`.
 `scripts/wasabi-fixity-check.py`, scheduled as `f/hitsave/wasabi_fixity_check` (daily 03:00 UTC),
 streams every object of a package back from Wasabi and verifies its SHA-256 against the bag
 manifests and the ingest-time ledger inventory. Results are `fixity_run` rows (`wasabi: …`).
+For a dump with a disc-contents bag, the same run also checks that bag, against the file list
+in the bag's own `metadata/inventory.json`, and records both bags in one row.
 
 - **Every package is checked at most once per 90 days** (`min_interval_days: 90`), up to 300
   packages / 150 GB per night, least-recently-checked first. A full pass takes about 9 nights;
