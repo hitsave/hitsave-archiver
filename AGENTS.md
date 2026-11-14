@@ -18,7 +18,7 @@ Compose expects `HITSAVE_PRIVATE_CONFIG` (default sibling `../hitsave-archiver-c
 
 **Ops UI:** the **ledger** app (`ledger/`, image `ghcr.io/hitsave/ledger`) on `:8090`; production at `https://ledger.hitsave.org` behind Caddy + oauth2-proxy (Pocket ID) on luigi (ledger, health, **`/correct`**, **`/quarantine`**, publish/hide) — config in the private repo (`ledger.yaml`, from **`config/ledger.yaml.example`**). **Windmill** (schedules, job logs): **`windmill_ops/README.md`**; Windmill keeps its own copy of each script; after each merge the `hitsave-deploy` container on saturn (`deploy/`, runs `scripts/deploy/deploy-poll.sh`) waits for green checks, then syncs Windmill, rebuilds the ingest-worker/omeka-catalog images and deploys the ledger as needed (**`docs/deploy-on-merge.md`**).
 
-**Storage:** Wasabi is the permanent copy; local bags and `ready/` are pruned after verification — **`docs/storage-retention.md`**. Archivist-facing usage: **`docs/archivist-guide.md`**.
+**Storage:** Wasabi is the permanent copy; local bags and `ready/` are pruned after verification — **`docs/storage-retention.md`**. A nightly job copies every complete package to S3 Glacier Deep Archive (versioned, locked for 365 days) — **`docs/glacier-copy.md`**. Archivist-facing usage: **`docs/archivist-guide.md`**.
 
 ## Docker
 

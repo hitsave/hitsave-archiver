@@ -8,7 +8,8 @@ working copies are deleted.
 | Copy | Location | Role | Kept |
 |------|----------|------|------|
 | **Preservation copy (AIP)** | Wasabi (`hitsave-dumps`, press/analog buckets), unpacked BagIt | The permanent archive | Permanently |
-| Third-party backup | Copied from Wasabi to an outside provider | Disaster recovery | Permanently (planned, not set up yet) |
+| Second copy | S3 Glacier Deep Archive, bucket `hitsave-backup-glacier` (AWS us-east-2), copied nightly from Wasabi ([glacier-copy.md](glacier-copy.md)) | Disaster recovery | Permanently; replaced and deleted file versions for 365 days |
+| Warm copy | Google Drive shared drives, through restic | Quick repairs | Planned, not set up yet |
 | Press-material originals | `/tank2/press-material/<game>/` | Source material | For now; not a preservation copy |
 | Contributor originals | `processed/{lane}/` in Wasabi `hitsave-incoming` and on the shared Drive (moved there automatically once the ledger says complete) | Source uploads after ingest | Kept; no automatic deletion |
 | Intake SIP | `<HOST_INTAKE>/ready/<slug>/` on `/tank` | **Temporary** working copy | Until pruned |
@@ -37,6 +38,14 @@ Why 90 days (decided 2026-11-02): APTrust checked its S3 and Wasabi copies every
 NDSA gives monthly, quarterly or yearly as examples and lists provider integrity checks and
 redundant copies as reasons to check less often. Wasabi runs its own replication and integrity
 checks, and our copy is also verified at ingest and again before local copies are pruned.
+
+## Fixity schedule (Glacier copy)
+
+The nightly copy job checks every file's SHA-256 against its bag manifest while it uploads it,
+and records a `fixity_run` row (`glacier-copy: …`) for each package it copies. Once a month,
+`scripts/glacier-copy-check.py` (`f/hitsave/glacier_copy_check`, 07:00 UTC on the 1st) asks AWS
+for the size and SHA-256 of every file in every up-to-date copy, without restoring anything,
+and records a `fixity_run` row (`glacier: …`). See [glacier-copy.md](glacier-copy.md).
 
 ## Pruning local working copies
 
