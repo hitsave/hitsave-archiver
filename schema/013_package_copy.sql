@@ -3,8 +3,9 @@
 --   location            aws-deep-archive (S3 Glacier Deep Archive)
 --   bucket, prefix      where the copy lives (prefix = <wasabi bucket>/<package prefix>/)
 --   object_count, bytes what the last copy covered (the package and its disc-contents bag)
---   tagmanifest_sha256  SHA-256 of the package's tagmanifest-sha256.txt when it was copied;
---                       the copy is out of date when Wasabi's tag manifest differs
+--   tagmanifest_sha256  SHA-256 of the package's tagmanifest-sha256.txt when it was copied, then a
+--                       comma and the disc-contents bag's when the dump has one; the copy is out
+--                       of date when Wasabi's tag manifests differ
 --   copied_at           last copy that uploaded or confirmed every file
 --   verified_at         last scripts/glacier-copy-check.py pass
 CREATE TABLE IF NOT EXISTS package_copy (
