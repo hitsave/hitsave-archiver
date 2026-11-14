@@ -24,3 +24,6 @@ fixtures/submissions-security/bombs/*.zip
 .ci/ledger/
 __pycache__/
 *.py[cod]
+# Real credentials live in the private config repo (mounted at /config/secrets); only templates here.
+config/secrets/*
+!config/secrets/*.example

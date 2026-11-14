@@ -1,0 +1,34 @@
+summary: Copy packages to Glacier Deep Archive
+description: >
+  Runs `scripts/glacier-copy.py`: copies complete packages that have no copy
+
+  yet, or whose tag manifest changed since their last copy, from Wasabi to
+
+  S3 Glacier Deep Archive. Every file's SHA-256 is checked against the bag
+
+  manifest while it streams through. Writes package_copy and fixity_run rows
+
+  (detail "glacier-copy: …"). With execute false it only lists what's due.
+lock: ''
+kind: script
+schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  properties:
+    execute:
+      type: string
+      description: 'true: upload and record; false: only list what is due'
+      default: 'true'
+    kind:
+      type: string
+      description: Optional ingest_kind filter (dump, press_material, …)
+      default: ''
+    max_gb:
+      type: string
+      description: Max GB read from Wasabi per run
+      default: '200'
+    max_packages:
+      type: string
+      description: Max packages per run
+      default: '50'
+  required: []

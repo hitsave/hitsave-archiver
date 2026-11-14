@@ -1,0 +1,8 @@
+# Second copy of every package in S3 Glacier Deep Archive (docs/glacier-copy.md).
+# Read by scripts/glacier-copy.py, glacier-copy-check.py and glacier-restore.py.
+# The bucket and writer user come from deploy/aws/glacier-copy.yaml.
+region: us-east-2
+bucket: hitsave-backup-glacier
+storage_class: DEEP_ARCHIVE
+# Relative to the config root; the secrets folder comes from the private config repo.
+credentials_file: secrets/aws-glacier-copy.yaml

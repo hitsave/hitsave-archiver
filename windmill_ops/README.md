@@ -14,11 +14,14 @@ container path `/archiver`.
 | `wasabi_fixity_check` | 03:00 | Re-reads packages from Wasabi and verifies every SHA-256. Each package at most every 90 days, up to 300 packages / 150 GB a night ([storage-retention.md](../docs/storage-retention.md#fixity-schedule-wasabi-copy)). |
 | `prune_local_working_copies` | 04:30 | Deletes local bags and `ready/` payloads proven identical on Wasabi (`execute: true`). Holds the remote-intake lock. |
 | `sync_catalog_snapshots` | 05:30 | Adds a dated copy of the catalog record to each bag whose Omeka record changed (`metadata/catalog/`); unchanged bags are only read ([preservation-packaging-standard.md](../docs/preservation-packaging-standard.md#catalog-record-copies)). |
+| `glacier_copy` | 06:15 | Copies new and changed packages from Wasabi to S3 Glacier Deep Archive, checking every SHA-256 on the way; up to 50 packages / 200 GB a night ([glacier-copy.md](../docs/glacier-copy.md)). Off until the backfill is done. |
+| `glacier_copy_check` | 07:00 on the 1st | Checks every file of the Glacier copy against Wasabi's manifests with HEAD requests, without restores ([glacier-copy.md](../docs/glacier-copy.md)). Off until the backfill is done. |
 | `publish_damaged_files_page` | Every 3 h at :15 | Rebuilds the public "Damaged files" page from the ledger ([damaged-files.md](../docs/damaged-files.md)). |
 
 Each schedule is defined in `wmill/f/hitsave/<name>.schedule.yaml`, next to its script. The
 times are chosen so the daily jobs don't overlap: the ledger backup runs before the fixity
-check, and the prune and catalog copies run after it. The prune deletes local copies only after
+check, and the prune and catalog copies run after it. The Glacier copy runs after the catalog copies, so it
+copies bags with their newest catalog record. The prune deletes local copies only after
 the first scheduled dry run on 2026-11-02 verified 50 of 50 packages; set `execute` to `'false'`
 in its schedule for a read-only report.
 
@@ -30,6 +33,8 @@ in its schedule for a read-only report.
 | `ledger_backup` | Scheduled ledger dump (above) |
 | `wasabi_fixity_check` | Scheduled Wasabi fixity (above). Run with `max_packages: 0` to only count what's due. |
 | `prune_local_working_copies` | Scheduled prune (above). Set `execute: 'false'` for a read-only report. |
+| `glacier_copy` | Scheduled Glacier copy (above). Set `execute: 'false'` to only list what's due. |
+| `glacier_copy_check` | Monthly Glacier check (above). Set `record: 'false'` to only report. |
 | `correct_catalog_item` | Catalog correction. The ledger's **`/correct`** submits this job. |
 | `quarantine_catalog_item` | Manual quarantine (`scripts/curation-quarantine-omeka.py`); the ledger's **`/quarantine`** offers the same form |
 | `batch_resume_omeka` | `run-batch-resume-omeka.sh` (long; manual) |

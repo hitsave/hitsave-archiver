@@ -56,6 +56,12 @@ FLAG_CONDITIONS: dict[str, tuple[str, str]] = {
         "needs attention",
     ),
     "damaged": (DAMAGED_SQL, "has damaged files"),
+    "no_second_copy": (
+        "(status = 'complete' AND NOT EXISTS (SELECT 1 FROM package_copy pc"
+        " WHERE pc.game_ingest_id = game_ingest.id AND pc.location = 'aws-deep-archive'"
+        " AND pc.out_of_date_since IS NULL))",
+        "complete, no up-to-date second copy",
+    ),
 }
 
 FAILED_OR_ERROR_SQL = f"""
@@ -71,6 +77,11 @@ WHERE {FLAG_CONDITIONS["no_omeka"][0]}
 DAMAGED_COUNT_SQL = f"""
 SELECT COUNT(*)::int FROM game_ingest
 WHERE {FLAG_CONDITIONS["damaged"][0]}
+"""
+
+NO_SECOND_COPY_COUNT_SQL = f"""
+SELECT COUNT(*)::int FROM game_ingest
+WHERE {FLAG_CONDITIONS["no_second_copy"][0]}
 """
 
 LEDGER_SORT_COLUMNS: dict[str, str] = {
@@ -225,11 +236,15 @@ def ledger_summary(conn) -> dict[str, Any]:
         print("Query: rows with damaged files\n", DAMAGED_COUNT_SQL.strip(), sep="")
         cur.execute(DAMAGED_COUNT_SQL)
         damaged = cur.fetchone()[0]
+        print("Query: complete rows without an up-to-date second copy\n", NO_SECOND_COPY_COUNT_SQL.strip(), sep="")
+        cur.execute(NO_SECOND_COPY_COUNT_SQL)
+        no_second_copy = cur.fetchone()[0]
     return {
         "by_status": by_status,
         "failed_or_error_message": failed_or_error,
         "complete_missing_omeka_item_id": complete_no_omeka,
         "damaged_files": damaged,
+        "complete_without_second_copy": no_second_copy,
     }
 
 

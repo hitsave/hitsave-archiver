@@ -26,6 +26,40 @@ def fetch_item(connect: ConnectFn, game_key: str) -> dict[str, Any] | None:
     return dict(zip(cols, row))
 
 
+COPY_LOCATIONS = {"aws-deep-archive": "AWS Glacier Deep Archive"}
+
+
+def fetch_second_copy(connect: ConnectFn, game_ingest_id: int) -> dict[str, Any] | None:
+    """The package's package_copy row (the Glacier copy), or None."""
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT location, copied_at, verified_at, out_of_date_since FROM package_copy "
+                "WHERE game_ingest_id = %s AND location = 'aws-deep-archive'",
+                (game_ingest_id,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                return None
+            cols = [d[0] for d in cur.description]
+    return dict(zip(cols, row))
+
+
+def _day(value: Any) -> str:
+    return fmt_ts(value)[:10]
+
+
+def second_copy_line(copy: dict[str, Any] | None) -> str:
+    if copy is None:
+        return "Second copy: none yet"
+    where = COPY_LOCATIONS.get(str(copy.get("location")), str(copy.get("location")))
+    if copy.get("out_of_date_since"):
+        return f"Second copy: out of date since {_day(copy['out_of_date_since'])} ({where})"
+    if copy.get("verified_at"):
+        return f"Second copy: verified {_day(copy['verified_at'])} ({where})"
+    return f"Second copy: copied {_day(copy.get('copied_at'))}, not verified yet ({where})"
+
+
 def row_links(game_key: str, item_id, *, admin_base: str, site_base: str) -> tuple[str, str]:
     """(game key cell linking to the item page, actions cell with Omeka admin/site links only)."""
     key_html = f'<a href="{html.escape(item_href(game_key))}">{html.escape(game_key)}</a>'
@@ -145,11 +179,15 @@ def render_item_page(
     site_base: str,
     is_public: bool | None,
     status_config: dict,
+    second_copy: dict[str, Any] | None = None,
 ) -> bytes:
     game_key = str(row.get("game_key") or "")
+    copy_line = (f'<p class="muted">{html.escape(second_copy_line(second_copy))}</p>'
+                 if row.get("status") == "complete" else "")
     title = str(row.get("moby_title") or game_key)
     inner = f"""<p><code>{html.escape(game_key)}</code> · {status_badge(row.get("status"))}
  · updated {html.escape(fmt_ts(row.get("updated_at")))}</p>
+{copy_line}
 {_catalog_panel(row, admin_base=admin_base, site_base=site_base, is_public=is_public)}
 {_problems_panel(row)}
 {render_damaged_panel(row, is_public=is_public)}
