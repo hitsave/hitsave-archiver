@@ -8,6 +8,8 @@
 --                       of date when Wasabi's tag manifests differ
 --   copied_at           last copy that uploaded or confirmed every file
 --   verified_at         last scripts/glacier-copy-check.py pass
+--   out_of_date_since   set by glacier-copy.py when the bag changed after its last copy;
+--                       cleared by the next copy
 CREATE TABLE IF NOT EXISTS package_copy (
     id BIGSERIAL PRIMARY KEY,
     game_ingest_id BIGINT NOT NULL REFERENCES game_ingest (id) ON DELETE CASCADE,
@@ -19,5 +21,6 @@ CREATE TABLE IF NOT EXISTS package_copy (
     tagmanifest_sha256 TEXT,
     copied_at TIMESTAMPTZ,
     verified_at TIMESTAMPTZ,
+    out_of_date_since TIMESTAMPTZ,
     UNIQUE (game_ingest_id, location)
 );

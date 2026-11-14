@@ -1,0 +1,22 @@
+summary: Check the Glacier Deep Archive copy
+description: >
+  Runs `scripts/glacier-copy-check.py`: for every package with an up-to-date
+
+  copy, checks that each file in the bag manifests is in the copy with the same
+
+  size and SHA-256 metadata, using HEAD requests only (no restores, about $0.05
+
+  a run). Writes fixity_run rows (detail "glacier: …") and
+
+  package_copy.verified_at. With record false it only reports.
+lock: ''
+kind: script
+schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  properties:
+    record:
+      type: string
+      description: 'true: write results to the ledger; false: report only'
+      default: 'true'
+  required: []

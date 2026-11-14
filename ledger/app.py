@@ -30,7 +30,7 @@ from catalog_quarantine import (
 from catalog_visibility import run_visibility
 from ledger_health import fetch_attention_rows, fetch_health_summary
 from intake_failures import load_failures, render_intake_failures
-from item_page import fetch_item, render_item_not_found, render_item_page, row_links
+from item_page import fetch_item, fetch_second_copy, render_item_not_found, render_item_page, row_links
 from omeka_status import fetch_item_is_public, fetch_item_json, fetch_private_item_ids
 
 sys.path.insert(0, str(Path("/app/scripts")))
@@ -448,6 +448,7 @@ def render_health(*, sort: str = "updated_at", sort_dir: str = "desc") -> bytes:
         flag_chip("failed_or_error", failed_n)
         + flag_chip("no_omeka", missing_omeka)
         + flag_chip("damaged", damaged_n)
+        + flag_chip("no_second_copy", summary.get("complete_without_second_copy") or 0)
     )
     rows = fetch_attention_rows(connect, sort=sort, sort_dir=sort_dir)
     with connect() as conn:
@@ -637,9 +638,11 @@ class Handler(BaseHTTPRequestHandler):
                 return
             item_id = row.get("omeka_item_id")
             is_public = fetch_item_is_public(int(item_id)) if item_id else None
+            second_copy = fetch_second_copy(connect, int(row["id"])) if row.get("status") == "complete" else None
             self._send_html(
                 render_item_page(
-                    row, admin_base=ADMIN, site_base=SITE, is_public=is_public, status_config=CONFIG
+                    row, admin_base=ADMIN, site_base=SITE, is_public=is_public, status_config=CONFIG,
+                    second_copy=second_copy,
                 )
             )
             return

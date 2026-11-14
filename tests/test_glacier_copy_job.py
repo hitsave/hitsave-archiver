@@ -34,6 +34,10 @@ class FakeLedger:
         self.rows = rows
         self.package_copy: list[dict] = []
         self.fixity_run: list[dict] = []
+        self.out_of_date: list[int] = []
+
+    def mark_out_of_date(self, game_ingest_id):
+        self.out_of_date.append(game_ingest_id)
 
     def candidates(self, kind=None, game_keys=None):
         out = []
@@ -163,3 +167,21 @@ def test_settings_point_at_the_decided_bucket_and_region():
     aws = yaml.safe_load((ROOT / "config" / "preservation" / "aws-copy.yaml").read_text())
     assert aws["region"] == "us-east-2" and aws["bucket"] == "hitsave-backup-glacier"
     assert aws["credentials_file"] == "secrets/aws-glacier-copy.yaml"
+
+
+def test_changed_bag_is_marked_out_of_date_until_copied_again(env):
+    src, dst, ledger, run = env
+    run(["--execute"])
+    assert ledger.out_of_date == []  # a first copy is never "out of date"
+    make_bag(src, "dumps/pkg/", note=b"v2")
+    run(["--execute"])
+    assert ledger.out_of_date == [1]
+    assert ledger.package_copy[0].get("out_of_date_since") is None
+
+
+def test_report_only_never_marks_out_of_date(env):
+    src, dst, ledger, run = env
+    run(["--execute"])
+    make_bag(src, "dumps/pkg/", note=b"v2")
+    run([])
+    assert ledger.out_of_date == []

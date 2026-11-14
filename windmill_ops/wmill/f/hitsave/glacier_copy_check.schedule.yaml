@@ -1,0 +1,11 @@
+args:
+  record: 'true'
+cron_version: v2
+email: admin@windmill.dev
+enabled: false
+is_flow: false
+no_flow_overlap: true
+schedule: 0 0 7 1 * *
+script_path: f/hitsave/glacier_copy_check
+timezone: UTC
+ws_error_handler_muted: false

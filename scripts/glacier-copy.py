@@ -81,6 +81,8 @@ def run(argv: list[str], *, ledger, src_s3, dst_s3, dst_bucket: str, bucket_for)
             if row["copied_fingerprint"] == before:
                 continue
             due += 1
+            if args.execute and row["copied_fingerprint"] is not None:
+                ledger.mark_out_of_date(row["id"])
             size = int(row.get("total_bytes") or 0)
             if results and spent + size > budget:
                 continue  # try smaller packages that still fit
@@ -181,9 +183,18 @@ class Ledger:
                     %(tagmanifest_sha256)s, now())
             ON CONFLICT (game_ingest_id, location) DO UPDATE SET
                 bucket = EXCLUDED.bucket, prefix = EXCLUDED.prefix, object_count = EXCLUDED.object_count,
-                bytes = EXCLUDED.bytes, tagmanifest_sha256 = EXCLUDED.tagmanifest_sha256, copied_at = now()
+                bytes = EXCLUDED.bytes, tagmanifest_sha256 = EXCLUDED.tagmanifest_sha256, copied_at = now(),
+                out_of_date_since = NULL
             """,
             row,
+        )
+        self.conn.commit()
+
+    def mark_out_of_date(self, game_ingest_id: int) -> None:
+        self.conn.execute(
+            "UPDATE package_copy SET out_of_date_since = COALESCE(out_of_date_since, now()) "
+            "WHERE game_ingest_id = %s AND location = %s",
+            (game_ingest_id, LOCATION),
         )
         self.conn.commit()
 

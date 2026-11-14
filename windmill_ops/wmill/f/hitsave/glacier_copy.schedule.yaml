@@ -1,0 +1,13 @@
+args:
+  execute: 'true'
+  max_gb: '200'
+  max_packages: '50'
+cron_version: v2
+email: admin@windmill.dev
+enabled: false
+is_flow: false
+no_flow_overlap: true
+schedule: 0 15 6 * * *
+script_path: f/hitsave/glacier_copy
+timezone: UTC
+ws_error_handler_muted: false
