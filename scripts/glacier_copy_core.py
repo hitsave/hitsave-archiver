@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
+from pathlib import Path
 
+from botocore.exceptions import ClientError
 from botocore.httpchecksum import CrtCrc64NvmeChecksum
 
 import bag_manifest
@@ -20,6 +22,21 @@ DEFAULT_PART_SIZE = 64 * 2**20
 STORAGE_CLASS = "DEEP_ARCHIVE"
 MANIFEST = "manifest-sha256.txt"
 TAGMANIFEST = "tagmanifest-sha256.txt"
+LOCATION = "aws-deep-archive"
+AWS_CONFIG = Path("/config/preservation/aws-copy.yaml")
+INGEST_CONFIG = Path("/config/preservation/ingest.yaml")
+FATAL_CODES = {
+    "AccessDenied", "InvalidAccessKeyId", "ExpiredToken", "SignatureDoesNotMatch",
+    "InvalidToken", "TokenRefreshRequired", "AllAccessDisabled", "AccountProblem",
+}
+
+
+class FatalError(RuntimeError):
+    """Stops the run: credentials or permissions are wrong, so no package result can be trusted."""
+
+
+def is_fatal(exc: BaseException) -> bool:
+    return isinstance(exc, ClientError) and exc.response.get("Error", {}).get("Code") in FATAL_CODES
 
 
 @dataclass(frozen=True)
@@ -200,7 +217,7 @@ def expected_digests(src_s3, bucket: str, prefix: str) -> tuple[dict[str, str], 
     return expected, tag
 
 
-def _list_source(src_s3, bucket: str, root: str) -> dict[str, int]:
+def list_source(src_s3, bucket: str, root: str) -> dict[str, int]:
     out: dict[str, int] = {}
     for page in src_s3.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=root):
         for o in page.get("Contents") or []:
@@ -228,7 +245,7 @@ def copy_package(src_s3, src_bucket: str, prefix: str, dst_s3, dst_bucket: str,
     src_root = prefix.strip("/") + "/"
     dst_root = f"{src_bucket}/{src_root}"
     expected, _ = expected_digests(src_s3, src_bucket, prefix)
-    source = _list_source(src_s3, src_bucket, src_root)
+    source = list_source(src_s3, src_bucket, src_root)
     plan = plan_package(source, list_target(dst_s3, dst_bucket, dst_root), expected)
     result = PackageResult(files_unchanged=len(plan.unchanged), object_count=len(source),
                            total_bytes=sum(source.values()))
@@ -244,3 +261,57 @@ def copy_package(src_s3, src_bucket: str, prefix: str, dst_s3, dst_bucket: str,
         dst_s3.delete_object(Bucket=dst_bucket, Key=dst_root + rel)
         result.delete_markers += 1
     return result
+
+
+# Shared by glacier-copy.py, glacier-copy-check.py and glacier-restore.py.
+
+def prefixes_of(row: dict) -> list[str]:
+    out = [str(row["package_storage_prefix"]).strip("/")]
+    if row.get("disc_contents_prefix"):
+        out.append(str(row["disc_contents_prefix"]).strip("/"))
+    return out
+
+
+def fingerprint(src_s3, bucket: str, prefixes: list[str]) -> str:
+    """SHA-256 of each bag's tag manifest, comma-separated (package first, then disc contents)."""
+    digests = []
+    for prefix in prefixes:
+        tag = src_s3.get_object(Bucket=bucket, Key=f"{prefix}/{TAGMANIFEST}")["Body"].read()
+        digests.append(hashlib.sha256(tag).hexdigest())
+    return ",".join(digests)
+
+
+def make_aws_client(aws: dict, creds: dict):
+    import boto3
+    from botocore.config import Config
+
+    return boto3.client(
+        "s3",
+        region_name=str(aws["region"]),
+        aws_access_key_id=str(creds["access_key_id"]),
+        aws_secret_access_key=str(creds["secret_access_key"]),
+        config=Config(retries={"max_attempts": 10, "mode": "adaptive"}),
+    )
+
+
+def connect():
+    """(ledger connection, Wasabi client, AWS client, AWS settings, bucket_for) from /config."""
+    import psycopg
+
+    from preservation_common import wasabi_bucket_for_storage_prefix
+    from upload_bag_wasabi import load_wasabi_settings, make_s3_client, resolve_config_path
+    from yaml_config import load_yaml
+
+    ingest = load_yaml(INGEST_CONFIG)
+    db = load_yaml(Path(ingest["database"]["config_file"]))["postgres"]
+    wasabi, _ = load_wasabi_settings(INGEST_CONFIG)
+    config_root = INGEST_CONFIG.parent.parent
+    src = make_s3_client(wasabi, load_yaml(resolve_config_path(str(wasabi["credentials_file"]), config_root)))
+    aws = load_yaml(AWS_CONFIG)
+    creds = load_yaml(resolve_config_path(str(aws["credentials_file"]), config_root))
+    dst = make_aws_client(aws, creds)
+    conn = psycopg.connect(host=db["host"], port=int(db.get("port", 5432)), dbname=db["database"],
+                           user=db["user"], password=db["password"])
+    return conn, src, dst, aws, lambda kind, prefix: wasabi_bucket_for_storage_prefix(wasabi, prefix, ingest_kind=kind)
+
+

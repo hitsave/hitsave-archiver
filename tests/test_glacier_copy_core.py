@@ -84,8 +84,8 @@ def test_plan_skips_unchanged_uploads_changed_and_marks_removed():
 
 
 def test_plan_uploads_a_file_whose_size_or_digest_changed():
-    p = plan_package(source={"a": 3, "b": 4, "c": 1}, target={"a": T(3, "x" * 64), "b": T(5, "b" * 64), "c": T(1, "c" * 64)},
-                     expected={"a": "a" * 64, "b": "b" * 64})
+    target = {"a": T(3, "x" * 64), "b": T(5, "b" * 64), "c": T(1, "c" * 64)}
+    p = plan_package(source={"a": 3, "b": 4, "c": 1}, target=target, expected={"a": "a" * 64, "b": "b" * 64})
     assert p.upload == ["a", "b", "c"] and p.unchanged == []
 
 
