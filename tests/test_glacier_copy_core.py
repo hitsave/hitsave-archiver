@@ -144,3 +144,22 @@ def test_copy_package_reports_damaged_files_and_keeps_going():
 def test_large_file_without_expected_digest_gets_its_real_sha256(src, dst):
     r = copy_file(src, "hitsave-dumps", "dumps/a/data/disc.iso", dst, "copy", "k", None, part_size=5 * 2**20)
     assert r.ok and dst.objects["k"].metadata["sha256"] == sha256_of(BIG)
+
+
+def test_file_in_the_manifest_but_missing_on_wasabi_is_damage_not_a_deletion():
+    src, dst = FakeS3(), FakeS3()
+    _bag(src, "dumps/a/", {"data/disc.iso": DATA, "bagit.txt": b"BagIt-Version: 1.0\n"})
+    copy_package(src, "hitsave-dumps", "dumps/a", dst, "copy")
+    src.delete_object(Bucket="b", Key="dumps/a/data/disc.iso")  # lost on Wasabi, still in the manifest
+    r = copy_package(src, "hitsave-dumps", "dumps/a", dst, "copy")
+    assert r.problems == ["data/disc.iso is in the bag manifest but missing on Wasabi"]
+    assert r.delete_markers == 0
+    assert "hitsave-dumps/dumps/a/data/disc.iso" in dst.objects
+
+
+def test_first_copy_of_a_bag_with_a_missing_file_fails():
+    src, dst = FakeS3(), FakeS3()
+    _bag(src, "dumps/a/", {"data/disc.iso": DATA})
+    src.delete_object(Bucket="b", Key="dumps/a/data/disc.iso")
+    r = copy_package(src, "hitsave-dumps", "dumps/a", dst, "copy")
+    assert r.problems == ["data/disc.iso is in the bag manifest but missing on Wasabi"]

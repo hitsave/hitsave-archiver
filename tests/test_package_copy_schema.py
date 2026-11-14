@@ -35,3 +35,10 @@ def test_botocore_can_compute_crc64nvme():
     # CRC-64/NVME check value for "123456789".
     assert c.digest() == bytes.fromhex("ae8b14860a799888")
     assert base64.b64decode(c.b64digest()) == bytes.fromhex("ae8b14860a799888")
+
+
+def test_boto3_floor_supports_full_object_checksums():
+    # CreateMultipartUpload's ChecksumType (FULL_OBJECT) arrived in boto3 1.36.
+    reqs = (ROOT / "ingest-worker" / "requirements.txt").read_text()
+    m = re.search(r"^boto3>=(\d+)\.(\d+)", reqs, re.M)
+    assert m and (int(m.group(1)), int(m.group(2))) >= (1, 36)

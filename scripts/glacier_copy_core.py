@@ -257,7 +257,13 @@ def copy_package(src_s3, src_bucket: str, prefix: str, dst_s3, dst_bucket: str,
             result.files_uploaded += 1
         else:
             result.problems.append(r.problem)
+    # A file still in the bag's manifests but not on Wasabi is lost, not deleted: report it and
+    # leave the copy's version current.
+    for rel in sorted(r for r in expected if r not in source):
+        result.problems.append(f"{rel} is in the bag manifest but missing on Wasabi")
     for rel in plan.delete_marker:
+        if rel in expected:
+            continue
         dst_s3.delete_object(Bucket=dst_bucket, Key=dst_root + rel)
         result.delete_markers += 1
     return result
