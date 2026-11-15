@@ -88,56 +88,9 @@ uploaded by mistake.
 
 ## Get files back
 
-Files in Deep Archive must be restored before you can download them. Use
-`scripts/glacier-restore.py` on saturn, in the archiver checkout. It never writes to Wasabi.
-Putting a repaired file back on Wasabi is a separate, manual step.
-
-1. Start the restore. For one file:
-
-   ```bash
-   docker compose run --rm -T --no-deps -v "$PWD/scripts:/app/scripts:ro" \
-     --entrypoint python ingest-worker /app/scripts/glacier-restore.py \
-     request --game-key psworld-volume-84-01a1b692-bc46-777c-a3ef-b370cc5a8304 \
-     --file "data/18 - PSWorld Volume 84/VOL_84.iso"
-   ```
-
-   Leave out `--file` to restore the whole package. Add `--tier Standard` if you need the file
-   sooner.
-
-2. Check which files are ready:
-
-   ```bash
-   docker compose run --rm -T --no-deps -v "$PWD/scripts:/app/scripts:ro" \
-     --entrypoint python ingest-worker /app/scripts/glacier-restore.py \
-     status --game-key psworld-volume-84-01a1b692-bc46-777c-a3ef-b370cc5a8304
-   ```
-
-   The output lists `ready` and `waiting` files.
-
-3. Download the ready files into a new folder under `/output` (`HOST_OUTPUT` on saturn), for
-   example `/output/restore/psworld-volume-84`:
-
-   ```bash
-   docker compose run --rm -T --no-deps -v "$PWD/scripts:/app/scripts:ro" \
-     --entrypoint python ingest-worker /app/scripts/glacier-restore.py \
-     fetch --game-key psworld-volume-84-01a1b692-bc46-777c-a3ef-b370cc5a8304 \
-     --to /output/restore/psworld-volume-84
-   ```
-
-   The script never overwrites a file. It checks each file's SHA-256 against the bag manifest,
-   and lists every file that differs under `problems`. An empty `problems` list means every
-   file matches.
-
-If the ledger isn't available, use `--prefix "hitsave-dumps/dumps/Redump/DVD-Video/Coverdiscs/P/psworld-volume-84-01a1b692-bc46-777c-a3ef-b370cc5a8304"`
-instead of `--game-key`.
-
-| Restore speed | Ready within | Cost per GB |
-|---------------|--------------|-------------|
-| Bulk (default) | 48 hours | $0.0025 |
-| Standard | 12 hours | $0.02 |
-
-A restored file stays downloadable for 7 days. Downloading from AWS to saturn costs $0.09 per
-GB after the first 100 GB each month.
+[restore-from-glacier.md](restore-from-glacier.md) has the steps: repair one package on Wasabi,
+get back a version from before a change, and restore everything if Wasabi is lost. A Bulk
+restore takes up to 48 hours and a Standard restore up to 12 hours.
 
 ## What it costs
 
