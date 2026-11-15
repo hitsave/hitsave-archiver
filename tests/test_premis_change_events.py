@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+from contextlib import nullcontext
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -61,6 +62,7 @@ def test_ledger_sync_records_a_metadata_modification_event(monkeypatch) -> None:
     plan = sync.sync_bag_from_ledger(
         FakeS3(_bag(prefix)), bucket="b", storage_prefix=prefix,
         ledger_row={"game_key": "new-pkg", "title_slug": "new", "sort_letter": "F"}, execute=True,
+        lock=lambda key: nullcontext(),
     )
     root = _check_event_then_tagmanifest(uploads, prefix, "metadata modification")
     assert "ledger" in root.findtext(f"{P}eventDetailInformation/{P}eventDetail")
@@ -90,7 +92,7 @@ def test_press_catalog_patch_records_the_correction(monkeypatch) -> None:
     mod.patch_wasabi_bag(
         ledger={"package_storage_prefix": prefix, "game_key": "tekken-7-01"}, title="Tekken 7",
         reference_uri="https://www.mobygames.com/game/1", former_title="Tekken", correction_summary="title fix",
-        execute=True,
+        execute=True, lock=lambda key: nullcontext(),
     )
     root = _check_event_then_tagmanifest(uploads, prefix, "metadata modification")
     detail = root.findtext(f"{P}eventDetailInformation/{P}eventDetail")

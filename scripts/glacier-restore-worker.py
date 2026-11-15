@@ -42,6 +42,7 @@ from glacier_restore_core import (  # noqa: E402
     verify_restored,
     write_back,
 )
+from package_lock import PackageBusy, package_lock  # noqa: E402,F401
 from premis_events import PremisEvent, stage_event  # noqa: E402
 from restore_states import FINISHED, OPEN  # noqa: E402
 
@@ -83,8 +84,8 @@ def done_message(written: int, restorable: int) -> str:
 class Step:
     """One request, one step. Each save names the state it expects, so concurrent ledger changes win."""
 
-    def __init__(self, req: dict, *, ledger, aws_s3, aws_bucket, wasabi_s3, bucket_for, fixity_check, now):
-        self.req, self.ledger = req, ledger
+    def __init__(self, req: dict, *, ledger, aws_s3, aws_bucket, wasabi_s3, bucket_for, fixity_check, now, lock):
+        self.req, self.ledger, self.lock = req, ledger, lock
         self.aws_s3, self.aws_bucket, self.wasabi_s3 = aws_s3, aws_bucket, wasabi_s3
         self.wasabi_bucket = bucket_for(req["ingest_kind"], req["package_storage_prefix"])
         self.fixity_check, self.now = fixity_check, now
@@ -140,6 +141,12 @@ class Step:
             self.writing()
 
     def writing(self) -> None:
+        # Other jobs add tag files to the same bags (package_lock.py). Hold the lock from the first
+        # write to the last PREMIS event, and during the fixity check, which skips a bag that changes.
+        with self.lock(self.req["game_key"]):
+            self._write()
+
+    def _write(self) -> None:
         if _expired(self.req, self.now()) and any(
                 f.written not in ("yes", "skipped") for f in _to_restore(_files(self.req))):
             self.save("writing", state="expired", message=EXPIRED_MESSAGE)
@@ -203,13 +210,14 @@ class Step:
                 raise RuntimeError(f"s3://{bucket}/{key} differs from what was written")
 
 
-def run(argv: list[str], *, ledger, aws_s3, aws_bucket: str, wasabi_s3, bucket_for, fixity_check, now) -> dict:
+def run(argv: list[str], *, ledger, aws_s3, aws_bucket: str, wasabi_s3, bucket_for, fixity_check, now,
+        lock) -> dict:
     parse_args(argv)
     counts: dict[str, int] = {}
     for req in ledger.open_requests():
         try:
             state = Step(req, ledger=ledger, aws_s3=aws_s3, aws_bucket=aws_bucket, wasabi_s3=wasabi_s3,
-                         bucket_for=bucket_for, fixity_check=fixity_check, now=now).run()
+                         bucket_for=bucket_for, fixity_check=fixity_check, now=now, lock=lock).run()
         except ClientError as e:
             if is_fatal(e):
                 raise FatalError(f"stopping: {e}") from e
@@ -301,7 +309,8 @@ def main() -> int:
     try:
         summary = run(sys.argv[1:], ledger=Ledger(conn), aws_s3=aws_s3, aws_bucket=str(aws["bucket"]),
                       wasabi_s3=wasabi_s3, bucket_for=bucket_for, fixity_check=fixity_check,
-                      now=lambda: datetime.now(timezone.utc))
+                      now=lambda: datetime.now(timezone.utc),
+                      lock=lambda game_key: package_lock(conn, game_key))
     except FatalError as e:
         print(f"FATAL {e}", file=sys.stderr, flush=True)
         return 2

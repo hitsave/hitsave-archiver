@@ -20,6 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import bag_manifest  # noqa: E402
+from package_lock import ledger_lock  # noqa: E402
 from package_identity import parse_package_id  # noqa: E402
 from preservation_common import wasabi_bucket_for_storage_prefix  # noqa: E402
 from upload_bag_wasabi import (  # noqa: E402
@@ -104,6 +105,23 @@ def patch_premis_package_id(xml_text: str, package_id: str) -> bytes:
 
 
 def sync_bag_from_ledger(
+    client,
+    *,
+    bucket: str,
+    storage_prefix: str,
+    ledger_row: dict,
+    execute: bool,
+    lock=None,
+) -> dict:
+    """Align the bag's tag files with the ledger; with *execute*, under the package lock (package_lock.py)."""
+    args = dict(bucket=bucket, storage_prefix=storage_prefix, ledger_row=ledger_row, execute=execute)
+    if not execute:
+        return _sync_bag_from_ledger(client, **args)
+    with (lock or ledger_lock)(str(ledger_row["game_key"])):
+        return _sync_bag_from_ledger(client, **args)
+
+
+def _sync_bag_from_ledger(
     client,
     *,
     bucket: str,

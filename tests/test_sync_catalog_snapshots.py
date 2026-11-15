@@ -181,3 +181,56 @@ def test_report_ends_with_a_one_line_summary_for_windmill() -> None:
     full = json.loads("\n".join(lines[:-1]))
     assert full["packages_detail"] == [{"game_key": "a", "status": "new"}]
     assert full["counts"] == {"new": 2, "error": 1}
+
+
+class FakeLock:
+    """Stands in for package_lock; on_enter runs when the lock is taken."""
+
+    def __init__(self, on_enter=None):
+        self.held = False
+        self.taken = 0
+        self.on_enter = on_enter
+
+    def __call__(self):
+        lock = self
+
+        class _Ctx:
+            def __enter__(self):
+                lock.held, lock.taken = True, lock.taken + 1
+                if lock.on_enter:
+                    lock.on_enter()
+
+            def __exit__(self, *exc):
+                lock.held = False
+
+        return _Ctx()
+
+
+def test_writes_happen_while_holding_the_package_lock() -> None:
+    s3 = bag_with()
+    lock = FakeLock()
+    held_during_puts: list[bool] = []
+    s3.on_put = lambda key: held_during_puts.append(lock.held)
+    scs.sync_bag(s3, bucket="b", root=ROOT_PREFIX, snapshot=snap(), execute=True, lock=lock)
+    assert lock.taken == 1 and not lock.held
+    assert held_during_puts and all(held_during_puts)
+
+
+def test_unchanged_record_never_takes_the_lock() -> None:
+    s3 = bag_with(snap())
+    lock = FakeLock()
+    scs.sync_bag(s3, bucket="b", root=ROOT_PREFIX, snapshot=snap(taken_at="2026-11-12T05:30:00Z"),
+                 execute=True, lock=lock)
+    assert lock.taken == 0
+
+
+def test_tagmanifest_changed_while_waiting_for_the_lock_writes_nothing() -> None:
+    s3 = bag_with()
+
+    def other_job_finished():
+        s3.objects[TM] = b"aa  bag-info.txt\nbb  metadata/premis/recovery-x.xml\n"
+
+    with pytest.raises(RuntimeError, match="tagmanifest changed"):
+        scs.sync_bag(s3, bucket="b", root=ROOT_PREFIX, snapshot=snap(), execute=True,
+                     lock=FakeLock(on_enter=other_job_finished))
+    assert s3.puts == []

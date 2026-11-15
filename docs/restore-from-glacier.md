@@ -49,7 +49,8 @@ problem.
    written. Click **Approve** to let the job write the files to Wasabi, or **Cancel**. Approve
    within 7 days, because the restored files stop being readable after that, and the request ends
    as **Expired**.
-5. After approval, the job writes each file to Wasabi. A file completes only when its bytes match
+5. After approval, the job takes the package's write lock, so no other job changes the bag until
+   step 6 ends (see [the packaging standard](preservation-packaging-standard.md)). It then writes each file to Wasabi. A file completes only when its bytes match
    the copy's SHA-256, so a bad read never replaces a Wasabi file. If someone fixed a file in the
    meantime, the job skips it.
 6. The job runs the Wasabi fixity check for the package. When it passes, the job adds a PREMIS

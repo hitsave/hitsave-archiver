@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -56,15 +57,36 @@ class Env:
                     "problem_report_id": 7, "restore_expires_at": None}
         self.ledger = FakeLedger([self.req])
         self.fixity_ok = True
-        self.fixity_calls: list[str] = []
+        self.fixity_calls: list[tuple[str, bool]] = []
         self.now = NOV15
+        self.locked: list[str] = []
+        self.lock_held = False
+        self.unlocked_wasabi_writes: list[str] = []
+        store = self.wasabi._store
+
+        def store_checked(key, v):
+            if not self.lock_held:
+                self.unlocked_wasabi_writes.append(key)
+            store(key, v)
+
+        self.wasabi._store = store_checked
+
+    @contextmanager
+    def lock(self, game_key):
+        self.locked.append(game_key)
+        self.lock_held = True
+        try:
+            yield
+        finally:
+            self.lock_held = False
 
     def run(self):
         def fixity(key):
-            self.fixity_calls.append(key)
+            self.fixity_calls.append((key, self.lock_held))
             return self.fixity_ok
         return worker.run([], ledger=self.ledger, aws_s3=self.aws, aws_bucket=COPY, wasabi_s3=self.wasabi,
-                          bucket_for=lambda kind, prefix: BUCKET, fixity_check=fixity, now=lambda: self.now)
+                          bucket_for=lambda kind, prefix: BUCKET, fixity_check=fixity, now=lambda: self.now,
+                          lock=self.lock)
 
     def restore_all(self):
         for v in self.aws.objects.values():
@@ -158,7 +180,7 @@ def test_approved_writes_runs_fixity_and_adds_recovery_event():
     env.run()
     assert env.req["state"] == "done"
     assert env.wasabi.objects[BAG + "/data/disc.iso"].data == PAYLOAD
-    assert env.fixity_calls == ["pkg"]
+    assert env.fixity_calls == [("pkg", True)]
     events = {k: v.data for k, v in env.wasabi.objects.items() if "/metadata/premis/recovery-" in k}
     assert len(events) == 1 and b"recovery" in next(iter(events.values()))
     tag = env.wasabi.objects[BAG + "/tagmanifest-sha256.txt"].data.decode()
@@ -261,3 +283,33 @@ def test_fixity_passed_needs_one_checked_package_without_skips():
     assert not worker.fixity_passed(0, ok.replace('"packages_checked": 1', '"packages_checked": 0'))
     assert not worker.fixity_passed(1, ok)
     assert not worker.fixity_passed(0, "no json")
+
+
+def test_writing_holds_the_package_lock_for_every_wasabi_write_and_the_fixity_check():
+    env = Env()
+    env.to_awaiting_approval()
+    assert env.locked == []  # checking and restoring only read Wasabi
+    env.unlocked_wasabi_writes.clear()
+    env.req["state"] = "approved"
+    env.run()
+    assert env.req["state"] == "done"
+    assert env.locked == ["pkg"]
+    assert env.unlocked_wasabi_writes == []
+    assert env.fixity_calls == [("pkg", True)]
+
+
+def test_package_busy_leaves_the_request_to_try_again():
+    env = Env()
+    env.to_awaiting_approval()
+    env.req["state"] = "approved"
+
+    @contextmanager
+    def busy(game_key):
+        raise worker.PackageBusy(f"another job is writing to package {game_key}; try again later")
+        yield
+
+    env.lock = busy
+    env.run()
+    assert env.req["state"] == "writing"
+    assert "try again" in env.req["message"]
+    assert env.wasabi.objects[BAG + "/data/disc.iso"].data == JUNK
