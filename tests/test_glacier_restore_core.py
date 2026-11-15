@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from glacier_copy_core import copy_package  # noqa: E402
 from glacier_fakes import FakeS3, sha256_of  # noqa: E402
 from glacier_restore_core import (  # noqa: E402
+    MAYBE_NEWER_NOTE,
     FileCheck,
     check_bag,
     restore_progress,
@@ -196,3 +197,31 @@ def test_copy_file_to_wasabi_in_parts_sends_no_storage_class_or_checksums():
     done = dst.completed[-1]
     assert done["ChecksumCRC64NVME"] is None and done["ChecksumType"] is None
     assert "ChecksumAlgorithm" not in done
+
+
+def test_damaged_manifest_in_a_newer_bag_restores_nothing():
+    wasabi, aws, recorded = setup()
+    make_bag(wasabi, BAG + "/", note=b"v2")
+    wasabi.put(BAG + "/tagmanifest-sha256.txt", JUNK)
+    files = check(wasabi, aws, recorded)
+    bad = {f.rel: f for f in files if f.verdict in ("missing", "corrupted")}
+    assert set(bad) == {"bag-info.txt", "tagmanifest-sha256.txt"}
+    assert not any(f.restorable for f in bad.values())
+    assert bad["bag-info.txt"].note == MAYBE_NEWER_NOTE
+    assert summary_message(files)[0] == "cannot_restore"
+
+
+def test_damaged_manifest_with_a_file_removed_after_the_copy_restores_nothing():
+    wasabi, aws, recorded = setup()
+    wasabi.delete_object(Bucket=BUCKET, Key=BAG + "/bag-info.txt")
+    wasabi.put(BAG + "/tagmanifest-sha256.txt", JUNK)
+    files = check(wasabi, aws, recorded)
+    assert not any(f.restorable for f in files)
+
+
+def test_damaged_tag_manifest_in_an_unchanged_bag_is_restorable():
+    wasabi, aws, recorded = setup()
+    wasabi.put(BAG + "/tagmanifest-sha256.txt", JUNK)
+    files = check(wasabi, aws, recorded)
+    assert [(f.rel, f.verdict, f.restorable) for f in files if f.verdict != "ok"] == [
+        ("tagmanifest-sha256.txt", "corrupted", True)]

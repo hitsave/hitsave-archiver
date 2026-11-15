@@ -230,3 +230,34 @@ def test_access_denied_stops_without_changing_state():
 def test_done_message():
     assert worker.done_message(1, 1) == "Restored 1 file."
     assert worker.done_message(1, 3) == "Restored 1 file. 2 were already correct on Wasabi, so they weren't written."
+
+
+def test_write_saved_after_a_crash_still_counts_as_written():
+    env = Env()
+    env.to_awaiting_approval()
+    env.req["state"] = "approved"
+    real_save = env.ledger.save
+    crashed = []
+
+    def crash_after_write(request_id, expect_state, **fields):
+        if not crashed and any(f.get("written") == "yes" for f in fields.get("files") or []):
+            crashed.append(True)
+            raise RuntimeError("container killed")
+        return real_save(request_id, expect_state, **fields)
+
+    env.ledger.save = crash_after_write
+    env.run()
+    assert env.wasabi.objects[BAG + "/data/disc.iso"].data == PAYLOAD
+    env.run()
+    assert env.req["state"] == "done" and env.req["message"] == "Restored 1 file."
+    assert [f["written"] for f in env.req["files"] if f["rel"] == "data/disc.iso"] == ["yes"]
+    assert any("/metadata/premis/recovery-" in k for k in env.wasabi.objects)
+
+
+def test_fixity_passed_needs_one_checked_package_without_skips():
+    ok = '{"packages_due": 1, "packages_checked": 1, "failed": 0, "skipped_changed": 0}'
+    assert worker.fixity_passed(0, "PASS pkg: ...\n" + ok)
+    assert not worker.fixity_passed(0, ok.replace('"skipped_changed": 0', '"skipped_changed": 1'))
+    assert not worker.fixity_passed(0, ok.replace('"packages_checked": 1', '"packages_checked": 0'))
+    assert not worker.fixity_passed(1, ok)
+    assert not worker.fixity_passed(0, "no json")

@@ -14,6 +14,12 @@ The trusted digests are Wasabi's own manifests when Wasabi's manifest-sha256.txt
 in tagmanifest-sha256.txt. Otherwise one of the two manifests is corrupted, and the copy's sha256
 values are trusted instead. When Wasabi's tag manifest is the one recorded at the last copy, both
 agree and the copy's values are used.
+
+When the copy's values are used only because a manifest is damaged, Wasabi may still be newer than
+the copy. Then a file that differs may be a newer version, not a corrupted one. Files are restorable
+in that case only when the bag looks unchanged since the copy: the same files, and every file other
+than the two manifests matching the copy. Otherwise nothing is restorable, so older bytes are never
+written over newer ones.
 """
 from __future__ import annotations
 
@@ -39,6 +45,8 @@ from glacier_copy_core import (
 RESTORE_DAYS = 7
 
 OLDER_COPY_NOTE = "The copy only has an older version of this file."
+MAYBE_NEWER_NOTE = ("The bag's manifests on Wasabi are damaged and the bag changed after its last copy, "
+                    "so this file may be newer than the copy. Check it by hand.")
 NOT_IN_COPY_NOTE = "The copy doesn't have this file."
 SKIPPED_NOTE = "already correct on Wasabi, not written"
 BAD = ("missing", "corrupted")
@@ -53,7 +61,7 @@ class FileCheck:
     verdict: str  # ok, newer, missing, corrupted
     restorable: bool
     note: str = ""
-    written: str = ""  # after approval: yes, skipped (already correct on Wasabi) or no (failed)
+    written: str = ""  # after approval: started, then yes, skipped (already correct on Wasabi) or no (failed)
 
     def to_json(self) -> dict:
         return asdict(self)
@@ -130,11 +138,14 @@ def check_bag(wasabi_s3, wasabi_bucket: str, bag_prefix: str, aws_s3, aws_bucket
     copy_digests = {rel: t.sha256 for rel, t in copy.items() if t.sha256}
 
     tag = _get(wasabi_s3, wasabi_bucket, w_root + TAGMANIFEST)
+    fallback = False
     if tag is not None and hashlib.sha256(tag).hexdigest() == recorded_tagmanifest_sha256:
         trusted = copy_digests
     else:
         manifest = _get(wasabi_s3, wasabi_bucket, w_root + MANIFEST)
-        trusted = _wasabi_digests(tag, manifest) or copy_digests
+        wasabi_digests = _wasabi_digests(tag, manifest)
+        trusted = wasabi_digests or copy_digests
+        fallback = wasabi_digests is None
 
     files: list[FileCheck] = []
     for rel in sorted(trusted):
@@ -153,7 +164,19 @@ def check_bag(wasabi_s3, wasabi_bucket: str, bag_prefix: str, aws_s3, aws_bucket
         if verdict in BAD and not restorable:
             note = OLDER_COPY_NOTE if in_copy else NOT_IN_COPY_NOTE
         files.append(FileCheck(c_root, rel, size, copy_sha, verdict, restorable, note))
+    if fallback and not _unchanged_since_copy(files, on_wasabi, copy):
+        for f in files:
+            if f.verdict in BAD:
+                f.restorable, f.note = False, MAYBE_NEWER_NOTE
     return files
+
+
+def _unchanged_since_copy(files: list[FileCheck], on_wasabi: dict[str, int], copy: dict) -> bool:
+    """True when Wasabi has the copy's files and only the manifests differ from it."""
+    manifests = {MANIFEST, TAGMANIFEST}
+    if {r for r in on_wasabi if r not in manifests} != {r for r in copy if r not in manifests}:
+        return False
+    return all(f.verdict == "ok" for f in files if f.rel not in manifests)
 
 
 def _files(n: int) -> str:

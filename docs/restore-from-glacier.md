@@ -35,7 +35,8 @@ problem.
 
    The job trusts the bag's manifests on Wasabi when `manifest-sha256.txt` matches its line in
    `tagmanifest-sha256.txt`. Otherwise it checks every file against the digests stored with the
-   copy.
+   copy. If a manifest is damaged and the bag also changed after its last copy, a file that
+   differs may be newer than the copy, so the job restores nothing and explains why.
 
    - When no file is missing or corrupted, the request ends as **Not needed**. Nothing is
      requested from AWS, so it costs nothing.

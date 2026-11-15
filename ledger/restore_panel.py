@@ -32,7 +32,7 @@ STATE_LABELS = {
     "expired": "Expired",
 }
 VERDICT_LABELS = {"ok": "fine", "newer": "newer on Wasabi", "missing": "missing", "corrupted": "corrupted"}
-WRITTEN_LABELS = {"yes": "written", "skipped": "skipped", "no": "failed", "": "—"}
+WRITTEN_LABELS = {"started": "writing", "yes": "written", "skipped": "skipped", "no": "failed", "": "—"}
 # Restore price per GB, plus the download price, paid twice: once to check the files, once to write them.
 TIER_USD_PER_GB = {"Bulk": 0.0025, "Standard": 0.02}
 TIER_HOURS = {"Bulk": 48, "Standard": 12}

@@ -148,7 +148,16 @@ class Step:
         for f in files:
             if not f.restorable or f.written in ("yes", "skipped"):
                 continue
+            # Mark the file first: if the job dies after the upload but before the next save, the
+            # next run finds the file correct on Wasabi and must still count it as written.
+            started = f.written == "started"
+            if not started:
+                f.written = "started"
+                if not self.save("writing", files=files):
+                    return
             f.written, note = write_back(self.aws_s3, self.aws_bucket, self.wasabi_s3, self.wasabi_bucket, f)
+            if started and f.written == "skipped":
+                f.written, note = "yes", ""
             if note:
                 f.note = note
             if not self.save("writing", files=files):
@@ -260,11 +269,31 @@ class Ledger:
         self.conn.commit()
 
 
+def fixity_passed(returncode: int, stdout: str) -> bool:
+    """True when wasabi-fixity-check.py checked exactly one package and it passed.
+
+    The script exits 0 for a package it skipped (the bag changed during the check) and when no
+    package matched, so the exit code alone isn't enough.
+    """
+    if returncode != 0:
+        return False
+    lines = [ln for ln in stdout.strip().splitlines() if ln.startswith("{")]
+    try:
+        summary = json.loads(lines[-1]) if lines else None
+    except ValueError:
+        return False
+    return bool(summary) and summary.get("packages_checked") == 1 and not summary.get("failed") \
+        and not summary.get("skipped_changed")
+
+
 def fixity_check(game_key: str) -> bool:
     """Run the Wasabi fixity check for one package; it records its own fixity_run row."""
     script = Path(__file__).resolve().parent / "wasabi-fixity-check.py"
-    proc = subprocess.run([sys.executable, str(script), "--game-key", game_key], check=False)
-    return proc.returncode == 0
+    proc = subprocess.run([sys.executable, str(script), "--game-key", game_key], check=False,
+                          capture_output=True, text=True)
+    print(proc.stdout, end="", flush=True)
+    print(proc.stderr, end="", file=sys.stderr, flush=True)
+    return fixity_passed(proc.returncode, proc.stdout)
 
 
 def main() -> int:

@@ -15,7 +15,7 @@
 --   reason              why the admin asked
 --   approved_by/at      the admin who allowed the write to Wasabi
 --   files               one entry per file: bag, rel, size, sha256 (the copy's), verdict
---                       (ok, newer, missing, corrupted), restorable, written (yes, skipped, no), note
+--                       (ok, newer, missing, corrupted), restorable, written (started, yes, skipped, no), note
 --   message             what the job last said about the request
 --   restore_expires_at  when the restored files stop being readable in AWS
 --   finished_at         when the request reached a finished state
