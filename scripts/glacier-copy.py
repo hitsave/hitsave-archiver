@@ -10,7 +10,8 @@ glacier_copy_core.py). On success the job upserts package_copy and adds a fixity
 detail "glacier-copy: ..."; a damaged file adds a "fail" row and no copy is recorded. When a
 bag's tag manifest changes while it is copied, nothing is recorded and the package stays due.
 
-Report-only unless --execute. Access errors (wrong or expired keys) stop the whole run with
+Report-only unless --execute. A report lists the packages a copy run with the same
+--max-packages and --max-gb would copy, and gb_read is their size from the ledger. Access errors (wrong or expired keys) stop the whole run with
 exit code 2 and record nothing. Exit 1 when any package failed.
 
 Usage (ingest-worker; scripts mounted so the image need not contain this file):
@@ -92,6 +93,7 @@ def run(argv: list[str], *, ledger, src_s3, dst_s3, dst_bucket: str, bucket_for)
             if not args.execute:
                 results.append({"game_key": row["game_key"], "outcome": "would-copy", "problems": []})
                 print(f"DUE  {row['game_key']}: {size / 1e9:.2f} GB in s3://{bucket}/{prefixes[0]}/", flush=True)
+                spent += size  # the ledger size stands in for the bytes a copy would read
                 continue
             results.append(copy_one(row, bucket, prefixes, before, ledger, src_s3, dst_s3, dst_bucket,
                                     workers=args.workers))
