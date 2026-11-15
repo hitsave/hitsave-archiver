@@ -366,6 +366,30 @@ After the archive preserves a package, it keeps checking it:
 - **Every night** it deletes working copies on its own servers, but only for packages whose Wasabi
   copy it has checked. Wasabi is the copy that lasts.
 
+## If a preserved file is damaged or lost
+
+Every package on Wasabi has a second copy in Amazon S3 Glacier Deep Archive, at AWS. The
+archive's scripts can't change or delete that copy, and it keeps the earlier version of a changed
+or removed file for a year. Your package's ledger page shows **Second copy** with the date it was
+copied, or `none yet`.
+
+Tell an admin straight away if:
+
+- a Wasabi check fails, which shows as a failed job on the ledger's **Windmill runs** page;
+- a file is missing from a package, or a catalog page can't show a file it showed before;
+- you changed or removed something on Wasabi by mistake.
+
+Give the admin the package's name from its ledger page and the files you know are affected.
+Don't upload, rename or delete anything on Wasabi to fix it yourself, because that can replace
+the version the admin needs.
+
+The admin restores the package from the second copy and puts it back on Wasabi. Deep Archive keeps
+files offline, so this takes 2 to 3 days, or about a day when it's urgent. The admin's steps are in
+[restore-from-glacier.md](restore-from-glacier.md).
+
+A file that was already damaged when the archive received it is the same in the second copy, so a
+restore doesn't fix it. See [Damaged files](damaged-files.md) for how an intact copy replaces it.
+
 ## Addendum: the catalog record kept in each package
 
 Each package keeps its own copy of its catalog record, so the package still says what it is if the
