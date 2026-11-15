@@ -9,7 +9,7 @@ _SCRIPTS = Path("/app/scripts")
 if _SCRIPTS.is_dir():
     sys.path.insert(0, str(_SCRIPTS))
 
-from ledger_health_report import ATTENTION_SQL, ledger_attention, ledger_summary  # noqa: E402
+from ledger_health_report import ledger_attention, ledger_summary  # noqa: E402
 
 ConnectFn = Callable[[], Any]
 

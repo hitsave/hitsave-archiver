@@ -57,7 +57,7 @@ Step 4 is stricter than today: a lone **`.exe`** (or other disallowed type) at r
 Use archive base name when restaging (rule 3):
 
 - Strip `.zip`; normalize display title via existing `normalize_display_title`.
-- **Slug / game_key:** reuse `slug_game_key(archive_base)` or manifest `game_key` when set.
+- **game_key:** the manifest's `game_key` when set. Otherwise ingest makes the package id from the title, as for every package (`make_package_id()` in `package_identity.py`).
 - Reject archive names that are too short, generic, or placeholder, e.g. `materials`, `files`, `download`, `bob` (configurable blocklist in `submissions.yaml`).
 - Optional future: fuzzy match archive base against Moby / internal catalog before ingest.
 
@@ -103,7 +103,7 @@ layout:
 | Behavior | Today |
 |----------|--------|
 | Single top-level folder | `resolve_source_folder()` |
-| Zip stem → game_key | `slug_game_key(zip_path.stem)` if no manifest |
+| game_key | Manifest `game_key`, otherwise the package id from the title (`make_package_id()`) |
 | Loose files at root | Used as `source_game_folder` if allowlist passes |
 | `.exe` at root | **Reject** (allowlist), zip → `failed/` |
 

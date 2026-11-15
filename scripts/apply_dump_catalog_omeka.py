@@ -462,8 +462,8 @@ def main() -> None:
     if len(sys.argv) < 2:
         raise SystemExit(
             "Usage:\n"
-            "  apply-dump-catalog-omeka.py <game.yaml> [handoff.yaml] [--item-id ID]\n"
-            "  apply-dump-catalog-omeka.py --manifest <handoff.yaml> [--item-id ID]"
+            "  apply_dump_catalog_omeka.py <game.yaml> [handoff.yaml] [--item-id ID]\n"
+            "  apply_dump_catalog_omeka.py --manifest <handoff.yaml> [--item-id ID]"
         )
 
     argv = sys.argv[1:]
@@ -471,7 +471,7 @@ def main() -> None:
 
     if argv and argv[0] in ("--manifest", "--handoff"):
         if len(argv) != 2:
-            raise SystemExit("Usage: apply-dump-catalog-omeka.py --manifest <handoff.yaml> [--item-id ID]")
+            raise SystemExit("Usage: apply_dump_catalog_omeka.py --manifest <handoff.yaml> [--item-id ID]")
         manifest = load_yaml(Path(argv[1]))
         result = apply_handoff_dump_catalog(manifest, patch_item_id=patch_item_id)
         from yaml_config import dumps_json

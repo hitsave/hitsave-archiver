@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import html
-import json
 import re
 import time
 from dataclasses import dataclass
@@ -637,17 +636,6 @@ class MobyClient:
             publishers += [n for n in pubs if n not in publishers]
             developers += [n for n in devs if n not in developers]
         return developers, publishers, platform_ids
-
-    def companies(self, game_id: int) -> tuple[list[str], list[str]]:
-        """(developers, publishers) for one game, picked the same way as at ingest. Raises on API errors."""
-        detail = self._get(f"games/{game_id}", {"format": "normal"})
-        game = detail if isinstance(detail, dict) and detail.get("title") else detail.get("game") or detail
-        platforms = game.get("platforms") or []
-        dates = sorted(
-            str(plat[key]) for plat in platforms for key in ("first_release_date", "release_date") if plat.get(key)
-        )
-        developers, publishers, _ = self._companies_for_platforms(game_id, platforms, dates[0] if dates else None)
-        return developers, publishers
 
     def resolve_by_id(
         self,

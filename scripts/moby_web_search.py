@@ -47,17 +47,3 @@ def duckduckgo_moby_game_candidates(
     return out
 
 
-def duckduckgo_moby_game_id(
-    search_title: str,
-    moby_cfg: dict,
-    *,
-    max_results: int = 10,
-) -> tuple[int | None, str | None]:
-    """First DDG Moby hit only (legacy); prefer ``duckduckgo_moby_game_candidates`` + title check."""
-    candidates = duckduckgo_moby_game_candidates(
-        search_title, moby_cfg, max_results=max_results
-    )
-    if not candidates:
-        return None, None
-    game_id, url = candidates[0]
-    return game_id, url

@@ -35,13 +35,6 @@ class FileHashes:
             return None
         return f"{hashlib.md5(b''.join(self.part_md5s)).hexdigest()}-{len(self.part_md5s)}"
 
-    def expected_etag(self, *, multipart_threshold: int | None = None) -> str:
-        """ETag boto3's transfer manager produces for this file with our TransferConfig."""
-        threshold = self.part_size if multipart_threshold is None else multipart_threshold
-        if self.size < threshold:
-            return self.md5
-        return self.multipart_etag() or self.md5
-
 
 def hash_file(path: Path | str, *, part_size: int = DEFAULT_PART_SIZE) -> FileHashes:
     size = Path(path).stat().st_size

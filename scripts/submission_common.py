@@ -6,7 +6,6 @@ import os
 import re
 import zipfile
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 
 try:
@@ -55,15 +54,6 @@ class SubmissionSecurity:
     reject_nested_archives: bool
     nested_archive_extensions: frozenset[str]
     allowed_extensions: frozenset[str] | None
-
-
-def slug_game_key(base: str, *, prefix: str = "submission") -> str:
-    slug = re.sub(r"[^a-zA-Z0-9]+", "-", base.strip()).strip("-").lower()
-    if not slug:
-        slug = "material"
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
-    key = f"{prefix}-{stamp}-{slug}"
-    return key[:120]
 
 
 def limits_from_dict(lim: dict) -> SubmissionLimits:
