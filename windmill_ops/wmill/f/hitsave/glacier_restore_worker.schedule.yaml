@@ -1,7 +1,7 @@
 args: {}
 cron_version: v2
 email: admin@windmill.dev
-enabled: false
+enabled: true
 is_flow: false
 no_flow_overlap: true
 schedule: 0 */15 * * * *
