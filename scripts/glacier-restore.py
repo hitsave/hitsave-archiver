@@ -27,8 +27,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from botocore.exceptions import ClientError  # noqa: E402
 
 from glacier_copy_core import LOCATION, FatalError, is_fatal  # noqa: E402
+from glacier_restore_core import RESTORE_DAYS, is_ready, request  # noqa: E402,F401
 
-RESTORE_DAYS = 7
 CHUNK = 8 * 2**20
 
 
@@ -56,31 +56,11 @@ def list_files(dst_s3, bucket: str, prefix: str, only: list[str] | None) -> list
     return sorted(r for r in rels if not only or r in only)
 
 
-def is_ready(head: dict) -> bool:
-    if head.get("StorageClass") not in ("DEEP_ARCHIVE", "GLACIER"):
-        return True
-    return 'ongoing-request="false"' in str(head.get("Restore") or "")
-
-
 def safe_target(root: Path, rel: str) -> Path | None:
     parts = PurePosixPath(rel).parts
     if not parts or rel.startswith("/") or any(p in ("..", "") for p in parts):
         return None
     return root.joinpath(*parts)
-
-
-def request(dst_s3, bucket, prefix, rels, tier) -> dict:
-    requested = already = 0
-    for rel in rels:
-        try:
-            dst_s3.restore_object(Bucket=bucket, Key=prefix + rel,
-                                  RestoreRequest={"Days": RESTORE_DAYS, "GlacierJobParameters": {"Tier": tier}})
-            requested += 1
-        except ClientError as e:
-            if e.response.get("Error", {}).get("Code") != "RestoreAlreadyInProgress":
-                raise
-            already += 1
-    return {"requested": requested, "already_requested": already, "tier": tier}
 
 
 def status(dst_s3, bucket, prefix, rels) -> dict:

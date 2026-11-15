@@ -373,19 +373,22 @@ archive's scripts can't change or delete that copy, and it keeps the earlier ver
 or removed file for a year. Your package's ledger page shows **Second copy** with the date it was
 copied, or `none yet`.
 
-Tell an admin straight away if:
+Report a problem straight away if:
 
 - a Wasabi check fails, which shows as a failed job on the ledger's **Windmill runs** page;
 - a file is missing from a package, or a catalog page can't show a file it showed before;
 - you changed or removed something on Wasabi by mistake.
 
-Give the admin the package's name from its ledger page and the files you know are affected.
-Don't upload, rename or delete anything on Wasabi to fix it yourself, because that can replace
-the version the admin needs.
+To report it, open the package's ledger page, describe the problem under **Problems and
+restores**, and click **Report a problem**. Say which files you know are affected and what you
+saw. The report shows on the package's page and on the ledger's **Restores** page, where the
+admins see it. Don't upload, rename or delete anything on Wasabi to fix it yourself, because that
+can replace the version the admin needs.
 
-The admin restores the package from the second copy and puts it back on Wasabi. Deep Archive keeps
-files offline, so this takes 2 to 3 days, or about a day when it's urgent. The admin's steps are in
-[restore-from-glacier.md](restore-from-glacier.md).
+The admin starts a restore from the same page. The archive first checks every file on Wasabi and
+restores only the ones that are missing or corrupted. Deep Archive keeps files offline, so a
+repair takes 2 to 3 days, or about a day when it's urgent. You can follow its progress on the
+package's page. The admin's steps are in [restore-from-glacier.md](restore-from-glacier.md).
 
 A file that was already damaged when the archive received it is the same in the second copy, so a
 restore doesn't fix it. See [Damaged files](damaged-files.md) for how an intact copy replaces it.

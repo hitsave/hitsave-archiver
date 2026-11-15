@@ -40,7 +40,9 @@ from ledger_health_report import (  # noqa: E402
     ledger_search_count,
 )
 from filters import filter_banner, flag_chip, parse_filters, status_chip  # noqa: E402
-from formatting import error_cell, fmt_ts, moby_badge, problem_text, status_badge
+from restore_panel import Store as RestoreStore  # noqa: E402
+from restore_panel import handle_restore_post, render_restore_panel, render_restores_page  # noqa: E402
+from formatting import error_cell, fmt_ts, item_href, moby_badge, problem_text, status_badge
 from notice import render_notice, safe_return_path, visibility_message, with_notice
 from disc_contents_review import pending as disc_contents_pending
 from disc_contents_review import recent as disc_contents_recent
@@ -89,6 +91,8 @@ _LOGS = CONFIG.get("logs") or {}
 GENERATED_DIR = Path((_LOGS.get("generated_dir") or "/archiver/.generated").strip())
 # Only behind oauth2-proxy (no published port): trust its X-Forwarded-Email / X-Forwarded-User.
 TRUST_FORWARDED_USER = bool(_server.get("trust_forwarded_user"))
+# Emails that may start, approve and cancel Glacier restores. Empty: nobody can.
+RESTORE_ADMINS = {str(e).strip().lower() for e in ((CONFIG.get("restore") or {}).get("admins") or []) if str(e).strip()}
 
 
 def forwarded_user(headers) -> str:
@@ -639,12 +643,24 @@ class Handler(BaseHTTPRequestHandler):
             item_id = row.get("omeka_item_id")
             is_public = fetch_item_is_public(int(item_id)) if item_id else None
             second_copy = fetch_second_copy(connect, int(row["id"])) if row.get("status") == "complete" else None
+            restore_html = ""
+            if row.get("status") == "complete":
+                user = forwarded_user(self.headers)
+                restore_html = render_restore_panel(
+                    RestoreStore(connect).panel_state(int(row["id"])), game_key=game_key,
+                    is_admin=user.lower() in RESTORE_ADMINS, has_copy=second_copy is not None,
+                    total_bytes=int(row.get("total_bytes") or 0),
+                )
             self._send_html(
                 render_item_page(
                     row, admin_base=ADMIN, site_base=SITE, is_public=is_public, status_config=CONFIG,
-                    second_copy=second_copy,
+                    second_copy=second_copy, restore_panel=restore_html,
                 )
             )
+            return
+        if path == "/restores":
+            requests, reports = RestoreStore(connect).overview()
+            self._send_html(render_restores_page(requests=requests, reports=reports, status_config=CONFIG))
             return
         if path == "/ops":
             self._send_html(render_ops())
@@ -770,6 +786,17 @@ class Handler(BaseHTTPRequestHandler):
             params = {k: v for k, v in (("moby", moby), ("after", str(nxt) if nxt else "")) if v}
             self.send_response(303)
             self.send_header("Location", with_notice("/review?" + urlencode(params), kind, msg))
+            self.end_headers()
+            return
+        if path.startswith("/restore/"):
+            game_key, kind, msg = handle_restore_post(
+                path, form, user, store=RestoreStore(connect), admins=RESTORE_ADMINS,
+            )
+            audit("restore-" + path.removeprefix("/restore/"), user, game_key=game_key, outcome=kind,
+                  request_id=(form.get("request_id") or [""])[0], report_id=(form.get("report_id") or [""])[0])
+            back = item_href(game_key) if game_key else "/restores"
+            self.send_response(303)
+            self.send_header("Location", with_notice(back, kind, msg))
             self.end_headers()
             return
         if path == "/visibility":

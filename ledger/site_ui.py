@@ -61,6 +61,7 @@ def render_nav(*, active: str, status_config: dict) -> str:
         ("review", "/review", "Review"),
         ("disc", "/disc-contents", "Disc contents"),
         ("health", "/health", "Health"),
+        ("restores", "/restores", "Restores"),
         ("correct", "/correct", "Catalog correction"),
         ("quarantine", "/quarantine", "Quarantine"),
         ("ops", "/ops", "Windmill runs"),

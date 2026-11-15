@@ -4,9 +4,64 @@ Every complete package on Wasabi has a second copy in S3 Glacier Deep Archive, i
 `hitsave-backup-glacier` ([glacier-copy.md](glacier-copy.md)). This page explains how to get
 files back from that copy, from one damaged file up to the loss of all of Wasabi.
 
-Archivists don't run these steps. They report the problem to an admin; see
+Archivists don't run these steps. They report the problem with **Report a problem** on the
+package's ledger page; see
 [If a preserved file is damaged or lost](archivist-guide.md#if-a-preserved-file-is-damaged-or-lost)
 in the archivist guide. The steps below are for admins.
+
+To repair a package, use the ledger first ([Restore from the ledger](#restore-from-the-ledger)).
+The command-line steps further down are for when the ledger is down, when a request ends as
+`cannot_restore`, and for the loss of all of Wasabi.
+
+## Restore from the ledger
+
+Admins are the emails listed under `restore.admins` in the private `ledger.yaml`. Only they see
+the restore form and the **Approve** and **Cancel** buttons. Anyone signed in can report a
+problem.
+
+1. Open the package's ledger page. Under **Problems and restores**, choose the speed (Bulk or
+   Standard), say why, and click **Restore from Glacier**. The form shows the cost for the whole
+   package as an upper limit. If the last Wasabi check passed, the form warns that the files may
+   not need a restore.
+2. Within 15 minutes, the Windmill job `glacier_restore_worker` checks every file of the package
+   on Wasabi and gives each one a label:
+
+   | Label | Meaning | Restored? |
+   |-------|---------|-----------|
+   | fine | Matches the bag's manifest, and the copy has the same version | No |
+   | newer on Wasabi | Matches the bag's manifest, but the copy has an older version. Wasabi changed after the last copy, which is normal | No |
+   | missing | The bag lists it, but it isn't on Wasabi | Yes, when the copy has the version the manifest lists |
+   | corrupted | Doesn't match the bag's manifest | Yes, when the copy has the version the manifest lists |
+
+   The job trusts the bag's manifests on Wasabi when `manifest-sha256.txt` matches its line in
+   `tagmanifest-sha256.txt`. Otherwise it checks every file against the digests stored with the
+   copy. If a manifest is damaged and the bag also changed after its last copy, a file that
+   differs may be newer than the copy, so the job restores nothing and explains why.
+
+   - When no file is missing or corrupted, the request ends as **Not needed**. Nothing is
+     requested from AWS, so it costs nothing.
+   - When the copy only has older versions of the bad files, it ends as **Can't restore from the
+     copy**. Use the command-line steps and [Damaged files](damaged-files.md) to decide what to do.
+   - Otherwise the job asks AWS to restore only the files it can fix.
+3. When AWS has restored the files (up to 48 hours for Bulk, 12 for Standard), the job reads each
+   one and checks its SHA-256. A mismatch ends the request as **Failed**.
+4. The request then waits for approval. The page lists each file, its label and what will be
+   written. Click **Approve** to let the job write the files to Wasabi, or **Cancel**. Approve
+   within 7 days, because the restored files stop being readable after that, and the request ends
+   as **Expired**.
+5. After approval, the job writes each file to Wasabi. A file completes only when its bytes match
+   the copy's SHA-256, so a bad read never replaces a Wasabi file. If someone fixed a file in the
+   meantime, the job skips it.
+6. The job runs the Wasabi fixity check for the package. When it passes, the job adds a PREMIS
+   `recovery` event to the bag, closes the linked report, and the request ends as **Done**. The
+   new event changes the bag, so the next nightly `glacier_copy` run copies the package again.
+
+The **Restores** page in the ledger lists open reports and requests. Each action is logged in the
+ledger container's log as `action=restore-...`.
+
+Setting it up: apply `schema/014_restore.sql` to the ledger database before deploying the ledger
+version that shows the panel, add the admins to `restore.admins`, and turn on the
+`glacier_restore_worker` schedule.
 
 ## What the copy holds
 
@@ -63,10 +118,10 @@ without a restore. With the project owner's AWS login:
 aws s3 ls s3://hitsave-backup-glacier/hitsave-dumps/dumps/ --profile hitsave
 ```
 
-## Repair a damaged or missing file on Wasabi
+## Repair a damaged or missing file on Wasabi from the command line
 
-Use this when the nightly Wasabi check fails for a package, or a file on Wasabi is missing or
-doesn't match its manifest.
+Use this when the ledger is down, or a request ended as `cannot_restore` and you've decided which
+version to put back.
 
 Restore the whole package, even when only one file is bad. A package is a few GB at most, the
 cost is a few cents, and the upload step below checks the bag as a whole.

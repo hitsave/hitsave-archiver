@@ -1,0 +1,18 @@
+summary: Move Glacier restore requests forward
+description: >
+  Runs `scripts/glacier-restore-worker.py`: for each open restore request from
+
+  the ledger, checks every file on Wasabi, asks AWS to restore only the missing
+
+  and corrupted files, checks the restored files, and writes them back to Wasabi
+
+  only after an admin approves in the ledger. Then runs the Wasabi fixity check
+
+  and adds a PREMIS recovery event.
+lock: ''
+kind: script
+schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  properties: {}
+  required: []

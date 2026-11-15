@@ -180,6 +180,7 @@ def render_item_page(
     is_public: bool | None,
     status_config: dict,
     second_copy: dict[str, Any] | None = None,
+    restore_panel: str = "",
 ) -> bytes:
     game_key = str(row.get("game_key") or "")
     copy_line = (f'<p class="muted">{html.escape(second_copy_line(second_copy))}</p>'
@@ -191,6 +192,7 @@ def render_item_page(
 {_catalog_panel(row, admin_base=admin_base, site_base=site_base, is_public=is_public)}
 {_problems_panel(row)}
 {render_damaged_panel(row, is_public=is_public)}
+{restore_panel}
 {_fields_table(row)}
 <p><a href="/">← Back to the ledger</a></p>"""
     return render_page_shell(title=title, active="ledger", inner=inner, status_config=status_config)
