@@ -45,6 +45,18 @@ def is_fatal(exc: BaseException) -> bool:
 
 
 @dataclass(frozen=True)
+class Target:
+    """Where copy_file writes: the storage class to set, and whether to send CRC64NVME checksums."""
+    storage_class: str | None
+    crc64nvme: bool
+
+
+DEEP_ARCHIVE = Target(STORAGE_CLASS, True)
+# Restores write back to Wasabi in its default storage class, without the newer checksum headers.
+WASABI = Target(None, False)
+
+
+@dataclass(frozen=True)
 class TargetObject:
     size: int
     sha256: str | None
@@ -121,8 +133,9 @@ def _hash_object(src_s3, bucket: str, key: str, part_size: int) -> str:
 
 def copy_file(src_s3, src_bucket: str, key: str, dst_s3, dst_bucket: str, dst_key: str,
               expected_sha256: str | None, part_size: int = DEFAULT_PART_SIZE, label: str | None = None,
-              size: int | None = None, workers: int = DEFAULT_WORKERS) -> CopyResult:
-    """Copy one file from Wasabi into Deep Archive.
+              size: int | None = None, workers: int = DEFAULT_WORKERS,
+              target: Target = DEEP_ARCHIVE) -> CopyResult:
+    """Copy one file from Wasabi into Deep Archive (or, with target=WASABI, from the copy back to Wasabi).
 
     Returns ok=False, with nothing stored, when the SHA-256 differs from expected_sha256.
     Any other error aborts a started multipart upload and propagates.
@@ -148,16 +161,19 @@ def copy_file(src_s3, src_bucket: str, key: str, dst_s3, dst_bucket: str, dst_ke
             raise RuntimeError(f"{label} changed during the copy: expected {size} bytes, read {len(data)}")
         if want and digest != want:
             return CopyResult(False, digest, crc.b64digest(), size, f"SHA-256 of {label} differs from the bag manifest")
-        dst_s3.put_object(Bucket=dst_bucket, Key=dst_key, Body=data, StorageClass=STORAGE_CLASS,
-                          Metadata={"sha256": digest}, ChecksumAlgorithm="CRC64NVME",
-                          ChecksumCRC64NVME=crc.b64digest())
-        return _check_stored(dst_s3, dst_bucket, dst_key, CopyResult(True, digest, crc.b64digest(), size))
+        extra = _target_args(target)
+        if target.crc64nvme:
+            extra.update(ChecksumAlgorithm="CRC64NVME", ChecksumCRC64NVME=crc.b64digest())
+        dst_s3.put_object(Bucket=dst_bucket, Key=dst_key, Body=data, Metadata={"sha256": digest}, **extra)
+        return _check_stored(dst_s3, dst_bucket, dst_key, CopyResult(True, digest, crc.b64digest(), size), target)
 
     if want is None:
         want = _hash_object(src_s3, src_bucket, key, part_size)
+    create_extra = _target_args(target)
+    if target.crc64nvme:
+        create_extra.update(ChecksumAlgorithm="CRC64NVME", ChecksumType="FULL_OBJECT")
     upload_id = dst_s3.create_multipart_upload(
-        Bucket=dst_bucket, Key=dst_key, StorageClass=STORAGE_CLASS, Metadata={"sha256": want},
-        ChecksumAlgorithm="CRC64NVME", ChecksumType="FULL_OBJECT",
+        Bucket=dst_bucket, Key=dst_key, Metadata={"sha256": want}, **create_extra,
     )["UploadId"]
     sha = hashlib.sha256()
     crc = CrtCrc64NvmeChecksum()
@@ -171,6 +187,10 @@ def copy_file(src_s3, src_bucket: str, key: str, dst_s3, dst_bucket: str, dst_ke
         if len(chunk) != length:
             raise RuntimeError(f"{label} changed during the copy: part {number} has {len(chunk)} bytes, "
                                f"expected {length}")
+        if not target.crc64nvme:
+            resp = dst_s3.upload_part(Bucket=dst_bucket, Key=dst_key, UploadId=upload_id, PartNumber=number,
+                                      Body=chunk)
+            return chunk, {"PartNumber": number, "ETag": resp["ETag"]}
         resp = dst_s3.upload_part(Bucket=dst_bucket, Key=dst_key, UploadId=upload_id, PartNumber=number,
                                   Body=chunk, ChecksumAlgorithm="CRC64NVME")
         return chunk, {"PartNumber": number, "ETag": resp["ETag"], "ChecksumCRC64NVME": resp["ChecksumCRC64NVME"]}
@@ -193,9 +213,11 @@ def copy_file(src_s3, src_bucket: str, key: str, dst_s3, dst_bucket: str, dst_ke
             dst_s3.abort_multipart_upload(Bucket=dst_bucket, Key=dst_key, UploadId=upload_id)
             return CopyResult(False, sha.hexdigest(), crc.b64digest(), size,
                               f"SHA-256 of {label} differs from the bag manifest")
+        complete_extra = ({"ChecksumCRC64NVME": crc.b64digest(), "ChecksumType": "FULL_OBJECT"}
+                          if target.crc64nvme else {})
         dst_s3.complete_multipart_upload(
             Bucket=dst_bucket, Key=dst_key, UploadId=upload_id, MultipartUpload={"Parts": parts},
-            ChecksumCRC64NVME=crc.b64digest(), ChecksumType="FULL_OBJECT",
+            **complete_extra,
         )
     except BaseException:
         pool.shutdown(wait=True, cancel_futures=True)
@@ -206,13 +228,23 @@ def copy_file(src_s3, src_bucket: str, key: str, dst_s3, dst_bucket: str, dst_ke
         raise
     finally:
         pool.shutdown(wait=True)
-    return _check_stored(dst_s3, dst_bucket, dst_key, CopyResult(True, want, crc.b64digest(), size))
+    return _check_stored(dst_s3, dst_bucket, dst_key, CopyResult(True, want, crc.b64digest(), size), target)
 
 
-def _check_stored(dst_s3, bucket: str, key: str, result: CopyResult) -> CopyResult:
-    """HEAD the new object: size, CRC64NVME and sha256 metadata must match what was sent."""
-    head = dst_s3.head_object(Bucket=bucket, Key=key, ChecksumMode="ENABLED")
-    if int(head["ContentLength"]) != result.bytes or head.get("ChecksumCRC64NVME") != result.crc64nvme:
+def _target_args(target: Target) -> dict:
+    return {"StorageClass": target.storage_class} if target.storage_class else {}
+
+
+def _check_stored(dst_s3, bucket: str, key: str, result: CopyResult, target: Target = DEEP_ARCHIVE) -> CopyResult:
+    """HEAD the new object: size, sha256 metadata and (when the target takes it) CRC64NVME must
+    match what was sent."""
+    if target.crc64nvme:
+        head = dst_s3.head_object(Bucket=bucket, Key=key, ChecksumMode="ENABLED")
+        crc_ok = head.get("ChecksumCRC64NVME") == result.crc64nvme
+    else:
+        head = dst_s3.head_object(Bucket=bucket, Key=key)
+        crc_ok = True
+    if int(head["ContentLength"]) != result.bytes or not crc_ok:
         raise RuntimeError(f"stored object differs from what was sent: s3://{bucket}/{key}")
     if (head.get("Metadata") or {}).get("sha256") != result.sha256:
         raise RuntimeError(f"stored object lacks its sha256 metadata: s3://{bucket}/{key}")
