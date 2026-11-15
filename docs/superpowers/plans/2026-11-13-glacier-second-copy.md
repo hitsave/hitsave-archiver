@@ -6,7 +6,7 @@
 
 **Architecture:** A nightly Windmill job streams each package from Wasabi to one S3 bucket in us-east-2, file by file, with the same keys as on Wasabi. It checks each file's SHA-256 against the bag manifest while it streams, lets S3 check a full-file CRC64NVME on arrival, and records the result in a new ledger table. A monthly job compares what S3 holds with the bag manifests without restoring anything. A restore script gets files back for repairs and restore tests.
 
-**Tech Stack:** Python 3 and boto3 (with `awscrt`) in the ingest-worker image, PostgreSQL ledger, Windmill on saturn, CloudFormation for the AWS resources.
+**Tech Stack:** Python 3 and boto3 (with `awscrt`) in the ingest-worker image, PostgreSQL ledger, Windmill, CloudFormation for the AWS resources.
 
 **Spec:** The Glacier step of the storage plan at https://claude.ai/artifact/3vjx5zzBi87pg8T76e7Ly7 (2026-11-06), and step 1 of the Notion page "HitSave Preservation Levels". The move to IDrive e2 now comes later, so this plan copies from Wasabi.
 
@@ -51,7 +51,7 @@ Copying out of Wasabi is free while monthly downloads stay below the amount stor
    - The job stores the SHA-256 in the file's metadata (`x-amz-meta-sha256`). A HEAD request returns the metadata and the CRC64NVME for archived files without a restore, so the monthly check can compare them with the manifest.
 4. **Versioning and Object Lock in governance mode, with 365 days' retention.** No one can delete or overwrite a stored version for a year, even with the job's access key. A file that changes or disappears on Wasabi gets a new current version, or a delete marker, in S3, and the old version stays for a year. A lifecycle rule then expires old versions. The lock never blocks a new version, so changes to a bag are copied the same night. Deep Archive bills every version for at least 180 days anyway, so the second half-year costs only the storage of replaced files: fractions of a cent for tag-file edits, about $0.05 a month for a rebuilt 50 GB bag. Governance mode, unlike compliance mode, still lets the project owner remove a version that was uploaded by mistake.
 5. **The job's access key can add files but never destroy them.** The IAM user gets `s3:PutObject`, `s3:GetObject`, `s3:GetObjectAttributes`, `s3:ListBucket`, `s3:ListBucketVersions`, `s3:DeleteObject` (which only adds a delete marker in a versioned bucket), `s3:RestoreObject`, `s3:AbortMultipartUpload` and `s3:ListMultipartUploadParts`, on this bucket only. It doesn't get `s3:DeleteObjectVersion`, `s3:BypassGovernanceRetention` or any bucket-settings permission. The paid plan allows IAM users and access keys; the managed policies only block groups, login profiles and the `managed/` roles.
-6. **The job runs on saturn and streams through it.** Nothing is written to disk. A copy machine in AWS would avoid saturn's connection, but it adds a server to manage, and saturn has a 1 Gbit line, so 1.2 TB fits in a few nights.
+6. **The job runs in Windmill and streams the files.** Nothing is written to disk. A copy machine in AWS would avoid the home connection, but it adds a server to manage, and the 1 Gbit line fits 1.2 TB in a few nights.
 7. **The ledger tracks copies in a new `package_copy` table.** Checks of the copy go into the existing `fixity_run` table, with detail text starting with `glacier:`, the same way the Wasabi check uses `wasabi:`. The ledger's item page and Health page show the copy's state.
 8. **A copy is up to date when its recorded `tagmanifest-sha256.txt` digest equals the current one on Wasabi.** Every change to a bag rewrites its tag manifest, so this catches catalog snapshots, PREMIS events and rebuilt bags. If the tag manifest changes while the job copies a package, the job records nothing and tries again the next night, as the Wasabi check does since #170.
 9. **The source is a setting.** The job reads the source endpoint and buckets from `ingest.yaml`, so the later move to IDrive e2 doesn't change it.
@@ -62,7 +62,7 @@ Jonas decided these on 2026-11-14:
 
 - **Press kits in `hitsave-incoming`** aren't copied. The originals are on the on-site press-material share.
 - **Object Lock** keeps every version for 365 days in governance mode.
-- **Saturn's line** is 1 Gbit. The Wasabi check reads at about 17 MB/s per file, so a 300 GB batch takes about five hours.
+- **The connection** is 1 Gbit. The Wasabi check reads at about 17 MB/s per file, so a 300 GB batch takes about five hours.
 - **The bucket** is `hitsave-backup-glacier`. Bucket names are global, so we'll find out whether it's free when we create the stack.
 
 Still open: Jonas sets a spend limit in AWS Settings, for example $25 per month. Only the project owner can set one, and it stops a runaway job from spending the credits.

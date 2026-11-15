@@ -6,7 +6,7 @@ files back from that copy, from one damaged file up to the loss of all of Wasabi
 
 Archivists don't run these steps. They report the problem to an admin; see
 [If a preserved file is damaged or lost](archivist-guide.md#if-a-preserved-file-is-damaged-or-lost)
-in the archivist guide. The steps below are for admins with access to saturn.
+in the archivist guide. The steps below are for admins.
 
 ## What the copy holds
 
@@ -42,21 +42,22 @@ The TechSoup credits pay for it.
 
 ## Before you start
 
-Run every command on saturn, in the `hitsave-archiver` checkout:
+Use any machine with Docker, a `hitsave-archiver` checkout and the private
+`hitsave-archiver-config` checkout beside it. Run every command in the `hitsave-archiver` checkout:
 
 ```bash
-cd ~/hitsave-e2e/hitsave-archiver
+cd hitsave-archiver
 source ../hitsave-archiver-config/host.env
 R="docker compose run --rm -T --no-deps -v $PWD/scripts:/app/scripts:ro --entrypoint python ingest-worker"
 ```
 
-`/output` in the container is `$HOST_OUTPUT` on saturn. Restore into a new folder under
+`/output` in the container is the `$HOST_OUTPUT` folder from `host.env`. Restore into a new folder under
 `/output/restore/`. The restore script never overwrites a file and never writes to Wasabi.
 
 The script needs the package's game key, which is on its ledger page. If the ledger is down, use
 `--prefix` with the copy's key prefix instead of `--game-key`, for example
 `--prefix hitsave-dumps/dumps/Redump/DVD-Video/Coverdiscs/F/<package>`. Listing the bucket works
-without a restore. With the project owner's AWS login on saturn:
+without a restore. With the project owner's AWS login:
 
 ```bash
 aws s3 ls s3://hitsave-backup-glacier/hitsave-dumps/dumps/ --profile hitsave
@@ -148,7 +149,7 @@ step.
 1. Decide where the new permanent copy goes: new Wasabi buckets or another S3 provider. Point the
    `wasabi:` section of `config/preservation/ingest.yaml` (endpoint and buckets) at it, and the
    credentials in `hitsave-archiver-config/secrets/wasabi-credentials.yaml`.
-2. Make sure saturn has room. Everything is about 1.2 TB. On 2026-11-14 `/tank` had 5.9 TB free.
+2. Make sure the machine you restore to has room. Everything is about 1.2 TB.
 3. Start the restore of each bucket. This sends one request per file, about 134,000 in all:
 
    ```bash
