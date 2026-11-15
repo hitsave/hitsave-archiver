@@ -76,15 +76,6 @@ def env():
     return src, dst, ledger, run
 
 
-def test_due_means_no_copy_or_a_different_tagmanifest():
-    rows = [
-        {"game_key": "never-copied", "copied_fingerprint": None, "fingerprint": "a"},
-        {"game_key": "up-to-date", "copied_fingerprint": "b", "fingerprint": "b"},
-        {"game_key": "changed-since-copy", "copied_fingerprint": "c", "fingerprint": "d"},
-    ]
-    assert job.due_game_keys(rows) == ["never-copied", "changed-since-copy"]
-
-
 def test_report_only_by_default_writes_nothing(env):
     src, dst, ledger, run = env
     out = run(["--max-packages", "5"])

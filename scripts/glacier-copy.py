@@ -45,10 +45,6 @@ from glacier_copy_core import (  # noqa: E402
 DETAIL_PREFIX = "glacier-copy:"
 
 
-def due_game_keys(rows: list[dict]) -> list[str]:
-    return [r["game_key"] for r in rows if r["copied_fingerprint"] != r["fingerprint"]]
-
-
 def parse_args(argv: list[str]) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--execute", action="store_true", help="Upload and record (default: report only)")

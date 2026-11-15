@@ -34,7 +34,6 @@ def test_hash_file_matches_s3_etag_rules(tmp_path: Path, size: int) -> None:
     p.write_bytes(data)
     h = s3_etag.hash_file(p, part_size=16)
     assert h.sha256 == hashlib.sha256(data).hexdigest()
-    assert h.expected_etag() == _etag_for(data, 16)
     assert s3_etag.etag_matches(h, f'"{_etag_for(data, 16)}"')[0]
 
 

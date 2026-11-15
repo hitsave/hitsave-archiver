@@ -115,8 +115,8 @@ Migration **`schema/009_backfill_ingest_kind_dump.sql`**: `game_dump` / `disc_du
 ## Omeka (catalog-only)
 
 - **`apply_dump_catalog_omeka.py`** — one CLI for metadata-only dump catalog items (unpacked BagIt on Wasabi, not Omeka file storage):
-  - Ledger: `apply-dump-catalog-omeka.py <game.yaml> [handoff.yaml] [--item-id ID]` — Redump RDF from SIP + SHA-1 lookup, Moby from ledger, staff **`bibo:uri`** = ledger `aip_wasabi_prefix`.
-  - Handoff YAML only: `apply-dump-catalog-omeka.py --manifest <handoff.yaml> [--item-id ID]` (via **`apply_handoff_dump_catalog()`**).
+  - Ledger: `apply_dump_catalog_omeka.py <game.yaml> [handoff.yaml] [--item-id ID]` — Redump RDF from SIP + SHA-1 lookup, Moby from ledger, staff **`bibo:uri`** = ledger `aip_wasabi_prefix`.
+  - Handoff YAML only: `apply_dump_catalog_omeka.py --manifest <handoff.yaml> [--item-id ID]` (via **`apply_handoff_dump_catalog()`**).
 - **`register-dip-omeka-api.py`** delegates to **`apply_dump_catalog()`** when **`ingest_kind: dump`**.
 - Redump and No-Intro sidecar parsers: the shared package **[`packages/hitsave-dump-sidecars`](../packages/hitsave-dump-sidecars/README.md)**, installed in the ingest-worker image and pinned by commit in hitsave-intake.
 

@@ -53,13 +53,6 @@ def uri_value_row(property_id: int, uri: str, *, is_public: bool) -> dict[str, A
     }
 
 
-def item_has_uri(item_body: dict, term: str, uri: str) -> bool:
-    for row in item_body.get(term) or []:
-        if str(row.get("@id") or "") == uri:
-            return True
-    return False
-
-
 def is_wasabi_s3_uri(uri: str) -> bool:
     return str(uri or "").strip().lower().startswith("s3://")
 

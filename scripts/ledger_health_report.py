@@ -148,17 +148,12 @@ def ledger_where(query: str, *, status: str = "", flag: str = "") -> tuple[str, 
     return (" AND ".join(parts) if parts else "TRUE"), binds
 
 
-LEDGER_COUNT_SQL = "SELECT COUNT(*)::int FROM game_ingest"
-
 ATTENTION_SELECT = f"""
 SELECT game_key, status, ingest_kind, moby_status, block_reason,
        omeka_item_id, moby_title, source_path, error_message, updated_at
 FROM game_ingest
 WHERE {FLAG_CONDITIONS["attention"][0]}
 """
-
-# Windmill / docs: full attention query (default sort).
-ATTENTION_SQL = ATTENTION_SELECT.strip() + "\nORDER BY updated_at DESC\nLIMIT %s"
 
 
 def normalize_ledger_sort(sort: str | None, *, default: str = "updated_at") -> str:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import sys
 from pathlib import Path
 
@@ -21,12 +20,10 @@ from package_identity import (  # noqa: E402
     parse_package_id,
     title_slug,
     title_slug_legacy_no_transliteration,
-    transliterate_for_slug,
 )
 from yaml_config import load_yaml  # noqa: E402
 
 _READY_CONTAINER = "/data/intake/ready"
-_MACRON_HINT = re.compile(r"[\u0100-\u024f]")  # Latin extended (macrons, etc.)
 
 
 def pg_connect(db_cfg: dict):
@@ -114,9 +111,6 @@ def main() -> None:
         folded = title_slug(title)
         entry["legacy_slug"] = legacy
         entry["folded_slug"] = folded
-        has_macron = bool(_MACRON_HINT.search(title)) or any(
-            ord(c) > 127 for c in transliterate_for_slug(title) if c.isalpha()
-        )
         if legacy != folded and (ledger_slug or slug_from_key) == legacy:
             entry["reason"] = "macron_stripped_in_legacy_slug"
             mangled.append(entry)

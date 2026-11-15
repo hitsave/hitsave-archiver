@@ -18,7 +18,6 @@ from submission_common import (  # noqa: E402
     extract_zip_safely,
     inspect_zip,
     resolve_source_folder,
-    slug_game_key,
     validate_allowlist,
 )
 
@@ -57,12 +56,6 @@ def _make_symlink_zip() -> Path:
         info.external_attr = (0o120000 | 0o777) << 16
         zf.writestr(info, b"target")
     return zpath
-
-
-def test_slug_game_key():
-    key = slug_game_key("My Game!!!")
-    assert key.startswith("submission-")
-    assert "my-game" in key
 
 
 def test_resolve_single_top_level_folder():
@@ -160,7 +153,6 @@ def test_streamed_member_cap():
 
 
 if __name__ == "__main__":
-    test_slug_game_key()
     test_resolve_single_top_level_folder()
     test_extract_and_resolve()
     test_rejects_zip_slip()

@@ -59,17 +59,6 @@ class VirusDetectedError(RuntimeError):
         self.signature = signature
 
 
-CLAMD_CONF_CANDIDATES = (
-    Path("/config/clamav/clamd.conf"),
-    Path(__file__).resolve().parents[1] / "config" / "clamav" / "clamd.conf",
-)
-_SIZE_UNITS = {"": 1, "K": 1024, "M": 1024**2, "G": 1024**3}
-
-
-def _parse_clamd_size(value: str) -> int:
-    value = value.strip().upper()
-    unit = value[-1] if value and value[-1] in "KMG" else ""
-    return int(value[: len(value) - len(unit)] or 0) * _SIZE_UNITS[unit]
 
 
 def scan_sip_tree(clamd, root: Path, **scan_kwargs) -> VirusScanReport:
