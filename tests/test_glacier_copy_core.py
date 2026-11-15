@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import sys
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -163,3 +165,77 @@ def test_first_copy_of_a_bag_with_a_missing_file_fails():
     src.delete_object(Bucket="b", Key="dumps/a/data/disc.iso")
     r = copy_package(src, "hitsave-dumps", "dumps/a", dst, "copy")
     assert r.problems == ["data/disc.iso is in the bag manifest but missing on Wasabi"]
+
+
+class InFlight:
+    """Counts how many get_object calls run at the same time."""
+
+    def __init__(self) -> None:
+        self.now = self.most = 0
+        self.lock = threading.Lock()
+
+    def __call__(self, key) -> None:
+        with self.lock:
+            self.now += 1
+            self.most = max(self.most, self.now)
+        time.sleep(0.05)
+        with self.lock:
+            self.now -= 1
+
+
+def test_large_file_parts_are_read_with_parallel_range_requests(src, dst):
+    seen = InFlight()
+    src.on_get = seen
+    mib5 = 5 * 2**20
+    r = copy_file(src, "hitsave-dumps", "dumps/a/data/disc.iso", dst, "copy", "k", sha256_of(BIG),
+                  part_size=mib5, size=len(BIG), workers=3)
+    assert r.ok and dst.objects["k"].data == BIG
+    assert {rng for _, rng in src.ranges} == {
+        f"bytes=0-{mib5 - 1}", f"bytes={mib5}-{2 * mib5 - 1}", f"bytes={2 * mib5}-{len(BIG) - 1}"}
+    assert seen.most >= 2
+    assert dst.completed[-1]["Parts"] == [1, 2, 3]
+    assert dst.completed[-1]["ChecksumCRC64NVME"] == crc64nvme_b64(BIG)
+
+
+def test_large_file_size_is_read_from_the_source_when_not_given(src, dst):
+    r = copy_file(src, "hitsave-dumps", "dumps/a/data/disc.iso", dst, "copy", "k", sha256_of(BIG),
+                  part_size=5 * 2**20)
+    assert r.ok and r.bytes == len(BIG)
+
+
+def test_source_shorter_than_its_listed_size_aborts_the_upload(src, dst):
+    with pytest.raises(RuntimeError, match="changed during the copy"):
+        copy_file(src, "hitsave-dumps", "dumps/a/data/disc.iso", dst, "copy", "k", sha256_of(BIG),
+                  part_size=5 * 2**20, size=len(BIG) + 2**20)
+    assert dst.aborted == ["k"] and "k" not in dst.objects
+
+
+def test_part_upload_error_aborts_and_raises(src, dst):
+    real = dst.upload_part
+
+    def failing(**kw):
+        if kw["PartNumber"] == 2:
+            raise client_error("InternalError", "UploadPart", 500)
+        return real(**kw)
+    dst.upload_part = failing
+    with pytest.raises(Exception, match="InternalError"):
+        copy_file(src, "hitsave-dumps", "dumps/a/data/disc.iso", dst, "copy", "k", sha256_of(BIG),
+                  part_size=5 * 2**20, workers=3)
+    assert dst.aborted == ["k"] and "k" not in dst.objects
+
+
+def test_copy_package_copies_small_files_in_parallel():
+    src, dst = FakeS3(), FakeS3()
+    _bag(src, "dumps/a/", {f"data/{n}.bin": DATA + bytes([n]) for n in range(6)})
+    seen = InFlight()
+    src.on_get = seen
+    r = copy_package(src, "hitsave-dumps", "dumps/a", dst, "copy", workers=4)
+    assert r.ok and r.files_uploaded == 8
+    assert seen.most >= 2
+
+
+def test_copy_package_with_one_worker_still_copies_everything():
+    src, dst = FakeS3(), FakeS3()
+    _bag(src, "dumps/a/", {"data/disc.iso": BIG, "bagit.txt": b"BagIt-Version: 1.0\n"})
+    r = copy_package(src, "hitsave-dumps", "dumps/a", dst, "copy", part_size=5 * 2**20, workers=1)
+    assert r.ok and dst.objects["hitsave-dumps/dumps/a/data/disc.iso"].data == BIG

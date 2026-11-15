@@ -10,6 +10,8 @@ A damaged file (SHA-256 differs from the manifest) is never uploaded. See docs/g
 from __future__ import annotations
 
 import hashlib
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -19,6 +21,9 @@ from botocore.httpchecksum import CrtCrc64NvmeChecksum
 import bag_manifest
 
 DEFAULT_PART_SIZE = 64 * 2**20
+# Parts or small files in flight at once. One Wasabi stream reads about 19 MB/s from saturn;
+# 8 streams about 56 MB/s (measured 2026-11-14). Memory use is about workers x part size.
+DEFAULT_WORKERS = 8
 STORAGE_CLASS = "DEEP_ARCHIVE"
 MANIFEST = "manifest-sha256.txt"
 TAGMANIFEST = "tagmanifest-sha256.txt"
@@ -115,43 +120,35 @@ def _hash_object(src_s3, bucket: str, key: str, part_size: int) -> str:
 
 
 def copy_file(src_s3, src_bucket: str, key: str, dst_s3, dst_bucket: str, dst_key: str,
-              expected_sha256: str | None, part_size: int = DEFAULT_PART_SIZE, label: str | None = None) -> CopyResult:
-    """Stream one file from Wasabi into Deep Archive.
+              expected_sha256: str | None, part_size: int = DEFAULT_PART_SIZE, label: str | None = None,
+              size: int | None = None, workers: int = DEFAULT_WORKERS) -> CopyResult:
+    """Copy one file from Wasabi into Deep Archive.
 
     Returns ok=False, with nothing stored, when the SHA-256 differs from expected_sha256.
     Any other error aborts a started multipart upload and propagates.
 
     S3 takes an object's metadata when the upload starts, so x-amz-meta-sha256 is the digest the
-    bag expects, and the upload completes only if the streamed bytes match it. A file larger than
-    one part with no expected digest is read twice: once to hash it, once to upload it.
+    bag expects, and the upload completes only if the bytes read match it. A file larger than one
+    part with no expected digest is read twice: once to hash it, once to upload it.
+
+    A larger file is read and uploaded in parts by up to `workers` threads at once, each with its
+    own range request. The parts are hashed in order, so at most `workers` parts are in memory.
     """
     label = label or key
-    body = src_s3.get_object(Bucket=src_bucket, Key=key)["Body"]
-    sha = hashlib.sha256()
-    crc = CrtCrc64NvmeChecksum()
-    size = 0
-
-    def take() -> bytes:
-        nonlocal size
-        chunk = _read_exactly(body, part_size)
-        sha.update(chunk)
-        crc.update(chunk)
-        size += len(chunk)
-        return chunk
-
-    def mismatch() -> CopyResult:
-        return CopyResult(False, sha.hexdigest(), crc.b64digest(), size,
-                          f"SHA-256 of {label} differs from the bag manifest")
-
     want = expected_sha256.lower() if expected_sha256 else None
-    first = take()
-    second = take() if len(first) == part_size else b""
+    if size is None:
+        size = int(src_s3.head_object(Bucket=src_bucket, Key=key)["ContentLength"])
 
-    if not second:
-        if want and sha.hexdigest() != want:
-            return mismatch()
-        digest = sha.hexdigest()
-        dst_s3.put_object(Bucket=dst_bucket, Key=dst_key, Body=first, StorageClass=STORAGE_CLASS,
+    if size <= part_size:
+        data = _read_exactly(src_s3.get_object(Bucket=src_bucket, Key=key)["Body"], part_size + 1)
+        crc = CrtCrc64NvmeChecksum()
+        crc.update(data)
+        digest = hashlib.sha256(data).hexdigest()
+        if len(data) != size:
+            raise RuntimeError(f"{label} changed during the copy: expected {size} bytes, read {len(data)}")
+        if want and digest != want:
+            return CopyResult(False, digest, crc.b64digest(), size, f"SHA-256 of {label} differs from the bag manifest")
+        dst_s3.put_object(Bucket=dst_bucket, Key=dst_key, Body=data, StorageClass=STORAGE_CLASS,
                           Metadata={"sha256": digest}, ChecksumAlgorithm="CRC64NVME",
                           ChecksumCRC64NVME=crc.b64digest())
         return _check_stored(dst_s3, dst_bucket, dst_key, CopyResult(True, digest, crc.b64digest(), size))
@@ -162,32 +159,53 @@ def copy_file(src_s3, src_bucket: str, key: str, dst_s3, dst_bucket: str, dst_ke
         Bucket=dst_bucket, Key=dst_key, StorageClass=STORAGE_CLASS, Metadata={"sha256": want},
         ChecksumAlgorithm="CRC64NVME", ChecksumType="FULL_OBJECT",
     )["UploadId"]
+    sha = hashlib.sha256()
+    crc = CrtCrc64NvmeChecksum()
+    count = -(-size // part_size)
+
+    def send(number: int) -> tuple[bytes, dict]:
+        first = (number - 1) * part_size
+        length = min(part_size, size - first)
+        body = src_s3.get_object(Bucket=src_bucket, Key=key, Range=f"bytes={first}-{first + length - 1}")["Body"]
+        chunk = _read_exactly(body, length + 1)
+        if len(chunk) != length:
+            raise RuntimeError(f"{label} changed during the copy: part {number} has {len(chunk)} bytes, "
+                               f"expected {length}")
+        resp = dst_s3.upload_part(Bucket=dst_bucket, Key=dst_key, UploadId=upload_id, PartNumber=number,
+                                  Body=chunk, ChecksumAlgorithm="CRC64NVME")
+        return chunk, {"PartNumber": number, "ETag": resp["ETag"], "ChecksumCRC64NVME": resp["ChecksumCRC64NVME"]}
+
+    pool = ThreadPoolExecutor(max_workers=max(1, workers))
     try:
+        pending = deque(pool.submit(send, n) for n in range(1, min(count, max(1, workers)) + 1))
+        submitted = len(pending)
         parts = []
-        chunk = first
-        while chunk:
-            number = len(parts) + 1
-            resp = dst_s3.upload_part(Bucket=dst_bucket, Key=dst_key, UploadId=upload_id, PartNumber=number,
-                                      Body=chunk, ChecksumAlgorithm="CRC64NVME")
-            parts.append({"PartNumber": number, "ETag": resp["ETag"],
-                          "ChecksumCRC64NVME": resp["ChecksumCRC64NVME"]})
-            if second:
-                chunk, second = second, b""
-            else:
-                chunk = take()
+        while pending:
+            chunk, part = pending.popleft().result()
+            sha.update(chunk)
+            crc.update(chunk)
+            parts.append(part)
+            del chunk
+            if submitted < count:
+                submitted += 1
+                pending.append(pool.submit(send, submitted))
         if sha.hexdigest() != want:
             dst_s3.abort_multipart_upload(Bucket=dst_bucket, Key=dst_key, UploadId=upload_id)
-            return mismatch()
+            return CopyResult(False, sha.hexdigest(), crc.b64digest(), size,
+                              f"SHA-256 of {label} differs from the bag manifest")
         dst_s3.complete_multipart_upload(
             Bucket=dst_bucket, Key=dst_key, UploadId=upload_id, MultipartUpload={"Parts": parts},
             ChecksumCRC64NVME=crc.b64digest(), ChecksumType="FULL_OBJECT",
         )
     except BaseException:
+        pool.shutdown(wait=True, cancel_futures=True)
         try:
             dst_s3.abort_multipart_upload(Bucket=dst_bucket, Key=dst_key, UploadId=upload_id)
         except Exception:  # noqa: BLE001 - the bucket's lifecycle rule removes it after 7 days
             pass
         raise
+    finally:
+        pool.shutdown(wait=True)
     return _check_stored(dst_s3, dst_bucket, dst_key, CopyResult(True, want, crc.b64digest(), size))
 
 
@@ -239,7 +257,7 @@ def list_target(dst_s3, bucket: str, root: str) -> dict[str, TargetObject]:
 
 
 def copy_package(src_s3, src_bucket: str, prefix: str, dst_s3, dst_bucket: str,
-                 part_size: int = DEFAULT_PART_SIZE) -> PackageResult:
+                 part_size: int = DEFAULT_PART_SIZE, workers: int = DEFAULT_WORKERS) -> PackageResult:
     """Make the copy of one package match Wasabi: upload new and changed files, add delete markers
     for files gone from Wasabi. Damaged files are listed in problems and not uploaded."""
     src_root = prefix.strip("/") + "/"
@@ -249,9 +267,18 @@ def copy_package(src_s3, src_bucket: str, prefix: str, dst_s3, dst_bucket: str,
     plan = plan_package(source, list_target(dst_s3, dst_bucket, dst_root), expected)
     result = PackageResult(files_unchanged=len(plan.unchanged), object_count=len(source),
                            total_bytes=sum(source.values()))
-    for rel in plan.upload:
-        r = copy_file(src_s3, src_bucket, src_root + rel, dst_s3, dst_bucket, dst_root + rel,
-                      expected.get(rel), part_size=part_size, label=rel)
+    def one(rel: str, file_workers: int) -> CopyResult:
+        return copy_file(src_s3, src_bucket, src_root + rel, dst_s3, dst_bucket, dst_root + rel,
+                         expected.get(rel), part_size=part_size, label=rel, size=source[rel],
+                         workers=file_workers)
+
+    # Small files go several at a time; a large file uses all workers for its own parts.
+    small = [rel for rel in plan.upload if source[rel] <= part_size]
+    large = [rel for rel in plan.upload if source[rel] > part_size]
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        copied = list(pool.map(lambda rel: (rel, one(rel, 1)), small))
+    copied += [(rel, one(rel, workers)) for rel in large]
+    for _, r in sorted(copied, key=lambda item: item[0]):
         result.bytes_read += r.bytes
         if r.ok:
             result.files_uploaded += 1

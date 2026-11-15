@@ -48,6 +48,7 @@ class FakeS3:
         self.restores: list[dict] = []
         self.denied = False
         self.on_get = None  # callback(key) run before each get_object
+        self.ranges: list[tuple[str, str | None]] = []  # (key, Range) of each get_object
 
     # helpers for tests
     def put(self, key: str, data: bytes, storage_class: str = "STANDARD", metadata: dict | None = None) -> None:
@@ -130,14 +131,19 @@ class FakeS3:
             out["Restore"] = 'ongoing-request="true"'
         return out
 
-    def get_object(self, Bucket, Key, **_):
+    def get_object(self, Bucket, Key, Range=None, **_):
         self._check("GetObject")
+        self.ranges.append((Key, Range))
         if self.on_get:
             self.on_get(Key)
         v = self._current(Key, "GetObject")
         if v.storage_class in ("DEEP_ARCHIVE", "GLACIER") and not v.restored:
             raise client_error("InvalidObjectState", "GetObject", 403)
-        return {"Body": io.BytesIO(v.data), "ContentLength": len(v.data)}
+        data = v.data
+        if Range is not None:
+            first, last = Range.removeprefix("bytes=").split("-")
+            data = data[int(first):int(last) + 1]
+        return {"Body": io.BytesIO(data), "ContentLength": len(data)}
 
     def delete_object(self, Bucket, Key, **_):
         self._check("DeleteObject")

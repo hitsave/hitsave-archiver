@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from botocore.exceptions import ClientError  # noqa: E402
 
 from glacier_copy_core import (  # noqa: E402
+    DEFAULT_WORKERS,
     LOCATION,
     FatalError,
     connect,
@@ -54,6 +55,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     ap.add_argument("--max-gb", type=float, default=200.0, help="Stop before reading more than this")
     ap.add_argument("--kind", help="Only this ingest_kind (dump, press_material, ...)")
     ap.add_argument("--game-key", action="append", help="Only these packages (repeatable)")
+    ap.add_argument("--workers", type=int, default=DEFAULT_WORKERS,
+                    help="Parts or small files copied at once (memory: about workers x 64 MB)")
     return ap.parse_args(argv)
 
 
@@ -90,7 +93,8 @@ def run(argv: list[str], *, ledger, src_s3, dst_s3, dst_bucket: str, bucket_for)
                 results.append({"game_key": row["game_key"], "outcome": "would-copy", "problems": []})
                 print(f"DUE  {row['game_key']}: {size / 1e9:.2f} GB in s3://{bucket}/{prefixes[0]}/", flush=True)
                 continue
-            results.append(copy_one(row, bucket, prefixes, before, ledger, src_s3, dst_s3, dst_bucket))
+            results.append(copy_one(row, bucket, prefixes, before, ledger, src_s3, dst_s3, dst_bucket,
+                                    workers=args.workers))
             spent += results[-1]["bytes_read"]
     except ClientError as e:
         if is_fatal(e):
@@ -106,14 +110,15 @@ def run(argv: list[str], *, ledger, src_s3, dst_s3, dst_bucket: str, bucket_for)
     }
 
 
-def copy_one(row, bucket, prefixes, before, ledger, src_s3, dst_s3, dst_bucket) -> dict:
+def copy_one(row, bucket, prefixes, before, ledger, src_s3, dst_s3, dst_bucket,
+             workers: int = DEFAULT_WORKERS) -> dict:
     t0 = time.time()
     key = row["game_key"]
     uploaded = unchanged = markers = objects = read = total = 0
     problems: list[str] = []
     try:
         for prefix in prefixes:
-            r = copy_package(src_s3, bucket, prefix, dst_s3, dst_bucket)
+            r = copy_package(src_s3, bucket, prefix, dst_s3, dst_bucket, workers=workers)
             uploaded += r.files_uploaded
             unchanged += r.files_unchanged
             markers += r.delete_markers
