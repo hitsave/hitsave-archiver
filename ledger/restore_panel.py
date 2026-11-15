@@ -33,6 +33,10 @@ STATE_LABELS = {
 }
 VERDICT_LABELS = {"ok": "fine", "newer": "newer on Wasabi", "missing": "missing", "corrupted": "corrupted"}
 WRITTEN_LABELS = {"yes": "written", "skipped": "skipped", "no": "failed", "": "—"}
+# Restore price per GB, plus the download price, paid twice: once to check the files, once to write them.
+TIER_USD_PER_GB = {"Bulk": 0.0025, "Standard": 0.02}
+TIER_HOURS = {"Bulk": 48, "Standard": 12}
+DOWNLOAD_USD_PER_GB = 0.09
 
 
 def _esc(value: Any) -> str:
@@ -148,13 +152,71 @@ class Store:
 
 # --- POST actions ---------------------------------------------------------------------------
 
+def estimate_usd(total_bytes: int, tier: str) -> float:
+    """Upper limit for restoring the whole package and writing it back to Wasabi."""
+    gb = total_bytes / 1e9
+    return gb * TIER_USD_PER_GB[tier] + gb * 2 * DOWNLOAD_USD_PER_GB
+
+
+def _id(form: dict[str, list[str]], name: str) -> int | None:
+    value = _first(form, name)
+    return int(value) if value.isdigit() else None
+
+
 def handle_restore_post(path: str, form: dict[str, list[str]], user: str, *, store, admins: set[str]
                         ) -> tuple[str, str, str]:
     """(game key to go back to, notice kind "ok" or "fail", message)."""
     game_key = _first(form, "game_key")
     if path == "/restore/report":
         return game_key, *_report(store, game_key, _first(form, "note"), user)
-    return game_key, "fail", "Unknown action."
+    actions = {"/restore/request": _request, "/restore/approve": _approve, "/restore/cancel": _cancel,
+               "/restore/close-report": _close_report}
+    if path not in actions:
+        return game_key, "fail", "Unknown action."
+    if not user or user.lower() not in {a.lower() for a in admins}:
+        return game_key, "fail", "Only admins can do this."
+    return game_key, *actions[path](store, form, user)
+
+
+def _request(store, form, user) -> tuple[str, str]:
+    tier, reason = _first(form, "tier"), _first(form, "reason")
+    if tier not in TIERS:
+        return "fail", "Pick Bulk or Standard."
+    if not reason:
+        return "fail", "Say why the package needs a restore."
+    if len(reason) > NOTE_MAX:
+        return "fail", f"Keep the reason under {NOTE_MAX:,} characters."
+    game = store.game(_first(form, "game_key"))
+    if game is None:
+        return "fail", "No package has that game key."
+    if not game.get("has_copy"):
+        return "fail", "This package has no copy in Glacier yet."
+    if store.open_request(int(game["id"])) or store.add_request(
+            int(game["id"]), tier, reason, user, _id(form, "report_id")) is None:
+        return "fail", "A restore is already open for this package."
+    return "ok", "Restore started. The job checks Wasabi within 15 minutes."
+
+
+def _approve(store, form, user) -> tuple[str, str]:
+    request_id = _id(form, "request_id")
+    if request_id is None or not store.approve(request_id, user):
+        return "fail", "This restore isn't waiting for approval any more."
+    return "ok", "Approved. The job writes the files to Wasabi within 15 minutes."
+
+
+def _cancel(store, form, user) -> tuple[str, str]:
+    request_id = _id(form, "request_id")
+    if request_id is None or not store.cancel(request_id, user):
+        return "fail", "This restore can't be cancelled now. It's already writing to Wasabi or has finished."
+    return "ok", "Restore cancelled."
+
+
+def _close_report(store, form, user) -> tuple[str, str]:
+    report_id = _id(form, "report_id")
+    note = _first(form, "note")[:NOTE_MAX]
+    if report_id is None or not store.close_report(report_id, user, note):
+        return "fail", "This report is already closed."
+    return "ok", "Report closed."
 
 
 def _report(store, game_key: str, note: str, user: str) -> tuple[str, str]:
@@ -201,8 +263,90 @@ def _report_form(game_key: str) -> str:
             f'<button type="submit" data-busy="Sending…">Report a problem</button></form>')
 
 
+def _files_word(n: int) -> str:
+    return "file" if n == 1 else "files"
+
+
+def _usd(value: float) -> str:
+    return "less than $0.01" if value < 0.005 else f"about ${value:,.2f}"
+
+
+def _wasabi_hint(check: dict | None) -> str:
+    if not check:
+        return ""
+    day = _day(check.get("checked_at"))
+    if check.get("outcome") == "pass":
+        text = (f"The last Wasabi check, on {day}, passed, so these files may not need a restore. The restore "
+                "job checks every file first and restores only the ones that are missing or corrupted.")
+    else:
+        text = f"The last Wasabi check, on {day}, failed: {check.get('detail') or ''}"
+    return f'<p class="muted">{_esc(text)}</p>'
+
+
+def _request_form(state: dict, *, game_key: str, total_bytes: int) -> str:
+    reports = state.get("reports") or []
+    report = _hidden("report_id", reports[0]["id"]) if reports else ""
+    estimates = " ".join(
+        f"{tier} (up to {TIER_HOURS[tier]} hours): {_usd(estimate_usd(total_bytes, tier))}." for tier in TIERS)
+    options = "".join(f'<option value="{t}"{" selected" if t == "Bulk" else ""}>{t}</option>' for t in TIERS)
+    return (f'<h3>Restore from Glacier</h3>{_wasabi_hint(state.get("last_wasabi_check"))}'
+            f'<form method="post" action="/restore/request">{_hidden("game_key", game_key)}{report}'
+            f'<label>Speed <select name="tier">{options}</select></label><br>'
+            f'<label>Reason<br><textarea name="reason" rows="2" maxlength="{NOTE_MAX}" required></textarea>'
+            f'</label><br><p class="muted">Cost for the whole package: {_esc(estimates)} These are upper '
+            f'limits, because only missing and corrupted files are restored.</p>'
+            f'<button type="submit" data-busy="Starting…">Restore from Glacier</button></form>')
+
+
+def _file_table(files: list[dict]) -> str:
+    shown = [f for f in files if f.get("verdict") != "ok"]
+    fine = len(files) - len(shown)
+    rows = "".join(
+        f"<tr><td><code>{_esc(f.get('rel'))}</code></td><td>{_esc(VERDICT_LABELS.get(f.get('verdict'), f.get('verdict')))}</td>"
+        f"<td>{'yes' if f.get('restorable') else 'no'}</td><td>{_esc(WRITTEN_LABELS.get(f.get('written') or '', f.get('written')))}</td>"
+        f"<td>{_esc(f.get('note'))}</td></tr>" for f in shown)
+    table = (f'<table class="kv"><thead><tr><th>File</th><th>Label</th><th>Restorable</th><th>Written</th>'
+             f'<th>Note</th></tr></thead><tbody>{rows}</tbody></table>') if rows else ""
+    fine_line = f'<p class="muted">{fine} {_files_word(fine)} {"is" if fine == 1 else "are"} fine.</p>' if fine else ""
+    return table + fine_line
+
+
+def _open_request_html(req: dict, *, game_key: str, is_admin: bool) -> str:
+    files = files_of(req)
+    state = str(req.get("state"))
+    parts = [f"<h3>Restore: {_esc(STATE_LABELS.get(state, state))}</h3>",
+             f"<p class=\"muted\">{_esc(req.get('tier'))}, started by {_esc(req.get('requested_by'))}"
+             f" on {_esc(_day(req.get('requested_at')))}. Reason: {_esc(req.get('reason'))}</p>"]
+    if req.get("message"):
+        parts.append(f"<p>{_esc(req.get('message'))}</p>")
+    parts.append(_file_table(files))
+    ids = _hidden("game_key", game_key) + _hidden("request_id", req.get("id"))
+    if is_admin and state == "awaiting_approval":
+        n = sum(1 for f in files if f.get("restorable"))
+        parts.append(f'<p>Approving writes {n} {_files_word(n)} to Wasabi.</p>'
+                     f'<form method="post" action="/restore/approve" class="actions">{ids}'
+                     f'<button type="submit" data-busy="Approving…">Approve</button></form>')
+    if is_admin and state in ("checking", "restoring", "awaiting_approval"):
+        parts.append(f'<form method="post" action="/restore/cancel" class="actions">{ids}'
+                     f'<button type="submit" class="btn-secondary" data-busy="Cancelling…">Cancel</button></form>')
+    return "".join(parts)
+
+
 def render_restore_panel(state: dict, *, game_key: str, is_admin: bool, has_copy: bool, total_bytes: int) -> str:
     parts = [_reports_html(state.get("reports") or [], game_key=game_key, is_admin=is_admin), _report_form(game_key)]
+    req = state.get("request")
+    if req and req.get("state") in OPEN:
+        parts.append(_open_request_html(req, game_key=game_key, is_admin=is_admin))
+    else:
+        if req:
+            label = STATE_LABELS.get(str(req.get("state")), str(req.get("state")))
+            when = _day(req.get("finished_at") or req.get("updated_at"))
+            parts.append(f"<p class=\"muted\">Last restore: {_esc(label)}, {_esc(when)}. "
+                         f"{_esc(req.get('message') or '')}</p>")
+        if is_admin and has_copy:
+            parts.append(_request_form(state, game_key=game_key, total_bytes=total_bytes))
+        elif is_admin:
+            parts.append("<p class=\"muted\">This package has no copy in Glacier yet, so it can't be restored.</p>")
     return f'<div class="panel"><h2>Problems and restores</h2>{"".join(parts)}</div>'
 
 
