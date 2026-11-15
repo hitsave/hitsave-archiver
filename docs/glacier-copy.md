@@ -41,6 +41,12 @@ PREMIS event, extracted DVD videos or a rebuilt bag. For a due package, the job:
 If the bag changes while the job copies it, the job records nothing and copies the package
 again the next night.
 
+The job copies 8 parts at once (`--workers`). A file larger than 64 MB is read in 64 MB ranges
+and uploaded as parts, 8 at a time, and smaller files are copied 8 at a time. The job still
+computes each file's SHA-256 in order, so the check against the manifest stays the same. On
+2026-11-14, one stream from Wasabi to saturn read about 19 MB/s and 8 streams about 56 MB/s.
+Memory use is about workers × 64 MB, so 512 MB at the default.
+
 ## How the archive checks the copy
 
 The job checks each file while it streams from Wasabi to AWS, so the archive never needs to

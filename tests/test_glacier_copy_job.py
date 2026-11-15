@@ -185,3 +185,16 @@ def test_report_only_never_marks_out_of_date(env):
     make_bag(src, "dumps/pkg/", note=b"v2")
     run([])
     assert ledger.out_of_date == []
+
+
+def test_workers_option_reaches_the_package_copy(env, monkeypatch):
+    src, dst, ledger, run = env
+    seen = []
+    real = job.copy_package
+
+    def spy(*a, **kw):
+        seen.append(kw.get("workers"))
+        return real(*a, **kw)
+    monkeypatch.setattr(job, "copy_package", spy)
+    out = run(["--execute", "--game-key", "pkg", "--workers", "3"])
+    assert out["packages_copied"] == 1 and seen == [3]
