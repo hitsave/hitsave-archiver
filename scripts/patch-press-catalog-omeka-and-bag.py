@@ -21,6 +21,7 @@ CONFIG_ROOT = Path(__import__("os").environ.get("HITSAVE_CONFIG_ROOT", str(REPO_
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from omeka_catalog_common import load_register_dip_omeka_api  # noqa: E402
+from package_lock import ledger_lock  # noqa: E402
 from sync_dump_bag_metadata_from_ledger import (  # noqa: E402
     patch_bag_info_external_description,
     s3_get_bytes,
@@ -184,6 +185,29 @@ def patch_wasabi_bag(
     correction_summary: str,
     execute: bool,
     ingest_kind: str = "press_material",
+    lock=None,
+) -> dict:
+    """Rewrite the bag's catalog fields; with *execute*, under the package lock (package_lock.py)."""
+    if not execute:
+        return _patch_wasabi_bag(ledger=ledger, title=title, reference_uri=reference_uri,
+                                 former_title=former_title, correction_summary=correction_summary,
+                                 execute=False, ingest_kind=ingest_kind)
+    take = lock or (lambda key: ledger_lock(key, CONFIG_ROOT / "preservation/ingest.yaml"))
+    with take(str(ledger["game_key"])):
+        return _patch_wasabi_bag(ledger=ledger, title=title, reference_uri=reference_uri,
+                                 former_title=former_title, correction_summary=correction_summary,
+                                 execute=True, ingest_kind=ingest_kind)
+
+
+def _patch_wasabi_bag(
+    *,
+    ledger: dict,
+    title: str,
+    reference_uri: str,
+    former_title: str,
+    correction_summary: str,
+    execute: bool,
+    ingest_kind: str,
 ) -> dict:
     prefix = str(ledger["package_storage_prefix"]).strip("/")
     ingest_path = CONFIG_ROOT / "preservation/ingest.yaml"

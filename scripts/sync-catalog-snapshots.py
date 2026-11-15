@@ -18,6 +18,7 @@ import hashlib
 import json
 import os
 import sys
+from contextlib import AbstractContextManager, nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterable
@@ -26,6 +27,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import catalog_snapshot as cs  # noqa: E402
+from package_lock import package_lock  # noqa: E402
 
 PER_PAGE = 100
 
@@ -56,8 +58,13 @@ def _put_verified(s3, bucket: str, key: str, body: bytes, content_type: str) -> 
         raise RuntimeError(f"s3://{bucket}/{key} does not match what was uploaded")
 
 
-def sync_bag(s3, *, bucket: str, root: str, snapshot: dict, execute: bool) -> dict:
-    """Add *snapshot* to the bag at s3://bucket/root unless its newest copy says the same."""
+def sync_bag(s3, *, bucket: str, root: str, snapshot: dict, execute: bool,
+             lock: Callable[[], AbstractContextManager] = nullcontext) -> dict:
+    """Add *snapshot* to the bag at s3://bucket/root unless its newest copy says the same.
+
+    *lock* returns the package's write lock (package_lock.py). It's held only while writing, and
+    the tag manifest must still match the copy read at the start, before and after the uploads.
+    """
     tm_key = f"{root}tagmanifest-sha256.txt"
     tm_raw = _read(s3, bucket, tm_key)
     if not tm_raw or not tm_raw.strip():
@@ -83,12 +90,16 @@ def sync_bag(s3, *, bucket: str, root: str, snapshot: dict, execute: bool) -> di
         result["dry_run"] = True
         return result
 
-    for rel, body in files.items():
-        kind = "application/json" if rel.endswith(".json") else "application/xml"
-        _put_verified(s3, bucket, root + rel, body, kind)
-    if _read(s3, bucket, tm_key) != tm_raw:
-        raise RuntimeError(f"tagmanifest changed during the update of s3://{bucket}/{root}; run again")
-    _put_verified(s3, bucket, tm_key, new_tm.encode("utf-8"), "text/plain")
+    changed = f"tagmanifest changed during the update of s3://{bucket}/{root}; run again"
+    with lock():
+        if _read(s3, bucket, tm_key) != tm_raw:
+            raise RuntimeError(changed)
+        for rel, body in files.items():
+            kind = "application/json" if rel.endswith(".json") else "application/xml"
+            _put_verified(s3, bucket, root + rel, body, kind)
+        if _read(s3, bucket, tm_key) != tm_raw:
+            raise RuntimeError(changed)
+        _put_verified(s3, bucket, tm_key, new_tm.encode("utf-8"), "text/plain")
     result["dry_run"] = False
     return result
 
@@ -183,9 +194,9 @@ def main() -> None:
     if args.game_key:
         sql += " AND game_key = ANY(%s)"
         params = (args.game_key,)
-    with psycopg.connect(host=db["host"], port=int(db.get("port", 5432)), dbname=db["database"],
-                         user=db["user"], password=db["password"]) as conn:
-        rows = conn.execute(sql + " ORDER BY game_key", params).fetchall()
+    conn = psycopg.connect(host=db["host"], port=int(db.get("port", 5432)), dbname=db["database"],
+                           user=db["user"], password=db["password"], autocommit=True)
+    rows = conn.execute(sql + " ORDER BY game_key", params).fetchall()
 
     session = requests.Session()
     headers = {"Accept": "application/ld+json"}
@@ -229,7 +240,8 @@ def main() -> None:
             bucket = wasabi_bucket_for_storage_prefix(wasabi, prefix, ingest_kind=kind)
             try:
                 status = sync_bag(s3, bucket=bucket, root=wasabi_unpacked_prefix(prefix),
-                                  snapshot=snapshot, execute=args.execute)
+                                  snapshot=snapshot, execute=args.execute,
+                                  lock=lambda: package_lock(conn, game_key))
             except Exception as exc:  # one bad bag must not stop the others
                 status = {"status": "error", "error": str(exc)[:300]}
             if status["status"] in ("new", "changed"):
@@ -237,6 +249,7 @@ def main() -> None:
         counts[status["status"]] = counts.get(status["status"], 0) + 1
         if status["status"] != "unchanged":
             report.append({"game_key": game_key, "omeka_item_id": int(item_id), **status})
+    conn.close()
     print(render_report(execute=args.execute, packages=len(rows), counts=counts, detail=report), end="")
     if counts.get("error"):
         sys.exit(1)
