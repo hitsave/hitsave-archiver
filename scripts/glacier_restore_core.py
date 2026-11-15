@@ -53,6 +53,7 @@ class FileCheck:
     verdict: str  # ok, newer, missing, corrupted
     restorable: bool
     note: str = ""
+    written: str = ""  # after approval: yes, skipped (already correct on Wasabi) or no (failed)
 
     def to_json(self) -> dict:
         return asdict(self)
