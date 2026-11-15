@@ -162,6 +162,17 @@ def test_max_gb_stops_before_the_budget(env):
     assert out["packages_copied"] == 1
 
 
+def test_report_only_lists_only_what_fits_the_budget(env, capsys):
+    src, dst, ledger, run = env
+    for i, key in [(2, "two"), (3, "three")]:
+        make_bag(src, f"dumps/{key}/")
+        ledger.rows.append({**row(i, key, f"dumps/{key}"), "total_bytes": 6 * 10**8})
+    run(["--max-gb", "1"])
+    listed = [line.split()[1].rstrip(":") for line in capsys.readouterr().out.splitlines()
+              if line.startswith("DUE")]
+    assert listed == ["pkg", "two"]
+
+
 def test_settings_point_at_the_decided_bucket_and_region():
     import yaml
     aws = yaml.safe_load((ROOT / "config" / "preservation" / "aws-copy.yaml").read_text())
