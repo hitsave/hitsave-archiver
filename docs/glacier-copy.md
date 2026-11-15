@@ -88,8 +88,11 @@ uploaded by mistake.
 
 ## Get files back
 
-[restore-from-glacier.md](restore-from-glacier.md) has the steps: repair one package on Wasabi,
-get back a version from before a change, and restore everything if Wasabi is lost. A Bulk
+Admins repair a package from its ledger page; see
+[Restore from the ledger](restore-from-glacier.md#restore-from-the-ledger).
+[restore-from-glacier.md](restore-from-glacier.md) also has the command-line steps: repair one
+package on Wasabi, get back a version from before a change, and restore everything if Wasabi is
+lost. A Bulk
 restore takes up to 48 hours and a Standard restore up to 12 hours.
 
 ## What it costs

@@ -16,6 +16,7 @@ container path `/archiver`.
 | `sync_catalog_snapshots` | 05:30 | Adds a dated copy of the catalog record to each bag whose Omeka record changed (`metadata/catalog/`); unchanged bags are only read ([preservation-packaging-standard.md](../docs/preservation-packaging-standard.md#catalog-record-copies)). |
 | `glacier_copy` | 06:15 | Copies new and changed packages from Wasabi to S3 Glacier Deep Archive, checking every SHA-256 on the way; up to 50 packages / 200 GB a night ([glacier-copy.md](../docs/glacier-copy.md)). Off until the backfill is done. |
 | `glacier_copy_check` | 07:00 on the 1st | Checks every file of the Glacier copy against Wasabi's manifests with HEAD requests, without restores ([glacier-copy.md](../docs/glacier-copy.md)). Off until the backfill is done. |
+| `glacier_restore_worker` | every 15 minutes | Moves each restore request from the ledger one step forward: checks Wasabi, restores only missing and corrupted files from Glacier, and writes them back after an admin approves ([restore-from-glacier.md](../docs/restore-from-glacier.md#restore-from-the-ledger)). Off until the ledger tables exist. |
 | `publish_damaged_files_page` | Every 3 h at :15 | Rebuilds the public "Damaged files" page from the ledger ([damaged-files.md](../docs/damaged-files.md)). |
 
 Each schedule is defined in `wmill/f/hitsave/<name>.schedule.yaml`, next to its script. The
@@ -35,6 +36,7 @@ in its schedule for a read-only report.
 | `prune_local_working_copies` | Scheduled prune (above). Set `execute: 'false'` for a read-only report. |
 | `glacier_copy` | Scheduled Glacier copy (above). Set `execute: 'false'` to only list what's due. |
 | `glacier_copy_check` | Monthly Glacier check (above). Set `record: 'false'` to only report. |
+| `glacier_restore_worker` | Restore requests from the ledger (above). Takes no arguments. |
 | `correct_catalog_item` | Catalog correction. The ledger's **`/correct`** submits this job. |
 | `quarantine_catalog_item` | Manual quarantine (`scripts/curation-quarantine-omeka.py`); the ledger's **`/quarantine`** offers the same form |
 | `batch_resume_omeka` | `run-batch-resume-omeka.sh` (long; manual) |
