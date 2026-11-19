@@ -55,7 +55,7 @@ def ledger_row_for_config(cfg_path: Path) -> dict | None:
                 SELECT game_key, status, dip_path, omeka_item_id, omeka_media_id,
                        moby_game_id, metadata_json IS NOT NULL AS has_metadata
                 FROM game_ingest
-                WHERE source_path = %s
+                WHERE normalize(source_path, NFC) = normalize(%s, NFC)
                 ORDER BY updated_at DESC
                 LIMIT 1
                 """,

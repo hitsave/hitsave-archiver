@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import html
 import os
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -80,6 +81,11 @@ def open_failures(connect: Callable[[], Any], failed_dir: Path = FAILED_DIR) -> 
     return _drop_resolved(connect, scan_failed_dir(failed_dir))
 
 
+def _nfc(text: str) -> str:
+    """Folder names arrive in NFC or NFD (macOS); compare them in NFC."""
+    return unicodedata.normalize("NFC", text)
+
+
 def _ready_slug_candidates(slug: str) -> set[str]:
     """Ready-folder names a failed slug may have been preserved under.
 
@@ -99,14 +105,15 @@ def _drop_resolved(
 ) -> tuple[list[IntakeFailure], int]:
     if not failures:
         return [], 0
-    candidates = {f.slug: _ready_slug_candidates(f.slug) for f in failures}
-    sources = sorted({READY_SOURCE_PREFIX + c for cs in candidates.values() for c in cs})
+    candidates = {f.slug: {_nfc(c) for c in _ready_slug_candidates(f.slug)} for f in failures}
+    sources = sorted({_nfc(READY_SOURCE_PREFIX + c) for cs in candidates.values() for c in cs})
     with connect() as conn:
         rows = conn.execute(
-            "SELECT source_path FROM game_ingest WHERE status = 'complete' AND source_path = ANY(%s)",
+            "SELECT source_path FROM game_ingest"
+            " WHERE status = 'complete' AND normalize(source_path, NFC) = ANY(%s)",
             (sources,),
         ).fetchall()
-    done = {r[0][len(READY_SOURCE_PREFIX):] for r in rows}
+    done = {_nfc(r[0])[len(READY_SOURCE_PREFIX):] for r in rows}
     open_ = [f for f in failures if not (candidates[f.slug] & done)]
     return open_, len(failures) - len(open_)
 

@@ -33,6 +33,20 @@ def test_title_slug_transliterates_macron_romanization() -> None:
     assert title_slug(title) == "famitsu-dvd-2002-e3-tokuho-saishin-gemu-eizo-katarogu"
 
 
+def test_title_slug_folds_letters_without_a_unicode_decomposition() -> None:
+    assert title_slug("\u00c6on Flux") == "aeon-flux"
+    assert title_slug("Stra\u00dfe") == "strasse"
+    assert title_slug("\u00d8rsted \u0141\u00f3d\u017a \u0152uvre") == "orsted-lodz-oeuvre"
+    assert title_slug("\u00de\u00f3r \u0110or\u0111e \u00f0 \u0131") == "thor-dorde-d-i"
+
+
+def test_sip_fingerprint_ignores_unicode_normalization_form() -> None:
+    composed = "Representation_Copies/O/\u014ckami"  # o-macron as one character
+    decomposed = "Representation_Copies/O/O\u0304kami"  # O + combining macron, as macOS writes it
+    sid = "hitsave-submission:press-material-community-2020-07-23"
+    assert sip_fingerprint_sha256(sid, composed) == sip_fingerprint_sha256(sid, decomposed)
+
+
 def test_sip_fingerprint_stable() -> None:
     line = canonical_sip_line(
         "hitsave-submission:press-material-community-2020-07-23",
