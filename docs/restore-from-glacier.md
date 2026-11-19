@@ -240,5 +240,28 @@ Restore the ledger and Omeka from their own backups. If Omeka is lost too, each 
 
 ## Check that restores work
 
-The first restore test started on 2026-11-14 with one DVD package and one press kit, using Bulk.
-Repeat a restore test once a year, as for the other backups.
+Repeat a restore test once a year, as for the other backups. Restore at least one large disc package and one press kit, fetch them, and check them against their own manifests:
+
+```sh
+cd <restore folder>
+sha256sum -c --quiet manifest-sha256.txt
+sha256sum -c --quiet tagmanifest-sha256.txt
+```
+
+Both commands print nothing when every file matches. Don't upload a test restore to Wasabi.
+
+### Results of the 2026-11-14 test
+
+| | DVD package | Press kit |
+|---|---|---|
+| Package | `famitsu-wave-dvd-2007-9-gatsugou-tokubetsu-furoku-01a136e6-…` | `a-bird-story-01a151cc-…` |
+| Files | 44 | 30 |
+| Size | 2.46 GB | 5.7 MB |
+| Download time | 141 seconds | 6 seconds |
+| Checksum failures | 0 | 0 |
+
+- The Bulk restore was requested on 2026-11-14 at about 22:08 UTC. It was still running 24 hours later and had finished during 2026-11-16 UTC, within the 48 hours AWS promises.
+- The restored copies stayed readable until 2026-11-24 00:00 UTC: 7 days after the restore finished, rounded up to midnight.
+- `glacier-restore.py fetch` downloaded both packages on 2026-11-19 at about 17 MB/s, including its own SHA-256 check. Every file matched the digest recorded when it was copied.
+- Both bags also passed `sha256sum -c` against `manifest-sha256.txt` and `tagmanifest-sha256.txt`. The two manifests and the tagmanifest itself account for every file in each bag.
+- The test cost less than one cent: $0.0025 per GB for Bulk, and the download fell within the free 100 GB each month.
