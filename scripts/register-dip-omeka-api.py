@@ -349,7 +349,7 @@ def main() -> None:
                 """
                 SELECT game_key, ingest_kind
                 FROM game_ingest
-                WHERE source_path = %s
+                WHERE normalize(source_path, NFC) = normalize(%s, NFC)
                 ORDER BY updated_at DESC
                 LIMIT 1
                 """,

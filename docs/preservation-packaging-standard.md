@@ -44,6 +44,10 @@ Fixity checks of the Wasabi copy are not written into bags. They stay in the led
 
 Unpacked bag trees only — one prefix per package. Press: `press-material/{sort_letter}/{package_id}/`. Dumps: see [dump-preservation.md](./dump-preservation.md).
 
+A `package_id` is `{title_slug}-{uuid_v7}`, and the slug is ASCII only. `title_slug()` in `scripts/package_identity.py` splits accented letters into a base letter and marks and drops the marks, so "Ōkami" becomes `okami`. Letters that Unicode can't split that way go through a small table: Æ becomes AE, ß becomes ss, and Ø, Ł, Đ, Œ, Þ and ı become O, L, D, OE, Th and i. A title with no Latin letters gets the slug `game`. Folder and file names inside a bag keep their original characters.
+
+macOS stores "ō" as "o" plus a separate macron, and Linux usually stores it as one character. The two look the same but are different bytes. The ledger keeps `source_path` exactly as it is on disk, so scripts can open it, but every lookup by `source_path` compares both sides in Unicode NFC form. The `sip_fingerprint` is also computed from the NFC form of the path. A test fails if new code compares `source_path` without NFC.
+
 ## Catalog record copies
 
 Each bag keeps dated copies of its catalog record under `metadata/catalog/`, so the package still says what it is if the catalog is lost. Without them, a bag holds the title, type, region, format and donor, but not the description, rights statement, access wording, creator and publisher, ARK, item sets or public/hidden status. The 2026-11-10 restore test found that gap.

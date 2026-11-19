@@ -55,7 +55,7 @@ def main() -> None:
                     aip_wasabi_prefix = NULL,
                     storage_layout = NULL,
                     updated_at = NOW()
-                WHERE source_path = %s
+                WHERE normalize(source_path, NFC) = normalize(%s, NFC)
                 """,
                 (source,),
             )

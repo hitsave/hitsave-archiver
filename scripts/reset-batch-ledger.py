@@ -47,7 +47,7 @@ def main() -> None:
                     metadata_source = NULL,
                     moby_status = NULL,
                     updated_at = NOW()
-                WHERE source_path = %s
+                WHERE normalize(source_path, NFC) = normalize(%s, NFC)
                 """,
                 (source,),
             )

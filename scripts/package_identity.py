@@ -18,10 +18,26 @@ _PACKAGE_UUID_SUFFIX = re.compile(
 )
 
 
+# Letters that NFKD leaves whole, so dropping combining marks alone would delete them.
+_NO_DECOMPOSITION = str.maketrans({
+    "\u00c6": "AE", "\u00e6": "ae", "\u0152": "OE", "\u0153": "oe",
+    "\u00df": "ss", "\u1e9e": "SS",
+    "\u00d8": "O", "\u00f8": "o", "\u0141": "L", "\u0142": "l",
+    "\u0110": "D", "\u0111": "d", "\u00d0": "D", "\u00f0": "d",
+    "\u00de": "Th", "\u00fe": "th", "\u0131": "i",
+})
+
+
 def transliterate_for_slug(text: str) -> str:
-    """Fold Unicode (macrons, accents) to ASCII before slugging package_id segments."""
-    normalized = unicodedata.normalize("NFKD", (text or "").strip())
+    """Fold Unicode (macrons, accents, ligatures) to ASCII before slugging package_id segments."""
+    normalized = unicodedata.normalize("NFKD", (text or "").strip().translate(_NO_DECOMPOSITION))
     return "".join(ch for ch in normalized if not unicodedata.combining(ch))
+
+
+def nfc(text: str) -> str:
+    """One byte form for a folder or file name: macOS writes o-macron as o plus a combining
+    macron (NFD), Linux usually as one character (NFC). Compare names in NFC."""
+    return unicodedata.normalize("NFC", text)
 
 
 def title_slug(text: str) -> str:
@@ -53,8 +69,8 @@ def relative_sip_path(source: Path, press_material_root: Path) -> str:
 
 
 def canonical_sip_line(submission_source_id: str, relative_path: str) -> str:
-    sid = submission_source_id.strip()
-    rel = relative_path.strip().strip("/")
+    sid = nfc(submission_source_id.strip())
+    rel = nfc(relative_path.strip().strip("/"))
     if not sid or not rel:
         raise ValueError("submission_source_id and relative SIP path required")
     return f"{sid}|{rel}"

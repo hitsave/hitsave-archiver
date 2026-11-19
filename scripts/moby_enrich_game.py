@@ -32,7 +32,7 @@ def ledger_game_key_for_bagit_source(conn, source: Path) -> str | None:
         cur.execute(
             """
             SELECT game_key FROM game_ingest
-            WHERE source_path = %s
+            WHERE normalize(source_path, NFC) = normalize(%s, NFC)
             ORDER BY updated_at DESC
             LIMIT 1
             """,

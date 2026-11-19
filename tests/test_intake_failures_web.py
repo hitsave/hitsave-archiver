@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
+import unicodedata
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,7 +36,9 @@ class _Conn:
 
     def execute(self, sql, params):
         self.queries.append((sql, params))
-        rows = [(s,) for s in params[0] if s in self.complete]
+        # Mirrors normalize(source_path, NFC) = ANY(%s): stored paths compare in NFC.
+        assert "normalize(source_path, NFC)" in sql
+        rows = [(s,) for s in self.complete if unicodedata.normalize("NFC", s) in params[0]]
 
         class R:
             def fetchall(self_inner):
@@ -137,3 +141,26 @@ def test_unavailable_without_folder_or_table(tmp_path: Path) -> None:
     from intake_failures import load_failures
 
     assert load_failures(lambda: _TableConn([], table=False), tmp_path / "x") == ([], 0, False)
+
+
+def test_failure_resolved_when_ledger_path_uses_other_normalization_form(tmp_path: Path) -> None:
+    _fail(tmp_path, "redump-\u014ckami", "SHA-1 mismatch", 1_000_000)  # composed on disk
+    conn = _Conn(["/data/intake/ready/redump-O\u0304kami"])  # decomposed in the ledger
+    open_, resolved = open_failures(lambda: conn, tmp_path)
+    assert open_ == []
+    assert resolved == 1
+
+
+def test_no_source_path_comparison_skips_nfc_normalization() -> None:
+    """Folder names can arrive in NFC or NFD; every ledger lookup by source_path must compare
+    both sides in NFC, or the same folder looks like two."""
+    plain = re.compile(r"(?<![(\w])source_path\s*(=|IN\b|=\s*ANY)", re.IGNORECASE)
+    offenders = [
+        f"{path.relative_to(ROOT)}:{n}"
+        for folder in ("scripts", "ledger", "windmill_ops")
+        for path in sorted((ROOT / folder).rglob("*.py"))
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if "WHERE" in line.upper() or "AND" in line.upper()
+        if plain.search(line)
+    ]
+    assert offenders == []
