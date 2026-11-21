@@ -26,7 +26,7 @@ on-site press-material share, and each press kit gets its copy once it's ingeste
 ## How the copy stays up to date
 
 The Windmill job `glacier_copy` runs every night at 06:15 UTC, after the catalog copies are
-added to the bags at 05:30. It runs `scripts/glacier-copy.py --execute` and copies up to 500
+added to the bags at 05:30. It runs `scripts/glacier-copy.py --execute` and copies up to 2,000
 packages or 200 GB a night.
 
 A package is due when it has no copy yet, or when its `tagmanifest-sha256.txt` on Wasabi has
