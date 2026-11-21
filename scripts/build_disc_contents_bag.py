@@ -408,4 +408,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    from omeka_key_redaction import install_omeka_key_redaction
+
+    install_omeka_key_redaction()
     sys.exit(main())
