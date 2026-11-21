@@ -1,7 +1,7 @@
 args:
   execute: 'true'
   max_gb: '200'
-  max_packages: '50'
+  max_packages: '500'
 cron_version: v2
 email: admin@windmill.dev
 enabled: true
