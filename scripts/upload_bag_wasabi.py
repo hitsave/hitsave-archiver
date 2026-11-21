@@ -120,14 +120,15 @@ def upload_file_to_s3(client, *, bucket: str, key: str, path: Path) -> None:
     client.upload_file(str(path), bucket, key, Config=S3_TRANSFER)
 
 
-def make_s3_client(wasabi: dict, creds: dict):
+def make_s3_client(wasabi: dict, creds: dict, *, response_checksum_validation: str = "when_supported"):
     return boto3.client(
         "s3",
         endpoint_url=str(wasabi["endpoint"]).rstrip("/"),
         region_name=wasabi_s3_region(wasabi),
         aws_access_key_id=str(creds["access_key_id"]),
         aws_secret_access_key=str(creds["secret_access_key"]),
-        config=Config(signature_version="s3v4", retries={"max_attempts": 5, "mode": "standard"}),
+        config=Config(signature_version="s3v4", retries={"max_attempts": 5, "mode": "standard"},
+                      response_checksum_validation=response_checksum_validation),
     )
 
 

@@ -359,19 +359,31 @@ def make_aws_client(aws: dict, creds: dict):
     )
 
 
+def make_wasabi_source_client(wasabi: dict, creds: dict):
+    """Wasabi client for reading bags.
+
+    It skips botocore's response checksum check: the copy checks every file's SHA-256 against the
+    bag manifest itself, and botocore 1.44 crashed in that path on a Wasabi error response
+    (AttributeError: 'StreamingChecksumBody' object has no attribute 'strip').
+    """
+    from upload_bag_wasabi import make_s3_client
+
+    return make_s3_client(wasabi, creds, response_checksum_validation="when_required")
+
+
 def connect():
     """(ledger connection, Wasabi client, AWS client, AWS settings, bucket_for) from /config."""
     import psycopg
 
     from preservation_common import wasabi_bucket_for_storage_prefix
-    from upload_bag_wasabi import load_wasabi_settings, make_s3_client, resolve_config_path
+    from upload_bag_wasabi import load_wasabi_settings, resolve_config_path
     from yaml_config import load_yaml
 
     ingest = load_yaml(INGEST_CONFIG)
     db = load_yaml(Path(ingest["database"]["config_file"]))["postgres"]
     wasabi, _ = load_wasabi_settings(INGEST_CONFIG)
     config_root = INGEST_CONFIG.parent.parent
-    src = make_s3_client(wasabi, load_yaml(resolve_config_path(str(wasabi["credentials_file"]), config_root)))
+    src = make_wasabi_source_client(wasabi, load_yaml(resolve_config_path(str(wasabi["credentials_file"]), config_root)))
     aws = load_yaml(AWS_CONFIG)
     creds = load_yaml(resolve_config_path(str(aws["credentials_file"]), config_root))
     dst = make_aws_client(aws, creds)
