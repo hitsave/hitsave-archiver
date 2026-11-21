@@ -247,6 +247,6 @@ def test_wasabi_source_client_skips_botocore_response_checksums():
     # error response (AttributeError: 'StreamingChecksumBody' object has no attribute 'strip').
     client = core.make_wasabi_source_client(
         {"endpoint": "https://s3.us-east-1.wasabisys.com", "region": "us-east-1"},
-        {"access_key_id": "AKIAEXAMPLE", "secret_access_key": "secret"},
+        {"access_key_id": "test-access-key", "secret_access_key": "test-secret-key"},
     )
     assert client.meta.config.response_checksum_validation == "when_required"
