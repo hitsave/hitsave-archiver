@@ -200,3 +200,20 @@ def test_workers_option_reaches_the_package_copy(env, monkeypatch):
     monkeypatch.setattr(job, "copy_package", spy)
     out = run(["--execute", "--game-key", "pkg", "--workers", "3"])
     assert out["packages_copied"] == 1 and seen == [3]
+
+
+def test_unexpected_error_in_one_package_fails_it_and_the_run_goes_on(env, monkeypatch):
+    # botocore 1.44 raised AttributeError while parsing a Wasabi error response, which used to stop the run.
+    src, dst, ledger, run = env
+    make_bag(src, "dumps/pkg2/")
+    ledger.rows.append(row(2, "pkg2", "dumps/pkg2"))
+    real = job.copy_package
+
+    def flaky(s3, bucket, prefix, *a, **kw):
+        if prefix == "dumps/pkg":
+            raise AttributeError("'StreamingChecksumBody' object has no attribute 'strip'")
+        return real(s3, bucket, prefix, *a, **kw)
+    monkeypatch.setattr(job, "copy_package", flaky)
+    out = run(["--execute"])
+    assert out["failed"] == 1 and out["packages_copied"] == 1
+    assert [c["game_ingest_id"] for c in ledger.package_copy] == [2]

@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from glacier_copy_core import TargetObject as T  # noqa: E402
 from glacier_copy_core import copy_file, copy_package, expected_digests, plan_package  # noqa: E402
 from glacier_fakes import FakeS3, client_error, crc64nvme_b64, sha256_of  # noqa: E402
+import glacier_copy_core as core  # noqa: E402
 
 DATA = b"0123456789abcdef" * 4
 BIG = bytes(range(256)) * (12 * 2**20 // 256)  # 12 MiB
@@ -239,3 +240,13 @@ def test_copy_package_with_one_worker_still_copies_everything():
     _bag(src, "dumps/a/", {"data/disc.iso": BIG, "bagit.txt": b"BagIt-Version: 1.0\n"})
     r = copy_package(src, "hitsave-dumps", "dumps/a", dst, "copy", part_size=5 * 2**20, workers=1)
     assert r.ok and dst.objects["hitsave-dumps/dumps/a/data/disc.iso"].data == BIG
+
+
+def test_wasabi_source_client_skips_botocore_response_checksums():
+    # The copy checks every file's SHA-256 itself; botocore's response checksum path crashed on an
+    # error response (AttributeError: 'StreamingChecksumBody' object has no attribute 'strip').
+    client = core.make_wasabi_source_client(
+        {"endpoint": "https://s3.us-east-1.wasabisys.com", "region": "us-east-1"},
+        {"access_key_id": "AKIAEXAMPLE", "secret_access_key": "secret"},
+    )
+    assert client.meta.config.response_checksum_validation == "when_required"

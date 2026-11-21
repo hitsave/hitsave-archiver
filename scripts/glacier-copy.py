@@ -130,6 +130,9 @@ def copy_one(row, bucket, prefixes, before, ledger, src_s3, dst_s3, dst_bucket,
             raise
         print(f"ERROR {key}: {e}", flush=True)
         return {"game_key": key, "outcome": "error", "problems": [str(e)], "bytes_read": read}
+    except Exception as e:  # noqa: BLE001 - one package's surprise must not stop the whole backlog
+        print(f"ERROR {key}: {type(e).__name__}: {e}", flush=True)
+        return {"game_key": key, "outcome": "error", "problems": [f"{type(e).__name__}: {e}"], "bytes_read": read}
     dst_prefix = f"{bucket}/{prefixes[0]}/"
     detail = (f"{DETAIL_PREFIX} s3://{dst_bucket}/{dst_prefix} {uploaded} uploaded, {unchanged} unchanged, "
               f"{markers} marked deleted, {read / 1e9:.2f} GB, {time.time() - t0:.0f}s"
