@@ -86,6 +86,7 @@ COPY scripts/batch-expand-preservation.py \
     scripts/udf_extents.py \
     scripts/fixity-check.py \
     scripts/omeka_dip_media.py \
+    scripts/omeka_key_redaction.py \
     scripts/omeka_external_dip.py \
     scripts/dip_mount_preflight.py \
     scripts/omeka_staff_metadata.py \
