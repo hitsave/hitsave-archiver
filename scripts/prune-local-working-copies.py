@@ -22,8 +22,17 @@ reads them, and without them a new package with the same slug would be skipped a
 preserved". A PRUNED.txt marker is written there. Originals under /data/press-material are
 never touched. Only status 'complete' rows older than --min-age-days are considered.
 
+A local copy can also be older than the package on Wasabi: files were added to the bag after
+ingest (scans), or the payload folder was renamed (#121). Then the only problems are inventory
+files missing locally, or local files whose bytes are in the inventory under another path (or,
+in early bags, our handoff files, whose current version ready/ keeps).
+Nothing local would be lost, but the copy can't be proven equal either. Such a package is
+"stale": it is kept, recorded once with outcome "stale", and not retried until it is uploaded
+again. Delete a stale local copy by hand if the space is needed.
+
 Dry run by default (read-only everywhere). With --execute it deletes and records a fixity_run
-row (detail "wasabi-etag: ...") per verified package. Exit 1 if any package failed verification.
+row (detail "wasabi-etag: ...") per checked package. Exit 1 if any package failed verification;
+stale packages don't count as failures.
 
 Usage (ingest-worker; see windmill_ops/wmill/f/hitsave/prune_local_working_copies.sh):
     prune-local-working-copies.py [--execute] [--min-age-days 14] [--max-packages 50]
@@ -55,6 +64,9 @@ LEDGER_READY_ROOT = "/data/intake/ready"
 # Pre-2026-11 ledger rows used the gdrive-intake container path; still accepted.
 LEGACY_LEDGER_READY_ROOTS = ("/data/gdrive-intake/ready",)
 TAG_FILE_MAX_BYTES = 64 * 1024 * 1024
+# Problems that only show the local copy is older than the Wasabi package (see classify()).
+MISSING_LOCALLY = "no local copy to verify against: "
+OLDER_LOCAL_COPY = "local file is an older copy of preserved content: "
 
 
 @dataclass
@@ -165,17 +177,31 @@ def verify(s3, c: Candidate) -> tuple[list[str], int]:
     if any(not d or s < 0 for d, s in inv.values()):
         return ["ledger inventory lacks sha256/size for some files"], 0
 
-    # 5. nothing local that was never preserved
+    # 5. nothing local that was never preserved. A file at a path the inventory doesn't know is
+    # hashed: if its bytes are in the inventory anyway, it is an older copy (renamed folder).
+    known = {d for d, _ in inv.values()}
+
+    def unknown_path(p: Path, rel: str, what: str) -> str:
+        digest = hash_file(p).sha256
+        if digest in known:
+            return f"{OLDER_LOCAL_COPY}{rel}"
+        # Early bags carried our own handoff files in data/. They aren't contributor content, and
+        # ready/ keeps their current version for good (KEEP_IN_READY; the intake rename rewrote
+        # paths in them), so the bag's copy is just an older one.
+        if c.ready_dir and p.name in KEEP_IN_READY and (c.ready_dir / p.name).is_file():
+            return f"{OLDER_LOCAL_COPY}{rel}"
+        return f"{what} not in ingest inventory: {rel}"
+
     if c.bag_dir:
         for p in local_payload_files(c.bag_dir / "data"):
             rel = p.relative_to(c.bag_dir).as_posix()
             if rel not in inv:
-                problems.append(f"local bag file not in ingest inventory: {rel}")
+                problems.append(unknown_path(p, rel, "local bag file"))
     if c.ready_dir:
         for p in local_payload_files(c.ready_dir, skip_names=KEEP_IN_READY | {MARKER}):
             rel = ready_rel_to_bag_rel(c.ready_dir, p, payload_top(inv, c.ready_dir))
             if rel not in inv:
-                problems.append(f"ready file not in ingest inventory: {rel}")
+                problems.append(unknown_path(p, rel, "ready file"))
             elif p.stat().st_size != inv[rel][1]:
                 problems.append(f"ready file size differs from inventory: {rel}")
     if problems:
@@ -229,7 +255,7 @@ def verify(s3, c: Candidate) -> tuple[list[str], int]:
             if rel.startswith(prefix) and (c.ready_dir / rel[len(prefix):]).is_file():
                 local = c.ready_dir / rel[len(prefix):]
         if local is None:
-            problems.append(f"no local copy to verify against: {rel}")
+            problems.append(f"{MISSING_LOCALLY}{rel}")
             continue
         if objs.get(rel) != size:
             problems.append(f"Wasabi object missing or wrong size: {rel}")
@@ -247,6 +273,15 @@ def verify(s3, c: Candidate) -> tuple[list[str], int]:
         if not ok:
             problems.append(f"Wasabi ETag does not match local bytes: {rel} ({detail})")
     return problems, hashed
+
+
+def classify(problems: list[str]) -> str:
+    """'pass' (safe to delete), 'stale' (local copy is only older than Wasabi), or 'fail'."""
+    if not problems:
+        return "pass"
+    if all(p.startswith((MISSING_LOCALLY, OLDER_LOCAL_COPY)) for p in problems):
+        return "stale"
+    return "fail"
 
 
 # --- deletion -------------------------------------------------------------------------------
@@ -335,6 +370,14 @@ def main() -> None:
     if args.game_key:
         where.append("game_key = ANY(%s)")
         params.append(args.game_key)
+    else:
+        # A stale local copy stays stale until the package is uploaded again: don't re-read it
+        # every night. --game-key still checks it on request.
+        where.append(
+            "NOT EXISTS (SELECT 1 FROM fixity_run f WHERE f.game_ingest_id = game_ingest.id "
+            f"AND f.detail LIKE '{DETAIL_PREFIX}%%' AND f.outcome = 'stale' "
+            "AND f.checked_at > game_ingest.aip_uploaded_at)"
+        )
     rows = conn.execute(
         f"SELECT id, game_key, ingest_kind, package_storage_prefix, inventory_json, aip_bag_path, "
         f"source_path FROM game_ingest WHERE {' AND '.join(where)} ORDER BY aip_uploaded_at",
@@ -368,19 +411,23 @@ def main() -> None:
         else:
             problems, hashed = verify(s3, c)
         hashed_total += hashed
-        outcome = "fail" if problems else "pass"
+        outcome = classify(problems)
         removed: list[str] = []
         if args.execute:
             conn.execute(
                 "INSERT INTO fixity_run (game_ingest_id, outcome, files_checked, detail) VALUES (%s, %s, %s, %s)",
                 (gid, outcome, len(inventory_files(inv)),
                  f"{DETAIL_PREFIX} s3://{c.bucket}/{prefix.strip('/')}/ vs local {hashed / 1e9:.2f} GB, "
-                 f"{time.time() - t0:.0f}s" + (": " + "; ".join(problems[:20]) if problems else "")),
+                 f"{time.time() - t0:.0f}s"
+                 + (": local copy is older than the Wasabi package, kept" if outcome == "stale" else "")
+                 + (": " + "; ".join(problems[:20]) if problems else "")),
             )
             conn.commit()
             if not problems:
                 removed = prune(c, now=now)
         action = ("DELETED" if removed else "WOULD DELETE") if not problems else "KEEP"
+        if outcome == "stale":
+            action = "KEEP (STALE)"
         print(f"{outcome.upper():4} {action:12} {game_key}: bag={bag_dir or '-'} ready={ready_dir or '-'} "
               f"{size / 1e9:.2f} GB" + (": " + "; ".join(problems[:5]) if problems else ""), flush=True)
         results.append({"game_key": game_key, "outcome": outcome, "bytes": size, "problems": problems,
@@ -388,16 +435,19 @@ def main() -> None:
 
     conn.close()
     passed = [r for r in results if r["outcome"] == "pass"]
+    stale = [r for r in results if r["outcome"] == "stale"]
+    failed = [r for r in results if r["outcome"] == "fail"]
     print(json.dumps({
         "mode": "execute" if args.execute else "dry-run",
         "candidates_checked": len(results),
         "verified": len(passed),
-        "failed": len(results) - len(passed),
+        "stale": len(stale),
+        "failed": len(failed),
         # payload size per package; disk freed is up to 2x for dumps (bag + ready/ copy)
         "payload_gb_pruned" if args.execute else "payload_gb_would_prune": round(sum(r["bytes"] for r in passed) / 1e9, 2),
         "gb_hashed": round(hashed_total / 1e9, 2),
     }))
-    if len(passed) != len(results):
+    if failed:
         raise SystemExit(1)
 
 
