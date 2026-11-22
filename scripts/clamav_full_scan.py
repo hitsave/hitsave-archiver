@@ -20,7 +20,10 @@ is reported as not fully scanned.
 from __future__ import annotations
 
 import hashlib
+import socket
 import struct
+import sys
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -31,6 +34,10 @@ SECTOR = 2048
 STREAM_TIMEOUT = 24 * 3600  # client-side wait per stream: a hung scan becomes an error, never "clean"
 ENCRYPTED_CONTAINERS = {".xci", ".nsp", ".nsz", ".xcz"}
 NOT_FULLY_SCANNED_ALERTS = ("Heuristics.Limits.Exceeded", "Heuristics.Encrypted")
+# clamd can go away mid-ingest: its container recreated, or a Docker upgrade restarting the daemon.
+# A lost connection waits up to this long for clamd to answer again, then rescans the range.
+CLAMD_RECONNECT_SECONDS = 300
+CLAMD_STREAM_ATTEMPTS = 3
 
 
 class MalwareFound(RuntimeError):
@@ -54,8 +61,12 @@ class _RangeReader:
     """File-like over [start, end) of an open file; feeds the running hash with new bytes only."""
 
     def __init__(self, fh, start: int, end: int, hasher, hash_state: list[int]):
-        self.fh, self.pos, self.end = fh, start, end
+        self.fh, self.start, self.pos, self.end = fh, start, start, end
         self.hasher, self.hash_state = hasher, hash_state
+
+    def restart(self) -> None:
+        """Read the range again from its start (the hash only takes bytes it hasn't seen)."""
+        self.pos = self.start
 
     def read(self, n: int = -1) -> bytes:
         if self.pos >= self.end:
@@ -102,10 +113,50 @@ def _instream(host: str, port: int, reader, *, block: int = 1 << 20) -> dict | N
     return {"stream": ("ERROR", text)}
 
 
+def wait_for_clamd_tcp(host: str, port: int, *, timeout: float = CLAMD_RECONNECT_SECONDS,
+                       connect=None, sleep=None, now=None) -> None:
+    """Block until clamd answers PING; raise ConnectionError after ``timeout`` seconds."""
+    connect = connect or socket.create_connection
+    sleep = sleep or time.sleep
+    now = now or time.monotonic
+    deadline = now() + timeout
+    last: Exception | None = None
+    while True:
+        try:
+            with connect((host, int(port)), timeout=10) as sock:
+                sock.sendall(b"zPING\0")
+                if sock.recv(16).startswith(b"PONG"):
+                    return
+        except OSError as e:
+            last = e
+        if now() >= deadline:
+            raise ConnectionError(f"clamd at {host}:{port} not back after {timeout:g}s: {last}")
+        sleep(3)
+
+
+def _instream_retrying(host: str, port: int, reader) -> dict | None:
+    """_instream, waiting for clamd and rescanning the range when the connection drops.
+
+    Only readers that can rewind (file ranges) are retried; a stream piped from 7-Zip can't be
+    read twice, so its error is raised as before.
+    """
+    for attempt in range(1, CLAMD_STREAM_ATTEMPTS + 1):
+        try:
+            return _instream(host, port, reader)
+        except ConnectionError as e:
+            if attempt == CLAMD_STREAM_ATTEMPTS or not hasattr(reader, "restart"):
+                raise
+            print(f"clamd connection lost ({type(e).__name__}); waiting for clamd, then rescanning "
+                  f"this range (attempt {attempt + 1} of {CLAMD_STREAM_ATTEMPTS})", file=sys.stderr, flush=True)
+            wait_for_clamd_tcp(host, port)
+            reader.restart()
+    raise AssertionError("unreachable")
+
+
 def _stream(clamd, reader) -> str | None:
     """Stream one object; return a limit alert name, None if clean; raise MalwareFound."""
     if getattr(clamd, "host", None) and getattr(clamd, "port", None):
-        result = _instream(clamd.host, clamd.port, reader)
+        result = _instream_retrying(clamd.host, clamd.port, reader)
     else:  # test doubles / other clients
         old = getattr(clamd, "timeout", None)
         if old is not None:
