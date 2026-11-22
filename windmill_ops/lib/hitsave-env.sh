@@ -3,6 +3,8 @@
 set -euo pipefail
 
 ARCHIVER_ROOT="${ARCHIVER_ROOT:-/archiver}"
+# shellcheck source=../../scripts/compose_shared.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/compose_shared.sh"
 HOST_ENV_FILE="${HOST_ENV_FILE:-/run/hitsave/host.env}"
 for _paths_file in \
   "${WORKER_PATHS_FILE:-}" \
@@ -74,5 +76,5 @@ archiver_compose() {
   if [[ -n "${HITSAVE_LEDGER_REMOTE_HOST:-}" ]]; then
     files=(-f "$ARCHIVER_HOST_PATH/docker-compose.yml" -f "$ARCHIVER_HOST_PATH/docker-compose.remote-ledger.yml")
   fi
-  docker compose --project-directory "$ARCHIVER_HOST_PATH" "${files[@]}" "$@"
+  hitsave_compose docker compose --project-directory "$ARCHIVER_HOST_PATH" "${files[@]}" -- "$@"
 }

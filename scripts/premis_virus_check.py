@@ -34,8 +34,21 @@ def iso_now() -> str:
 
 
 def clamav_version_info(clamd) -> tuple[str, str, str | None]:
-    """Return (program, version string, optional virus DB build line)."""
-    raw = clamd.version()
+    """Return (program, version string, optional virus DB build line).
+
+    clamd may have restarted since the ingest connected (container recreated, Docker upgrade):
+    pyclamd then raises its ConnectionError, an OSError. Wait for clamd once and ask again.
+    """
+    try:
+        raw = clamd.version()
+    except OSError:
+        host, port = getattr(clamd, "host", None), getattr(clamd, "port", None)
+        if not (host and port):
+            raise
+        import clamav_full_scan
+
+        clamav_full_scan.wait_for_clamd_tcp(host, port)
+        raw = clamd.version()
     if isinstance(raw, bytes):
         raw = raw.decode("utf-8", errors="replace")
     line = str(raw).strip()

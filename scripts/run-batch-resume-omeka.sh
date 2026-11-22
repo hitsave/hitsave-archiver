@@ -4,6 +4,8 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+# shellcheck source=compose_shared.sh
+source "$ROOT/scripts/compose_shared.sh"
 
 INGEST_ONLY=0
 if [[ "${1:-}" == "--ingest-only" ]]; then
@@ -29,7 +31,7 @@ docker compose build ingest-worker omeka-catalog >/dev/null
 ledger_status() {
   local cfg="$1"
   local rel="${cfg#config/preservation/}"
-  docker compose run --rm --entrypoint python ingest-worker \
+  compose_run --rm --entrypoint python ingest-worker \
     /app/scripts/batch_ledger.py status "/config/preservation/$rel" 2>/dev/null | tr -d '[:space:]' || true
 }
 
@@ -48,7 +50,7 @@ for cfg in "${CONFIGS[@]}"; do
   status="$(ledger_status "$cfg")"
   if [[ "$status" != "complete" && "$status" != "quarantine" ]]; then
     echo "=== ingest: $label ==="
-    if ! docker compose run --rm -T -e HITSAVE_BATCH_KEY="$BATCH_KEY" ingest-worker \
+    if ! compose_run --rm -T -e HITSAVE_BATCH_KEY="$BATCH_KEY" ingest-worker \
       "/config/preservation/${cfg#config/preservation/}" </dev/null; then
       echo "=== ingest failed (continuing batch): $label ===" >&2
     fi
@@ -59,17 +61,17 @@ for cfg in "${CONFIGS[@]}"; do
   if [[ "$INGEST_ONLY" -eq 0 ]]; then
     if [[ "$status" == "complete" ]]; then
       rel="${cfg#config/preservation/}"
-      needs_moby="$(docker compose run --rm --entrypoint python ingest-worker \
+      needs_moby="$(compose_run --rm --entrypoint python ingest-worker \
         /app/scripts/batch_ledger.py needs_moby "/config/preservation/$rel" 2>/dev/null | tr -d '[:space:]' || echo 0)"
       if [[ "$needs_moby" == "1" ]]; then
         echo "=== moby enrich (ledger backfill): $label ==="
-        docker compose run --rm -T -e HITSAVE_BATCH_KEY="$BATCH_KEY" --entrypoint python ingest-worker \
+        compose_run --rm -T -e HITSAVE_BATCH_KEY="$BATCH_KEY" --entrypoint python ingest-worker \
           /app/scripts/moby_enrich_game.py "/config/preservation/$rel" </dev/null || true
       fi
-      pkg_key="$(docker compose run --rm --entrypoint python ingest-worker \
+      pkg_key="$(compose_run --rm --entrypoint python ingest-worker \
         /app/scripts/batch_ledger.py game_key "/config/preservation/$rel" 2>/dev/null | tr -d '[:space:]' || true)"
       echo "=== omeka catalog register: ${pkg_key:-$label} ==="
-      if ! docker compose run --rm -T omeka-catalog "/config/preservation/${cfg#config/preservation/}" </dev/null; then
+      if ! compose_run --rm -T omeka-catalog "/config/preservation/${cfg#config/preservation/}" </dev/null; then
         echo "=== omeka catalog register failed (continuing batch): $label ===" >&2
       fi
     else
