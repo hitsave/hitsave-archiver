@@ -295,8 +295,10 @@ def main() -> int:
     import psycopg
     import requests
 
+    from omeka_key_redaction import install_omeka_key_redaction
     from yaml_config import load_yaml
 
+    install_omeka_key_redaction()  # Omeka takes the API key as URL parameters; keep it out of tracebacks
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--execute", action="store_true", help="post and write to the ledger (default: dry run)")
     ap.add_argument("--backfill", action="store_true", help="mark already-public items announced, without posting")
