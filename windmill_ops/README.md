@@ -18,6 +18,7 @@ container path `/archiver`.
 | `glacier_copy_check` | 07:00 on the 1st | Checks every file of the Glacier copy against Wasabi's manifests with HEAD requests, without restores ([glacier-copy.md](../docs/glacier-copy.md)). |
 | `glacier_restore_worker` | every 15 minutes | Moves each restore request from the ledger one step forward: checks Wasabi, restores only missing and corrupted files from Glacier, and writes them back after an admin approves ([restore-from-glacier.md](../docs/restore-from-glacier.md#restore-from-the-ledger)). |
 | `publish_damaged_files_page` | Every 3 h at :15 | Rebuilds the public "Damaged files" page from the ledger ([damaged-files.md](../docs/damaged-files.md)). |
+| `discord_digest` | 09:00, 12:00, 15:00, 18:00, 21:00 **Pacific** | Posts newly published items to the Discord changelog channel, up to 40 a run. Disabled until the backfill has run ([discord-digest.md](../docs/discord-digest.md)). |
 
 Each schedule is defined in `wmill/f/hitsave/<name>.schedule.yaml`, next to its script. The
 times are chosen so the daily jobs don't overlap: the ledger backup runs before the fixity
@@ -37,6 +38,7 @@ in its schedule for a read-only report.
 | `glacier_copy` | Scheduled Glacier copy (above). Set `execute: 'false'` to only list what's due. |
 | `glacier_copy_check` | Monthly Glacier check (above). Set `record: 'false'` to only report. |
 | `glacier_restore_worker` | Restore requests from the ledger (above). Takes no arguments. |
+| `discord_digest` | Discord digest (above). Set `execute: 'false'` to only list what would be posted. |
 | `correct_catalog_item` | Catalog correction. The ledger's **`/correct`** submits this job. |
 | `quarantine_catalog_item` | Manual quarantine (`scripts/curation-quarantine-omeka.py`); the ledger's **`/quarantine`** offers the same form |
 | `batch_resume_omeka` | `run-batch-resume-omeka.sh` (long; manual) |

@@ -1,0 +1,24 @@
+summary: Post newly published items to Discord
+description: >
+  Runs `scripts/discord_digest.py`: records ledger items that became public in
+  Omeka without the ledger seeing it, then posts up to max_items unannounced
+  publications to the archive changelog channel as the archive bot, oldest
+  first, and marks them announced. Items hidden again or still showing the
+  placeholder description wait for a later run.
+
+  With execute false it only reports what would be posted.
+lock: ''
+kind: script
+schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  properties:
+    execute:
+      type: string
+      description: 'true: post to Discord and update the ledger; false: dry run'
+      default: 'true'
+    max_items:
+      type: string
+      description: 'Post at most this many items per run; the rest go out at the next run'
+      default: '40'
+  required: []
