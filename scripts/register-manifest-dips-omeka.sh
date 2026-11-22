@@ -13,6 +13,8 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+# shellcheck source=compose_shared.sh
+source "$ROOT/scripts/compose_shared.sh"
 LOG="${HITSAVE_REGISTER_LOG:-$ROOT/.generated/register-manifest-dips-omeka.log}"
 mkdir -p "$(dirname "$LOG")"
 
@@ -23,7 +25,7 @@ register_manifest() {
   while IFS=$'\t' read -r game_label cfg || [[ -n "${game_label:-}" ]]; do
     [[ -z "${cfg:-}" ]] && continue
     echo "--- omeka catalog register: $game_label ($(date -Is)) ---" | tee -a "$LOG"
-    if docker compose run --rm -T omeka-catalog "/config/preservation/${cfg#config/preservation/}" </dev/null >>"$LOG" 2>&1; then
+    if compose_run --rm -T omeka-catalog "/config/preservation/${cfg#config/preservation/}" </dev/null >>"$LOG" 2>&1; then
       echo "OK $game_label" | tee -a "$LOG"
     else
       echo "FAILED $game_label (see $LOG)" | tee -a "$LOG"
@@ -47,7 +49,7 @@ docker compose build omeka-catalog >/dev/null
 if [[ "${1:-}" == "--pilot" ]]; then
   echo "Register run started $(date -Is)" | tee -a "$LOG"
   echo "--- omeka catalog register: pilot-wog1 ---" | tee -a "$LOG"
-  docker compose run --rm -T omeka-catalog /config/preservation/pilot-game.yaml </dev/null >>"$LOG" 2>&1 \
+  compose_run --rm -T omeka-catalog /config/preservation/pilot-game.yaml </dev/null >>"$LOG" 2>&1 \
     || echo "FAILED pilot-wog1" | tee -a "$LOG"
   echo "Register run finished $(date -Is)" | tee -a "$LOG"
   exit 0

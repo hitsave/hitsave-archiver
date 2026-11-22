@@ -2,6 +2,9 @@
 # Shared paths for community-dump remote intake (Drive / Wasabi → archiver).
 # Source from operator host.env: HITSAVE_PRIVATE_CONFIG, HOST_INTAKE, HOST_OUTPUT.
 
+# shellcheck source=../compose_shared.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../compose_shared.sh"
+
 remote_intake_compat_env() {
   # Compatibility: accept the pre-rename gdrive-intake variable names (hitsave-intake rename,
   # 2026-11). Old names fill in new ones only when the new name is unset.
@@ -175,7 +178,7 @@ remote_intake_archiver_compose() {
   if [[ -n "${HITSAVE_LEDGER_REMOTE_HOST:-}" ]]; then
     files+=(-f "$dir/docker-compose.remote-ledger.yml")
   fi
-  HITSAVE_PRIVATE_CONFIG="$priv" docker compose --project-directory "$dir" "${files[@]}" "$@"
+  HITSAVE_PRIVATE_CONFIG="$priv" hitsave_compose docker compose --project-directory "$dir" "${files[@]}" -- "$@"
 }
 
 # The compose FILE is read by this process (inside the Windmill worker that is /intake, the

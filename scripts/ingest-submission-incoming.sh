@@ -3,6 +3,8 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+# shellcheck source=compose_shared.sh
+source "$ROOT/scripts/compose_shared.sh"
 
 SUBMISSIONS_ROOT="$(python3 "$ROOT/scripts/read-host-path-config.py" submissions_root)"
 INCOMING="$SUBMISSIONS_ROOT/incoming"
@@ -28,6 +30,6 @@ for z in "${ZIPS[@]}"; do
     cp -f "$src" "$INCOMING_ABS/$base"
   fi
   echo "=== Ingest submission: $base ==="
-  docker compose run --rm --entrypoint python ingest-worker \
+  compose_run --rm --entrypoint python ingest-worker \
     /app/scripts/ingest-submission.py "/data/submissions/incoming/$base"
 done
