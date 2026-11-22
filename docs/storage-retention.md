@@ -74,8 +74,18 @@ guard (`scripts/remote-intake/ready_source.py`) reads the handoff manifest. With
 package with the same slug would be skipped as "already preserved". Originals under
 `/data/press-material` are never touched. Quarantined and failed packages are never touched.
 
-Each verified package gets a `fixity_run` row with detail `wasabi-etag: …`. The job exits
+Each checked package gets a `fixity_run` row with detail `wasabi-etag: …`. The job exits
 non-zero if any package fails verification, and that package's local copy is kept.
+
+**Stale local copies.** A local copy can be older than the package on Wasabi: scans were added
+to the bag after ingest, or the payload folder was renamed. Then the only problems are inventory
+files missing locally, or local files that are older copies of preserved content: the same bytes
+under an old path, or, in early bags, the handoff files whose current version `ready/` keeps.
+Nothing local would be lost, but the copy can't be proven equal either. The job records such a
+package once with outcome `stale`, keeps its local copy, doesn't count it as a failure, and
+skips it on later nights until the package is uploaded again (`--game-key` still checks it).
+Delete a stale local copy by hand when the space is needed: Wasabi and Glacier hold the current
+package.
 
 **Deleting since 2026-11-02.** The schedule runs with `execute: "true"`. It was enabled after the
 first scheduled dry run verified all 50 candidates (199.9 GB). Set `execute` to `"false"` for a

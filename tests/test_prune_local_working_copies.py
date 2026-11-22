@@ -202,3 +202,64 @@ def test_ready_dir_for(tmp_path: Path) -> None:
     assert prune.ready_dir_for(None, tmp_path) is None
     # legacy ledger prefix (before the intake data-dir rename) still maps
     assert prune.ready_dir_for(f"/data/gdrive-intake/ready/{SLUG}", tmp_path) == (tmp_path / SLUG).resolve()
+
+
+def test_local_copy_missing_files_added_later_is_stale(world) -> None:
+    """Scans added to the Wasabi bag after ingest: the local copy is older, nothing local is lost."""
+    scan = b"JPEG" * 50
+    rel = f"data/{SLUG}/Scans/_DSC0015.JPG"
+    world["s3"].objects[f"{PREFIX}/{rel}"] = scan
+    world["c"].inventory["files"].append({"path": rel, "sha256": _sha(scan), "size_bytes": len(scan)})
+    manifest = "".join(f"{f['sha256']}  {f['path']}\n" for f in world["c"].inventory["files"]).encode()
+    world["s3"].objects[f"{PREFIX}/manifest-sha256.txt"] = manifest
+    baginfo = world["s3"].objects[f"{PREFIX}/bag-info.txt"]
+    world["s3"].objects[f"{PREFIX}/tagmanifest-sha256.txt"] = (
+        f"{_sha(manifest)}  manifest-sha256.txt\n{_sha(baginfo)}  bag-info.txt\n".encode())
+    problems, _ = prune.verify(world["s3"], world["c"])
+    assert problems == [f"no local copy to verify against: {rel}"]
+    assert prune.classify(problems) == "stale"
+
+
+def test_local_copy_under_old_folder_name_is_stale(world) -> None:
+    """Payload folder renamed on Wasabi after ingest: same bytes, old path locally."""
+    import shutil
+
+    shutil.rmtree(world["c"].ready_dir)
+    world["c"].ready_dir = None
+    bag = world["c"].bag_dir
+    (bag / "data" / SLUG).rename(bag / "data" / "redump-e3-2004")
+    problems, _ = prune.verify(world["s3"], world["c"])
+    assert sorted(problems) == [
+        "local file is an older copy of preserved content: data/redump-e3-2004/!submissionInfo.txt",
+        "local file is an older copy of preserved content: data/redump-e3-2004/disc.iso",
+    ]
+    assert prune.classify(problems) == "stale"
+
+
+def test_unpreserved_local_content_is_still_a_failure(world) -> None:
+    (world["c"].bag_dir / f"data/{SLUG}/extra.bin").write_bytes(b"never preserved")
+    problems, _ = prune.verify(world["s3"], world["c"])
+    assert problems == [f"local bag file not in ingest inventory: data/{SLUG}/extra.bin"]
+    assert prune.classify(problems) == "fail"
+
+
+def test_stale_with_any_other_problem_is_a_failure(world) -> None:
+    assert prune.classify([]) == "pass"
+    assert prune.classify(["no local copy to verify against: data/x", "Wasabi HEAD size mismatch: data/y"]) == "fail"
+
+
+def test_old_bag_with_handoff_files_kept_in_ready_is_stale(world) -> None:
+    """Early bags carried the handoff files in data/; ready/ keeps their current version for good."""
+    import shutil
+
+    bag = world["c"].bag_dir
+    (bag / "data" / SLUG).rename(bag / "data" / "redump-e3-2004")
+    (bag / "data/redump-e3-2004/game.ingest.yaml").write_text(
+        "source_game_folder: /data/gdrive-intake/ready/redump-pkg\n")  # before the intake rename
+    problems, _ = prune.verify(world["s3"], world["c"])
+    assert f"{prune.OLDER_LOCAL_COPY}data/redump-e3-2004/game.ingest.yaml" in problems
+    assert prune.classify(problems) == "stale"
+    (world["c"].ready_dir / "game.ingest.yaml").unlink()
+    problems, _ = prune.verify(world["s3"], world["c"])
+    assert "local bag file not in ingest inventory: data/redump-e3-2004/game.ingest.yaml" in problems
+    assert prune.classify(problems) == "fail"
