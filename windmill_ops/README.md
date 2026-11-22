@@ -18,7 +18,7 @@ container path `/archiver`.
 | `glacier_copy_check` | 07:00 on the 1st | Checks every file of the Glacier copy against Wasabi's manifests with HEAD requests, without restores ([glacier-copy.md](../docs/glacier-copy.md)). |
 | `glacier_restore_worker` | every 15 minutes | Moves each restore request from the ledger one step forward: checks Wasabi, restores only missing and corrupted files from Glacier, and writes them back after an admin approves ([restore-from-glacier.md](../docs/restore-from-glacier.md#restore-from-the-ledger)). |
 | `publish_damaged_files_page` | Every 3 h at :15 | Rebuilds the public "Damaged files" page from the ledger ([damaged-files.md](../docs/damaged-files.md)). |
-| `discord_digest` | 09:00, 12:00, 15:00, 18:00, 21:00 **Pacific** | Posts newly published items to the Discord changelog channel, up to 40 a run. Disabled until the backfill has run ([discord-digest.md](../docs/discord-digest.md)). |
+| `discord_digest` | 09:00, 12:00, 15:00, 18:00, 21:00 **Pacific** | Posts newly published items to the Discord changelog channel, up to 40 a run ([discord-digest.md](../docs/discord-digest.md)). |
 
 Each schedule is defined in `wmill/f/hitsave/<name>.schedule.yaml`, next to its script. The
 times are chosen so the daily jobs don't overlap: the ledger backup runs before the fixity
