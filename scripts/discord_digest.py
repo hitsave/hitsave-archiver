@@ -6,9 +6,10 @@ Each run of this job:
 
   1. finds ledger items that are public in Omeka but have no publication row (published from a
      script or the Omeka admin) and records them ("reconcile");
-  2. takes up to --max-items unannounced rows, oldest first, and reads each item from Omeka:
-     a deleted item is closed without a post, an item that is hidden again or still has the
-     placeholder description stays pending;
+  2. reads unannounced rows from Omeka, new ones first, then the oldest skipped ones, until
+     --max-items are ready to post (at most 200 reads a run): a deleted item is closed without a
+     post; an item that is hidden again or still has the placeholder description stays pending
+     and moves behind newer rows;
   3. posts the rest as embeds, 10 per message, as the archive bot account, and marks each
      message's items announced right after that message is accepted.
 
@@ -43,6 +44,7 @@ MAX_MESSAGE_CHARS = 6000
 TITLE_MAX = 256
 DESCRIPTION_MAX = 300
 MAX_RETRIES = 3
+MAX_CHECKS_PER_RUN = 200  # Omeka item reads per run, so skipped items can't make a run endless
 
 
 class DigestError(Exception):
@@ -161,24 +163,28 @@ class Store:
         return {int(r[0]) for r in self.conn.execute("SELECT omeka_item_id FROM publication").fetchall()}
 
     def insert(self, ids: Iterable[int], source: str, *, announced: bool) -> int:
+        """Add rows for ids that have none. Returns how many were added."""
         ids = sorted(ids)
         if not ids:
             return 0
-        with self.conn.transaction():
-            with self.conn.cursor() as cur:
-                cur.executemany(
-                    "INSERT INTO publication (omeka_item_id, game_ingest_id, published_by, source, announced_at, "
-                    "skip_reason) SELECT %s, (SELECT id FROM game_ingest WHERE omeka_item_id = %s ORDER BY id LIMIT 1), "
-                    "%s, %s, CASE WHEN %s THEN now() END, CASE WHEN %s THEN %s END "
-                    "ON CONFLICT (omeka_item_id) DO NOTHING",
-                    [(i, i, source, source, announced, announced, source) for i in ids])
-        return len(ids)
+        cur = self.conn.execute(
+            "INSERT INTO publication (omeka_item_id, game_ingest_id, published_by, source, announced_at, skip_reason) "
+            "SELECT i, (SELECT id FROM game_ingest g WHERE g.omeka_item_id = i ORDER BY id LIMIT 1), %s, %s, "
+            "CASE WHEN %s THEN now() END, CASE WHEN %s THEN %s END "
+            "FROM unnest(%s::int[]) AS i ON CONFLICT (omeka_item_id) DO NOTHING",
+            (source, source, announced, announced, source, ids))
+        return cur.rowcount
 
-    def pending(self, limit: int) -> list[int]:
+    def pending(self, limit: int, exclude: Iterable[int] = ()) -> list[int]:
+        """Unannounced items: never-checked ones first, oldest published first; then the longest-skipped."""
         rows = self.conn.execute(
-            "SELECT omeka_item_id FROM publication WHERE announced_at IS NULL ORDER BY published_at, id LIMIT %s",
-            (limit,))
+            "SELECT omeka_item_id FROM publication WHERE announced_at IS NULL AND NOT (omeka_item_id = ANY(%s)) "
+            "ORDER BY last_checked_at NULLS FIRST, published_at, id LIMIT %s", (list(exclude), limit))
         return [int(r[0]) for r in rows.fetchall()]
+
+    def touch(self, ids: list[int]) -> None:
+        """Move skipped items behind newer ones."""
+        self.conn.execute("UPDATE publication SET last_checked_at = now() WHERE omeka_item_id = ANY(%s)", (list(ids),))
 
     def mark(self, ids: list[int], *, message_id: str | None = None, skip_reason: str | None = None) -> None:
         self.conn.execute(
@@ -224,8 +230,12 @@ class Omeka:
 # --- the job -------------------------------------------------------------------------------
 
 def backfill(store, omeka, *, execute: bool) -> int:
-    """Mark every public ledger item without a row as announced, without posting."""
-    ids = (omeka.public_ids() & store.ledger_item_ids()) - store.recorded_ids()
+    """Mark every public item without a row as announced, without posting.
+
+    All public items, not only ledger ones: a ledger package can later point at an old public record
+    (an ARK merge, a new dump on an existing record), and reconcile must not announce that as new.
+    """
+    ids = omeka.public_ids() - store.recorded_ids()
     if execute:
         store.insert(ids, "backfill", announced=True)
         store.set_state("backfilled", datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
@@ -245,31 +255,43 @@ def run(store, omeka, post: Callable, discord: dict, *, execute: bool, max_items
         return {"locked": True}
     if not store.get_state("backfilled"):
         raise DigestError("run --backfill first")
-    summary = {"pending": 0, "posted": 0, "would_post": 0, "skipped_hidden": 0, "skipped_deleted": 0,
+    summary = {"pending": 0, "checked": 0, "posted": 0, "would_post": 0, "skipped_hidden": 0, "skipped_deleted": 0,
                "skipped_placeholder": 0, "messages": 0, "reconciled": 0}
     public = omeka.public_ids()
     if execute:
         summary["reconciled"] = reconcile(store, public)
     else:
         summary["reconciled"] = len((public & store.ledger_item_ids()) - store.recorded_ids())
-    ids = store.pending(max_items)
-    summary["pending"] = len(ids)
     ready: list[tuple[int, dict]] = []
     deleted: list[int] = []
-    for item_id in ids:
-        it = omeka.item(item_id)
-        if it is None:
-            deleted.append(item_id)
-            summary["skipped_deleted"] += 1
-            continue
-        if it.get("o:is_public") is not True:
-            summary["skipped_hidden"] += 1
-            continue
-        embed = build_embed(it)
-        if embed is None:
-            summary["skipped_placeholder"] += 1
-            continue
-        ready.append((item_id, embed))
+    skipped: list[int] = []
+    checked: list[int] = []
+    while len(ready) < max_items and len(checked) < MAX_CHECKS_PER_RUN:
+        batch = store.pending(min(max_items, MAX_CHECKS_PER_RUN - len(checked)), exclude=checked)
+        if not batch:
+            break
+        for item_id in batch:
+            if len(ready) >= max_items:
+                break
+            checked.append(item_id)
+            it = omeka.item(item_id)
+            if it is None:
+                deleted.append(item_id)
+                summary["skipped_deleted"] += 1
+                continue
+            if it.get("o:is_public") is not True:
+                skipped.append(item_id)
+                summary["skipped_hidden"] += 1
+                continue
+            embed = build_embed(it)
+            if embed is None:
+                skipped.append(item_id)
+                summary["skipped_placeholder"] += 1
+                continue
+            ready.append((item_id, embed))
+    summary["checked"] = summary["pending"] = len(checked)
+    if execute and skipped:
+        store.touch(skipped)
     if execute and deleted:
         store.mark(deleted, skip_reason="deleted")
     by_embed = {id(e): i for i, e in ready}

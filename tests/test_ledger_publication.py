@@ -52,3 +52,4 @@ def test_db_error_returns_false(capsys):
 
     assert record_published(boom, 31336, "editor@example.org") is False
     assert "31336" in capsys.readouterr().out
+

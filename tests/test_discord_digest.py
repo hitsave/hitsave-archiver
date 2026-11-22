@@ -32,7 +32,8 @@ class FakeStore:
 
     def add(self, item_id, minutes, source="ledger"):
         self.rows[item_id] = {"omeka_item_id": item_id, "published_at": T0 + timedelta(minutes=minutes),
-                              "source": source, "announced_at": None, "discord_message_id": None, "skip_reason": None}
+                              "source": source, "announced_at": None, "discord_message_id": None, "skip_reason": None,
+                              "last_checked_at": None}
 
     def try_lock(self):
         return self.lock
@@ -56,12 +57,19 @@ class FakeStore:
         for i in ids:
             self.rows[i] = {"omeka_item_id": i, "published_at": T0, "source": source,
                             "announced_at": T0 if announced else None, "discord_message_id": None,
-                            "skip_reason": "backfill" if announced else None}
+                            "skip_reason": "backfill" if announced else None, "last_checked_at": None}
         return len(ids)
 
-    def pending(self, limit):
-        rows = sorted((r for r in self.rows.values() if r["announced_at"] is None), key=lambda r: r["published_at"])
+    def pending(self, limit, exclude=()):
+        rows = sorted((r for r in self.rows.values() if r["announced_at"] is None and r["omeka_item_id"] not in exclude),
+                      key=lambda r: (r["last_checked_at"] is not None, r["last_checked_at"] or T0, r["published_at"]))
         return [r["omeka_item_id"] for r in rows[:limit]]
+
+    def touch(self, ids):
+        self.writes += 1
+        self.clock = getattr(self, "clock", T0) + timedelta(seconds=1)
+        for i in ids:
+            self.rows[i]["last_checked_at"] = self.clock
 
     def mark(self, ids, *, message_id=None, skip_reason=None):
         self.writes += 1
@@ -182,8 +190,8 @@ def test_refuses_without_backfill():
 
 def test_backfill_marks_public_items_announced():
     store = FakeStore(ledger_items={5, 6, 7}, backfilled=False)
-    assert dd.backfill(store, FakeOmeka(public={5, 6, 99}), execute=True) == 2
-    assert {i for i, r in store.rows.items() if r["announced_at"]} == {5, 6}
+    assert dd.backfill(store, FakeOmeka(public={5, 6, 99}), execute=True) == 3
+    assert {i for i, r in store.rows.items() if r["announced_at"]} == {5, 6, 99}
     assert store.rows[5]["source"] == "backfill"
     assert "backfilled" in store.state
 
@@ -279,3 +287,38 @@ def test_second_run_skips_on_lock():
     store = FakeStore(lock=False)
     assert dd.run(store, FakeOmeka(), FakePost(), DISCORD, execute=True) == {"locked": True}
     assert store.calls_after_lock == 0
+
+
+def test_items_that_never_get_ready_do_not_block_the_queue():
+    ids = list(range(1, 46))
+    store = FakeStore(ledger_items=ids + [100])
+    for i in ids:
+        store.add(i, i)
+    store.add(100, 1000)
+    items = {i: item(i, desc=dd.PLACEHOLDER) for i in ids}
+    items[100] = item(100)
+    post = FakePost()
+    s = dd.run(store, FakeOmeka(items=items, public=set(items)), post, DISCORD, execute=True, max_items=40)
+    assert s["posted"] == 1 and store.rows[100]["announced_at"] == T0
+    assert s["skipped_placeholder"] == 45
+
+
+def test_skipped_rows_move_behind_new_ones():
+    store = FakeStore(ledger_items={1, 2})
+    store.add(1, 0)
+    om = FakeOmeka(items={1: item(1, public=False)}, public=set())
+    dd.run(store, om, FakePost(), DISCORD, execute=True)
+    store.add(2, 5)
+    om.items[2] = item(2)
+    om.public.add(2)
+    assert store.pending(1) == [2]
+
+
+def test_check_budget_bounds_a_run():
+    ids = list(range(1, 301))
+    store = FakeStore(ledger_items=ids)
+    for i in ids:
+        store.add(i, i)
+    om = FakeOmeka(items={i: item(i, public=False) for i in ids}, public=set())
+    s = dd.run(store, om, FakePost(), DISCORD, execute=True, max_items=40)
+    assert s["checked"] == dd.MAX_CHECKS_PER_RUN and s["posted"] == 0

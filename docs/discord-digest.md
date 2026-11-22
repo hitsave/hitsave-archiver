@@ -17,7 +17,9 @@ Each run:
    public in Omeka but have no publication row yet. This covers items published by a script or
    in the Omeka admin.
 2. Takes up to 40 unannounced items, oldest first. The rest go out at the next run, so a large
-   publishing session is shared over several posts.
+   publishing session is shared over several posts. Items that a run skips (see the next step)
+   move behind newer ones, and a run reads at most 200 items, so skipped items can't hold up the
+   queue.
 3. Reads each item from Omeka again:
    - A deleted item is closed without a post.
    - An item that was hidden again waits until it is public again.
@@ -56,7 +58,7 @@ docker compose run --rm -T --no-deps -v "$PWD/scripts:/app/scripts:ro" \
 ```
 
 **Backfill, once, before the first real run.** It marks every item that is already public as
-announced without posting, so the first run doesn't post the whole archive. The job refuses to
+announced without posting, including items with no ledger package, so the first run doesn't post the whole archive. The job refuses to
 post until the backfill has run.
 
 ```bash
@@ -65,6 +67,9 @@ docker compose run ... omeka-catalog /app/scripts/discord_digest.py --backfill -
 ```
 
 Only one run at a time: a second run while one is active exits without doing anything.
+
+Delivery is at least once. If Discord accepts a message but the reply is lost, or the ledger
+can't be updated right after a post, those items are posted again at the next run.
 
 ## Pausing it
 

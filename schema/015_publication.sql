@@ -13,6 +13,8 @@
 --   announced_at        when the digest posted it, or decided not to (see skip_reason)
 --   discord_message_id  the Discord message that announced it
 --   skip_reason         set when the item was closed without a post: deleted, backfill
+--   last_checked_at     last run that skipped the item (hidden again, placeholder description);
+--                       skipped items move behind new ones so they can't block the queue
 --
 -- digest_state: small key/value settings of the digest job; 'backfilled' holds the UTC time of
 -- the backfill, and the job refuses to post before it is set.
@@ -25,7 +27,8 @@ CREATE TABLE IF NOT EXISTS publication (
     source TEXT NOT NULL CHECK (source IN ('ledger', 'reconcile', 'backfill')),
     announced_at TIMESTAMPTZ,
     discord_message_id TEXT,
-    skip_reason TEXT
+    skip_reason TEXT,
+    last_checked_at TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS publication_pending ON publication (published_at) WHERE announced_at IS NULL;
