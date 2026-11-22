@@ -26,7 +26,10 @@ Each run:
    - An item whose description still starts with "More information to be added at a later
      date." waits until the description is written.
 4. Posts one message for every 10 items. Each item shows its title, the start of its
-   description, a thumbnail, its format and the ARK link. Nobody is mentioned, even if a
+   description, a thumbnail, its format and the ARK link. The thumbnail is the item's Omeka
+   thumbnail if it has one. Most archive items don't (their media is a package, and Omeka gives
+   them a blank placeholder), so the digest uses the same preview the archive site shows in item
+   lists (`/omeka-dip/browse-preview/<media id>`), and leaves the thumbnail out when there is none. Nobody is mentioned, even if a
    description contains `@everyone`.
 5. Marks each message's items as announced as soon as Discord accepts that message. If a later
    message fails, its items stay unannounced and go out at the next run.

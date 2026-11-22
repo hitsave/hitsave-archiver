@@ -78,9 +78,13 @@ class FakeStore:
 
 
 class FakeOmeka:
-    def __init__(self, items=None, public=None):
+    def __init__(self, items=None, public=None, thumbs=None):
         self.items = items or {}
         self.public = set(public or ())
+        self.thumbs = thumbs or {}
+
+    def thumbnail(self, it):
+        return self.thumbs.get(it["o:id"])
 
     def public_ids(self):
         return set(self.public)
@@ -110,9 +114,8 @@ DISCORD = {"token": "tok", "channel_id": "123"}
 
 def test_build_embed_fields():
     it = {"o:id": 31336, "o:title": "Aka", "dcterms:description": [{"@value": "A game."}],
-          "dcterms:format": [{"@value": "Nintendo Switch"}],
-          "thumbnail_display_urls": {"medium": "https://x/m.jpg"}}
-    e = dd.build_embed(it)
+          "dcterms:format": [{"@value": "Nintendo Switch"}]}
+    e = dd.build_embed(it, thumbnail="https://x/m.jpg")
     assert e["url"] == "https://archive.hitsave.org/ark:/78322/31336"
     assert e["title"] == "Aka" and e["description"] == "A game."
     assert e["thumbnail"] == {"url": "https://x/m.jpg"} and e["footer"] == {"text": "Nintendo Switch"}
@@ -322,3 +325,88 @@ def test_check_budget_bounds_a_run():
     om = FakeOmeka(items={i: item(i, public=False) for i in ids}, public=set())
     s = dd.run(store, om, FakePost(), DISCORD, execute=True, max_items=40)
     assert s["checked"] == dd.MAX_CHECKS_PER_RUN and s["posted"] == 0
+
+
+def test_run_uses_omeka_thumbnail_lookup():
+    store = FakeStore(ledger_items={1, 2})
+    store.add(1, 0)
+    store.add(2, 1)
+    post = FakePost()
+    om = FakeOmeka(items={1: item(1), 2: item(2)}, public={1, 2}, thumbs={1: "https://p/1.png"})
+    dd.run(store, om, post, DISCORD, execute=True)
+    embeds = post.sent[0]["json"]["embeds"]
+    assert embeds[0]["thumbnail"] == {"url": "https://p/1.png"} and "thumbnail" not in embeds[1]
+
+
+class FakeHTTP:
+    """requests.Session stand-in: maps URL (without query) to (status, content_type, json)."""
+
+    def __init__(self, routes):
+        self.routes = routes
+        self.calls = []
+
+    def get(self, url, headers=None, timeout=None, params=None, stream=False):
+        self.calls.append(url)
+        status, ctype, body = self.routes.get(url.split("?")[0], (404, "text/html", None))
+
+        class R:
+            status_code = status
+            headers = {"Content-Type": ctype}
+
+            def json(self):
+                return body
+
+            def close(self):
+                pass
+
+        return R()
+
+
+DEFAULT = "https://archive.hitsave.org/application/asset/thumbnails/default.png"
+API_BASE = "https://archive.hitsave.org/api"
+
+
+def omeka_with(routes):
+    return dd.Omeka(API_BASE, {"key_identity": "i", "key_credential": "c"}, FakeHTTP(routes))
+
+
+def test_real_omeka_thumbnail_is_kept():
+    om = omeka_with({})
+    it = {"o:id": 1, "thumbnail_display_urls": {"medium": "https://archive.hitsave.org/files/medium/x.jpg"}}
+    assert om.thumbnail(it) == "https://archive.hitsave.org/files/medium/x.jpg"
+
+
+def test_default_thumbnail_falls_back_to_dip_browse_preview():
+    preview = "https://archive.hitsave.org/omeka-dip/browse-preview/11"
+    om = omeka_with({
+        f"{API_BASE}/media/11": (200, "application/json", {"o:id": 11, "o:renderer": "omeka_dip_package",
+                                                          "data": {"package_storage_prefix": "dumps/x"}}),
+        preview: (200, "image/png", None),
+    })
+    it = {"o:id": 1, "thumbnail_display_urls": {"medium": DEFAULT}, "o:primary_media": {"o:id": 11},
+          "o:media": [{"o:id": 11}]}
+    assert om.thumbnail(it) == preview + "?type=medium"
+
+
+def test_disc_contents_media_is_preferred():
+    om = omeka_with({
+        f"{API_BASE}/media/11": (200, "application/json", {"o:id": 11, "o:renderer": "omeka_dip_package",
+                                                          "data": {"package_storage_prefix": "dumps/x"}}),
+        f"{API_BASE}/media/12": (200, "application/json", {"o:id": 12, "o:renderer": "omeka_dip_package",
+                                                          "data": {"package_storage_prefix": "disc-contents/x"}}),
+        "https://archive.hitsave.org/omeka-dip/browse-preview/12": (200, "image/png", None),
+    })
+    it = {"o:id": 1, "thumbnail_display_urls": {"medium": DEFAULT}, "o:primary_media": {"o:id": 11},
+          "o:media": [{"o:id": 11}, {"o:id": 12}]}
+    assert om.thumbnail(it).startswith("https://archive.hitsave.org/omeka-dip/browse-preview/12?")
+
+
+def test_no_preview_means_no_thumbnail():
+    om = omeka_with({
+        f"{API_BASE}/media/11": (200, "application/json", {"o:id": 11, "o:renderer": "omeka_dip_package",
+                                                          "data": {"package_storage_prefix": "dumps/x"}}),
+    })  # browse-preview answers 404
+    it = {"o:id": 1, "thumbnail_display_urls": {"medium": DEFAULT}, "o:primary_media": {"o:id": 11},
+          "o:media": [{"o:id": 11}]}
+    assert om.thumbnail(it) is None
+    assert om.thumbnail({"o:id": 2, "thumbnail_display_urls": {"medium": DEFAULT}, "o:media": []}) is None

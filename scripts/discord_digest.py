@@ -33,7 +33,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterable
 
-ITEM_URL = "https://archive.hitsave.org/ark:/78322/{id}"
+SITE = "https://archive.hitsave.org"
+ITEM_URL = SITE + "/ark:/78322/{id}"
+# Omeka's placeholder for items without their own thumbnail: a blank square in Discord.
+DEFAULT_THUMBNAIL_SUFFIX = "/application/asset/thumbnails/default.png"
+DIP_RENDERER = "omeka_dip_package"
 PLACEHOLDER = "More information to be added at a later date."
 API = "https://discord.com/api/v10"
 USER_AGENT = "DiscordBot (https://hitsave.org, 1.0)"
@@ -66,7 +70,7 @@ def _cut(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
-def build_embed(item: dict) -> dict | None:
+def build_embed(item: dict, thumbnail: str | None = None) -> dict | None:
     """The Discord embed for one Omeka item, or None while it has the placeholder description."""
     description = _first_value(item, "dcterms:description")
     if description.startswith(PLACEHOLDER):
@@ -79,10 +83,8 @@ def build_embed(item: dict) -> dict | None:
     }
     if description:
         embed["description"] = _cut(description, DESCRIPTION_MAX)
-    thumbs = item.get("thumbnail_display_urls") or {}
-    thumb = thumbs.get("medium") or thumbs.get("large") or thumbs.get("small") if isinstance(thumbs, dict) else None
-    if thumb:
-        embed["thumbnail"] = {"url": thumb}
+    if thumbnail:
+        embed["thumbnail"] = {"url": thumbnail}
     fmt = _first_value(item, "dcterms:format")
     if fmt:
         embed["footer"] = {"text": fmt[:2048]}
@@ -217,6 +219,49 @@ class Omeka:
             ids.update(int(i["o:id"]) for i in data if isinstance(i, dict) and "o:id" in i)
         raise DigestError(f"more than {self.max_pages} pages of public items; raise max_pages")
 
+    def thumbnail(self, item: dict) -> str | None:
+        """A preview image URL for the item, or None.
+
+        Omeka's own thumbnail when the item has one. Archive items usually don't: their media is a
+        DIP package, so Omeka returns its blank default.png. Then use the DIP viewer's browse preview,
+        the image the archive site shows in item lists, picking the media the way the viewer does
+        (DipBrowsePreviewService::findDipMedia): disc contents first, then the primary DIP package.
+        The preview is used only if it answers with an image (it is 404 when the package has none).
+        """
+        thumbs = item.get("thumbnail_display_urls") or {}
+        if isinstance(thumbs, dict):
+            url = thumbs.get("medium") or thumbs.get("large") or thumbs.get("square")
+            if url and not str(url).endswith(DEFAULT_THUMBNAIL_SUFFIX):
+                return url
+        media_id = self._dip_media_id(item)
+        if media_id is None:
+            return None
+        preview = f"{SITE}/omeka-dip/browse-preview/{media_id}?type=medium"
+        try:
+            r = self.session.get(preview, headers=self.headers, timeout=120, stream=True)
+            ok = r.status_code == 200 and str(r.headers.get("Content-Type", "")).startswith("image/")
+            r.close()
+        except Exception:  # noqa: BLE001 - no thumbnail is better than no post
+            return None
+        return preview if ok else None
+
+    def _dip_media_id(self, item: dict) -> int | None:
+        refs = [m.get("o:id") for m in item.get("o:media") or [] if isinstance(m, dict) and m.get("o:id")]
+        primary = (item.get("o:primary_media") or {}).get("o:id")
+        media = {}
+        for mid in refs:
+            r = self.session.get(f"{self.base}/media/{mid}", headers=self.headers, timeout=60, params=self.keys)
+            if r.status_code == 200:
+                media[mid] = r.json()
+        dip = {mid: m for mid, m in media.items() if m.get("o:renderer") == DIP_RENDERER}
+        for mid, m in dip.items():
+            data = m.get("data") or m.get("o:data") or {}
+            if str(data.get("package_storage_prefix") or "").lstrip("/").startswith("disc-contents/"):
+                return mid
+        if primary in dip:
+            return primary
+        return next(iter(dip), None)
+
     def item(self, item_id: int) -> dict | None:
         """The item, or None when Omeka says it doesn't exist."""
         r = self.session.get(f"{self.base}/items/{item_id}", headers=self.headers, timeout=60, params=self.keys)
@@ -288,6 +333,9 @@ def run(store, omeka, post: Callable, discord: dict, *, execute: bool, max_items
                 skipped.append(item_id)
                 summary["skipped_placeholder"] += 1
                 continue
+            thumb = omeka.thumbnail(it)
+            if thumb:
+                embed["thumbnail"] = {"url": thumb}
             ready.append((item_id, embed))
     summary["checked"] = summary["pending"] = len(checked)
     if execute and skipped:
