@@ -28,6 +28,7 @@ from catalog_quarantine import (
     validate_and_argv as validate_quarantine_argv,
 )
 from catalog_visibility import run_visibility
+from publication import record_published
 from ledger_health import fetch_attention_rows, fetch_health_summary
 from intake_failures import load_failures, render_intake_failures
 from item_page import fetch_item, fetch_second_copy, render_item_not_found, render_item_page, row_links
@@ -778,6 +779,7 @@ class Handler(BaseHTTPRequestHandler):
                 audit("publish", user, omeka_ref=omeka_ref, exit=str(code), via="review")
             if code == 0 and item_id is not None:
                 HIDDEN.mark_public(item_id)
+                record_published(connect, item_id, user or "-")
                 nxt = after
             else:
                 print(output, flush=True)
@@ -810,6 +812,8 @@ class Handler(BaseHTTPRequestHandler):
                     print(output, flush=True)
                 elif (item_id := parse_omeka_item_id(omeka_ref)) is not None:
                     (HIDDEN.mark_public if is_public else HIDDEN.mark_private)(item_id)
+                    if is_public:
+                        record_published(connect, item_id, user or "-")
                 kind, msg = visibility_message(omeka_ref, is_public, code, output)
             else:
                 kind, msg = "fail", "No Omeka item given."

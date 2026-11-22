@@ -1,0 +1,12 @@
+args:
+  execute: 'true'
+  max_items: '40'
+cron_version: v2
+email: admin@windmill.dev
+enabled: false
+is_flow: false
+no_flow_overlap: false
+schedule: 0 0 9-21/3 * * *
+script_path: f/hitsave/discord_digest
+timezone: America/Los_Angeles
+ws_error_handler_muted: false
