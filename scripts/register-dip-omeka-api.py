@@ -28,6 +28,7 @@ from moby_resolve import (  # noqa: E402
     uses_moby_catalog_data,
 )
 from yaml_config import load_yaml  # noqa: E402
+from catalog_registration import claim, run_tracked  # noqa: E402
 from press_material_description import press_material_description  # noqa: E402
 from donor_provenance import PROVENANCE, donor_names, merged_provenance  # noqa: E402
 from rights_access import apply_to_payload  # noqa: E402
@@ -315,7 +316,7 @@ def update_ledger(conn, game_key: str, item_id: int, media_id: int) -> None:
     conn.commit()
 
 
-def main() -> None:
+def _register(ctx: dict) -> None:
     if len(sys.argv) < 2:
         raise SystemExit(
             "Usage: register-dip-omeka-api.py <game_key> [path/to/game.yaml]\n"
@@ -366,6 +367,9 @@ def main() -> None:
         game_key = str(game_cfg.get("game_key") or "")
     if not game_key:
         raise SystemExit(f"No ledger row for source {source_path}; run ingest first")
+    # From here on a failure is noted in the ledger and the retry job can rerun this config.
+    if not claim(ctx, pg_connect, game_key=game_key, config_path=str(game_cfg_path), db_cfg=db_cfg):
+        return
 
     ingest_kind = resolve_ingest_kind(game_cfg)
     if ingest_kind == "dump":
@@ -431,6 +435,7 @@ def main() -> None:
             )
             row = cur.fetchone()
         if row and row[5] and row[5] != "complete":
+            ctx["skip"] = True  # not a registration attempt
             print(
                 json.dumps(
                     {
@@ -689,6 +694,10 @@ def main() -> None:
     }
 
     print(json.dumps(out, indent=2))
+
+
+def main() -> None:
+    run_tracked(_register, pg_connect)
 
 
 if __name__ == "__main__":
