@@ -276,3 +276,30 @@ def test_ark_url_sits_at_the_site_root_whatever_the_site_slug() -> None:
 def test_row_links_site_link_is_the_ark() -> None:
     _, actions_html = row_links("a b", 5, admin_base=ADMIN, site_base=SITE)
     assert 'href="https://archive.hitsave.org/ark:/78322/5"' in actions_html
+
+
+def test_failed_registration_shows_in_problems() -> None:
+    page = _page(_row(omeka_item_id=None, catalog_error="RuntimeError: <Network is unreachable>",
+                      catalog_attempts=2,
+                      catalog_attempted_at=datetime(2026, 11, 25, 5, 0, tzinfo=timezone.utc)), None)
+    problems = page.split("<h2>Problems</h2>")[1].split("</div>")[0]
+    assert "Omeka registration failed" in problems
+    assert "&lt;Network is unreachable&gt;" in problems
+    assert "2 attempts" in problems and "2026-11-25" in problems
+    assert "retry_catalog_registration" in problems
+
+
+def test_no_registration_note_without_an_error() -> None:
+    assert "Omeka registration failed" not in _page(_row(catalog_error=None, catalog_attempts=0), True)
+
+
+def test_given_up_registration_asks_for_a_person() -> None:
+    page = _page(_row(omeka_item_id=None, catalog_error="x", catalog_attempts=10), None)
+    assert "given up" in page and "tries again" not in page
+
+
+def test_item_page_gives_up_with_the_retry_job() -> None:
+    import catalog_registration  # scripts/ is on the test PYTHONPATH
+    from item_page import RETRY_GIVES_UP_AFTER
+
+    assert RETRY_GIVES_UP_AFTER == catalog_registration.MAX_ATTEMPTS

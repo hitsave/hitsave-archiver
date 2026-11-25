@@ -1,0 +1,20 @@
+summary: Retry failed Omeka registrations
+description: >
+  Runs `scripts/catalog_registration.py`: for each complete package whose Omeka
+  registration failed (game_ingest.catalog_error set), reruns
+  register-dip-omeka-api.py with the config it last ran with, up to 50 a run,
+  oldest attempt first. A package is left for a person after 10 failed
+  attempts. The job fails while anything still needs a person.
+
+  With execute false it only lists what would be retried.
+lock: ''
+kind: script
+schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  properties:
+    execute:
+      type: string
+      description: 'true: rerun registration; false: dry run'
+      default: 'true'
+  required: []

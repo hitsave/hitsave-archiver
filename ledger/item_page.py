@@ -135,12 +135,29 @@ def _catalog_panel(row: dict[str, Any], *, admin_base: str, site_base: str, is_p
 </div>"""
 
 
+RETRY_GIVES_UP_AFTER = 10  # scripts/catalog_registration.py MAX_ATTEMPTS
+
+
 def _problems_panel(row: dict[str, Any]) -> str:
     err = row.get("error_message")
     reason = row.get("block_reason")
-    if not err and not reason:
+    catalog_err = row.get("catalog_error")
+    if not err and not reason and not catalog_err:
         return ""
     parts = ['<div class="panel panel-danger"><h2>Problems</h2>']
+    if catalog_err:
+        n = int(row.get("catalog_attempts") or 0)
+        when = row.get("catalog_attempted_at")
+        last = f", last on {html.escape(fmt_ts(when))}" if when else ""
+        if n >= RETRY_GIVES_UP_AFTER:
+            next_step = "The retry job has given up on it; register it by hand."
+        else:
+            next_step = ("The Windmill job <code>retry_catalog_registration</code> tries again "
+                         "at 05:00 and 17:00 UTC.")
+        parts.append(
+            f"<p>Omeka registration failed ({n} attempt{'' if n == 1 else 's'}{last}). {next_step}</p>"
+            f'<pre class="err">{html.escape(str(catalog_err))}</pre>'
+        )
     if reason:
         parts.append(f"<p>Block reason: <code>{html.escape(str(reason))}</code></p>")
     if err:
