@@ -635,6 +635,8 @@ class MobyClient:
         self.cfg = cfg
         self.base = require_str(cfg, "api_base", where="mobygames.yaml").rstrip("/")
         self.interval = float(require_key(cfg, "min_request_interval_seconds", where="mobygames.yaml"))
+        self.rate_limit_wait = float(require_key(cfg, "rate_limit_wait_seconds", where="mobygames.yaml"))
+        self.rate_limit_max_waits = int(require_key(cfg, "rate_limit_max_waits", where="mobygames.yaml"))
         self._last_request = 0.0
         self.api_key = ""
         if credentials_path.is_file():
@@ -654,12 +656,30 @@ class MobyClient:
         q = dict(params or {})
         q["api_key"] = self.api_key
         url = f"{self.base}/{path.lstrip('/')}"
-        resp = requests.get(url, params=q, timeout=60)
-        if resp.status_code == 429:
-            time.sleep(5)
+        try:
             resp = requests.get(url, params=q, timeout=60)
-        resp.raise_for_status()
+            waits = 0
+            while resp.status_code == 429 and waits < self.rate_limit_max_waits:
+                waits += 1
+                time.sleep(self._rate_limit_delay(resp))
+                self._last_request = time.time()
+                resp = requests.get(url, params=q, timeout=60)
+            resp.raise_for_status()
+        except requests.RequestException as e:
+            # requests puts the full URL, api_key included, in its error text.
+            raise RuntimeError(self._redact(str(e))) from None
         return resp.json()
+
+    def _rate_limit_delay(self, resp: Any) -> float:
+        """Seconds to wait after a 429: Retry-After when MobyGames sends it, else the configured wait."""
+        retry_after = (resp.headers or {}).get("Retry-After", "")
+        try:
+            return max(float(retry_after), 1.0)
+        except (TypeError, ValueError):
+            return self.rate_limit_wait
+
+    def _redact(self, text: str) -> str:
+        return text.replace(self.api_key, "REDACTED") if self.api_key else text
 
     def search_titles(self, title: str) -> list[dict]:
         """Brief API search results (game_id, title) for a title or word."""

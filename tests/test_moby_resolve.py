@@ -313,3 +313,95 @@ def test_resolve_for_game_reports_error_when_word_search_api_fails(monkeypatch, 
     )
     assert result.status == "error"
     assert result.block_reason == "moby_api_error"
+
+
+class _FakeResponse:
+    def __init__(self, status_code: int, headers: dict | None = None, body=None, url: str = ""):
+        self.status_code = status_code
+        self.headers = headers or {}
+        self._body = body if body is not None else []
+        self.url = url
+
+    def raise_for_status(self) -> None:
+        import requests
+
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"{self.status_code} Client Error: for url: {self.url}", response=self)
+
+    def json(self):
+        return self._body
+
+
+def _client_with_responses(monkeypatch, responses: list, **cfg_overrides):
+    import moby_resolve
+
+    cfg = {
+        "api_base": "https://api.example.test/v1",
+        "min_request_interval_seconds": 0,
+        "rate_limit_wait_seconds": 300,
+        "rate_limit_max_waits": 3,
+        **cfg_overrides,
+    }
+    client = moby_resolve.MobyClient(cfg, Path("/nonexistent/creds.yaml"))
+    client.api_key = "moby_SECRETKEY"
+    sleeps: list[float] = []
+    calls: list[dict] = []
+
+    def fake_get(url, params=None, timeout=None):
+        calls.append(dict(params or {}))
+        resp = responses.pop(0)
+        resp.url = f"{url}?api_key={(params or {}).get('api_key')}"
+        return resp
+
+    monkeypatch.setattr(moby_resolve.requests, "get", fake_get)
+    monkeypatch.setattr(moby_resolve.time, "sleep", lambda s: sleeps.append(s))
+    return client, sleeps, calls
+
+
+def test_moby_client_waits_out_rate_limit_and_retries(monkeypatch) -> None:
+    client, sleeps, calls = _client_with_responses(
+        monkeypatch,
+        [_FakeResponse(429), _FakeResponse(429), _FakeResponse(200, body=[{"game_id": 1, "title": "Rygar"}])],
+    )
+    assert client.search_titles("Rygar") == [{"game_id": 1, "title": "Rygar"}]
+    assert len(calls) == 3
+    assert sleeps.count(300) == 2
+
+
+def test_moby_client_uses_retry_after_header_when_given(monkeypatch) -> None:
+    client, sleeps, _ = _client_with_responses(
+        monkeypatch,
+        [_FakeResponse(429, headers={"Retry-After": "42"}), _FakeResponse(200, body=[])],
+    )
+    assert client.search_titles("Rygar") == []
+    assert 42 in sleeps
+    assert 300 not in sleeps
+
+
+def test_moby_client_gives_up_after_max_rate_limit_waits(monkeypatch) -> None:
+    import pytest
+
+    client, sleeps, calls = _client_with_responses(monkeypatch, [_FakeResponse(429) for _ in range(4)])
+    with pytest.raises(RuntimeError, match="429"):
+        client.search_titles("Rygar")
+    assert len(calls) == 4
+    assert sleeps.count(300) == 3
+
+
+def test_moby_client_errors_never_contain_the_api_key(monkeypatch) -> None:
+    import pytest
+
+    client, _, _ = _client_with_responses(monkeypatch, [_FakeResponse(500)])
+    with pytest.raises(RuntimeError) as excinfo:
+        client.search_titles("Rygar")
+    assert "moby_SECRETKEY" not in str(excinfo.value)
+    assert "500" in str(excinfo.value)
+
+
+def test_moby_client_rate_limit_error_never_contains_the_api_key(monkeypatch) -> None:
+    import pytest
+
+    client, _, _ = _client_with_responses(monkeypatch, [_FakeResponse(429) for _ in range(4)])
+    with pytest.raises(RuntimeError) as excinfo:
+        client.search_titles("Rygar")
+    assert "moby_SECRETKEY" not in str(excinfo.value)
