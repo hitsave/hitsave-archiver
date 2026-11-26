@@ -21,9 +21,11 @@ from moby_resolve import (  # noqa: E402
     moby_attribution_for_omeka_rights,
     moby_description_for_omeka,
     moby_search_title_candidates,
+    moby_title_key,
     moby_title_matches_search,
     pick_moby_search_game,
     resolve_web_search_fallback,
+    resolve_word_search_fallback,
     web_search_fallback_enabled,
     web_search_fallback_max_results,
 )
@@ -168,3 +170,99 @@ def test_attribution_appends_suffix_when_sentence_does_not_name_mobygames() -> N
     )
 
 
+
+
+# --- API word-search fallback (web search from the host returns junk) ---
+
+JETZ_SEARCH = [
+    {"game_id": 6453, "title": "WarJetz"},
+    {"game_id": 17944, "title": "King Size: WarJetz + Army Men Sarge's Heroes 2"},
+    {"game_id": 43459, "title": "Hot Wheels: Jetz"},
+]
+
+
+class WordSearchClient:
+    """Fake MobyClient: search_titles answers per word, resolve_by_id echoes the title."""
+
+    def __init__(self, by_query: dict[str, list[dict]]):
+        self.by_query = by_query
+        self.queries: list[str] = []
+
+    def search_titles(self, title: str) -> list[dict]:
+        self.queries.append(title)
+        return self.by_query.get(title.casefold(), [])
+
+    def resolve_by_id(self, game_id: int, search_title: str = "", **kwargs: object) -> MobyResult:
+        title = str(kwargs.get("fallback_title") or "")
+        return MobyResult(
+            "ok", None, game_id, title, {"moby_game_id": game_id, "moby_title": title}, "first_release"
+        )
+
+
+def test_moby_title_key_ignores_punctuation_and_case() -> None:
+    assert moby_title_key("Hot Wheels: Jetz") == moby_title_key("hot wheels jetz")
+    assert moby_title_key("Hot Wheels: Jetz") != moby_title_key("WarJetz")
+
+
+def test_word_search_fallback_finds_title_that_needs_a_colon() -> None:
+    client = WordSearchClient({"jetz": JETZ_SEARCH})
+    result = resolve_word_search_fallback(client, "Hot Wheels Jetz")
+    assert result.status == "ok"
+    assert result.moby_game_id == 43459
+    assert result.metadata_json is not None
+    assert result.metadata_json.get("moby_match_source") == "api_word_search"
+
+
+def test_word_search_fallback_is_ambiguous_when_several_titles_match_exactly() -> None:
+    lemmings = [
+        {"game_id": 683, "title": "Lemmings"},
+        {"game_id": 38448, "title": "Lemmings"},
+        {"game_id": 1603, "title": "Lemmings 2: The Tribes"},
+    ]
+    result = resolve_word_search_fallback(WordSearchClient({"lemmings": lemmings}), "Lemmings")
+    assert result.status == "ambiguous"
+    assert result.moby_game_id is None
+    ids = {c["id"] for c in (result.metadata_json or {}).get("candidates", [])}
+    assert ids == {683, 38448}
+
+
+def test_word_search_fallback_rejects_partial_title_matches() -> None:
+    result = resolve_word_search_fallback(WordSearchClient({"jetz": JETZ_SEARCH}), "Jetz Racing")
+    assert result.status == "no_match"
+    assert result.block_reason == "moby_word_search_no_match"
+
+
+def test_word_search_fallback_limits_queries_to_distinctive_words() -> None:
+    client = WordSearchClient({})
+    resolve_word_search_fallback(client, "The Legend of the Hidden Temple Game", max_queries=2)
+    assert len(client.queries) == 2
+    assert all(q not in {"the", "of", "game"} for q in client.queries)
+
+
+def test_resolve_for_game_tries_word_search_before_web_search(monkeypatch, tmp_path) -> None:
+    import moby_resolve
+
+    class FakeMobyClient(WordSearchClient):
+        def __init__(self, cfg: dict, credentials_path: Path):
+            super().__init__({"jetz": JETZ_SEARCH})
+
+        def resolve(self, search_title: str) -> MobyResult:
+            return MobyResult("no_match", "moby_no_match", None, None, None, None)
+
+    monkeypatch.setattr(
+        moby_resolve,
+        "load_mobygames_config",
+        lambda root: {"enabled": True, "web_search_fallback": {"enabled": True}},
+    )
+    monkeypatch.setattr(moby_resolve, "moby_credentials_path", lambda root, cfg: tmp_path / "creds.yaml")
+    monkeypatch.setattr(moby_resolve, "MobyClient", FakeMobyClient)
+
+    def no_web_search(*args: object, **kwargs: object) -> MobyResult:
+        raise AssertionError("web search should not run when the API word search matched")
+
+    monkeypatch.setattr(moby_resolve, "resolve_web_search_fallback", no_web_search)
+    result = moby_resolve.resolve_for_game(
+        config_root=tmp_path, folder_name="Hot_Wheels_Jetz", moby_search_title="Hot Wheels Jetz"
+    )
+    assert result.status == "ok"
+    assert result.moby_game_id == 43459
