@@ -42,6 +42,27 @@ def test_press_kit_names_not_flagged() -> None:
         assert not is_booru_tagged_filename(name, rules=rules)
 
 
+def test_mangled_non_ascii_names_not_flagged() -> None:
+    # Japanese file names whose characters were replaced with underscores (Killer is Dead,
+    # Valkyrie Crusade press kits). Runs of underscores are not booru tags.
+    for name in (
+        "001___-___R__s.jpg",
+        "480______c__g_____en.jpg",
+        "480__________en.jpg",
+        "3_____-__________j_____h_____f_____r_en.jpg",
+        "480__________wallpaper.jpg",
+    ):
+        assert not is_booru_tagged_filename(name, rules=RULES), name
+
+
+def test_booru_names_with_short_tags_still_flagged() -> None:
+    for name in (
+        "47796__-__fue__game_cg__rococo_works__volume7.jpg",
+        "170591__-__devil__oki_kiki__sumaga__tail__torn_clothes__tsuji_santa__wallpaper__wings.jpg",
+    ):
+        assert is_booru_tagged_filename(name, rules=RULES), name
+
+
 def test_enforce_blocks_folder(tmp_path: Path) -> None:
     folder = tmp_path / "game"
     folder.mkdir()
