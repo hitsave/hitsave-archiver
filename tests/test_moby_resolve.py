@@ -266,3 +266,50 @@ def test_resolve_for_game_tries_word_search_before_web_search(monkeypatch, tmp_p
     )
     assert result.status == "ok"
     assert result.moby_game_id == 43459
+
+
+def test_moby_title_key_treats_roman_and_arabic_numerals_alike() -> None:
+    assert moby_title_key("Gothic III: Forsaken Gods") == moby_title_key("Gothic 3 Forsaken Gods")
+    assert moby_title_key("Final Fantasy XII") == moby_title_key("final fantasy 12")
+    assert moby_title_key("Heroes of Might and Magic IV") != moby_title_key("Heroes of Might and Magic 3")
+
+
+def test_moby_title_key_only_converts_whole_word_numerals() -> None:
+    assert moby_title_key("Mix Live") == "mix live"
+    assert moby_title_key("Civilization") == "civilization"
+
+
+def test_word_search_fallback_matches_roman_numeral_title() -> None:
+    client = WordSearchClient({"forsaken": [{"game_id": 37190, "title": "Gothic 3: Forsaken Gods"}]})
+    result = resolve_word_search_fallback(client, "Gothic III Forsaken Gods")
+    assert result.status == "ok"
+    assert result.moby_game_id == 37190
+
+
+def test_moby_title_key_leaves_x_and_i_alone() -> None:
+    # "Mega Man X" and "Mega Man 10" are different games; "I" is usually the word I.
+    assert moby_title_key("Mega Man X") != moby_title_key("Mega Man 10")
+    assert moby_title_key("I Am Alive") == "i am alive"
+
+
+def test_resolve_for_game_reports_error_when_word_search_api_fails(monkeypatch, tmp_path) -> None:
+    import moby_resolve
+
+    class FailingSearchClient(WordSearchClient):
+        def __init__(self, cfg: dict, credentials_path: Path):
+            super().__init__({})
+
+        def resolve(self, search_title: str) -> MobyResult:
+            return MobyResult("no_match", "moby_no_match", None, None, None, None)
+
+        def search_titles(self, title: str) -> list[dict]:
+            raise RuntimeError("429 Too Many Requests")
+
+    monkeypatch.setattr(moby_resolve, "load_mobygames_config", lambda root: {"enabled": True})
+    monkeypatch.setattr(moby_resolve, "moby_credentials_path", lambda root, cfg: tmp_path / "creds.yaml")
+    monkeypatch.setattr(moby_resolve, "MobyClient", FailingSearchClient)
+    result = moby_resolve.resolve_for_game(
+        config_root=tmp_path, folder_name="Gothic_III_Forsaken_Gods", moby_search_title="Gothic III Forsaken Gods"
+    )
+    assert result.status == "error"
+    assert result.block_reason == "moby_api_error"
