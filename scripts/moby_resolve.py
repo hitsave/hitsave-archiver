@@ -468,9 +468,22 @@ def moby_title_matches_search(moby_title: str, search_title: str) -> bool:
     return True
 
 
+# "i" and "x" are left out: "I" is usually the word I, and "Mega Man X" isn't "Mega Man 10".
+_ROMAN_NUMERALS = {
+    roman: str(n)
+    for n, roman in enumerate(
+        "i ii iii iv v vi vii viii ix x xi xii xiii xiv xv xvi xvii xviii xix xx".split(), start=1
+    )
+    if roman not in ("i", "x")
+}
+
+
 def moby_title_key(title: str) -> str:
-    """Title compared without case or punctuation: "Hot Wheels: Jetz" == "hot wheels jetz"."""
-    return " ".join(re.findall(r"[a-z0-9]+", (title or "").casefold()))
+    """Title compared without case or punctuation, with Roman numerals as digits:
+    "Hot Wheels: Jetz" == "hot wheels jetz", "Gothic III: Forsaken Gods" == "Gothic 3 Forsaken Gods".
+    Only whole words count, so "Mix" stays "mix"; "I" and "X" stay letters."""
+    words = re.findall(r"[a-z0-9]+", (title or "").casefold())
+    return " ".join(_ROMAN_NUMERALS.get(w, w) for w in words)
 
 
 def resolve_word_search_fallback(
@@ -796,11 +809,15 @@ def resolve_for_game(
                 best = result
         if best is not None and best.status == "ambiguous":
             return best
+        # An API error in the word search (e.g. rate limiting) must not end as no_match: the
+        # lookup never finished, so report it as an error and let the row be retried.
+        word_error: MobyResult | None = None
         if best is None or best.status in ("no_match", "error"):
             try:
                 word_result = resolve_word_search_fallback(client, search)
-            except Exception as e:  # API hiccup: fall through to web search
+            except Exception as e:  # API hiccup: still try the web search
                 word_result = MobyResult("error", "moby_api_error", None, None, {"error": str(e)}, None)
+                word_error = word_result
             if word_result.status in ("ok", "incomplete", "ambiguous"):
                 return word_result
         if web_search_fallback_enabled(moby_cfg) and (
@@ -809,8 +826,13 @@ def resolve_for_game(
             ddg_result = resolve_web_search_fallback(client, search, moby_cfg)
             if ddg_result.status in ("ok", "incomplete", "ambiguous"):
                 return ddg_result
-            if ddg_result.block_reason in ("moby_ddg_title_mismatch", "moby_ddg_no_results"):
+            if word_error is None and ddg_result.block_reason in (
+                "moby_ddg_title_mismatch",
+                "moby_ddg_no_results",
+            ):
                 return ddg_result
+        if word_error is not None:
+            return word_error
         return best if best is not None else MobyResult("no_match", "moby_no_match", None, None, None, None)
     except RuntimeError as e:
         if "moby_credentials_missing" in str(e):
