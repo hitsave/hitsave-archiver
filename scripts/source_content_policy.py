@@ -65,6 +65,16 @@ def load_content_policy(ingest_cfg: dict) -> ContentPolicyConfig:
     )
 
 
+def _word_tag_count(lower: str) -> int:
+    """Tag segments after the post id that contain a real word (3+ letters in a row).
+
+    Booru exports are {post_id}__tag__tag__...; a Japanese file name whose characters were
+    replaced with underscores ("001___-___R__s.jpg") has the shape but no words.
+    """
+    stem = lower.rsplit(".", 1)[0]
+    return sum(1 for seg in re.split(r"__+", stem)[1:] if re.search(r"[a-z]{3}", seg))
+
+
 def is_booru_tagged_filename(name: str, *, rules: BooruFilenameRules) -> bool:
     if not rules.enabled:
         return False
@@ -72,6 +82,8 @@ def is_booru_tagged_filename(name: str, *, rules: BooruFilenameRules) -> bool:
     if not base or base.startswith("."):
         return False
     lower = base.lower()
+    if _word_tag_count(lower) < 2:
+        return False
     if _BOORU_WALLPAPER.match(lower):
         return True
     if lower.count("__") < rules.min_double_underscore_segments:
