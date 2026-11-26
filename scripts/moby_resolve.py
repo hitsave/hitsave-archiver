@@ -468,6 +468,59 @@ def moby_title_matches_search(moby_title: str, search_title: str) -> bool:
     return True
 
 
+def moby_title_key(title: str) -> str:
+    """Title compared without case or punctuation: "Hot Wheels: Jetz" == "hot wheels jetz"."""
+    return " ".join(re.findall(r"[a-z0-9]+", (title or "").casefold()))
+
+
+def resolve_word_search_fallback(
+    client: "MobyClient",
+    search_title: str,
+    *,
+    max_queries: int = 3,
+) -> MobyResult:
+    """Search the Moby API for the title's distinctive words; accept only an exact title match.
+
+    The API title search misses titles that differ in punctuation ("Hot Wheels Jetz" finds
+    nothing, "Jetz" finds "Hot Wheels: Jetz"). Longest words go first, since they're usually
+    the rarest. Several exact matches (e.g. "Lemmings" on different platforms) are ambiguous.
+    """
+    want = moby_title_key(search_title)
+    words = sorted(dict.fromkeys(_moby_search_tokens(search_title)), key=len, reverse=True)
+    matches: dict[int, str] = {}
+    for word in words[:max_queries]:
+        for game in client.search_titles(word):
+            game_id = game.get("game_id") or game.get("id")
+            title = str(game.get("title") or "")
+            if game_id and moby_title_key(title) == want:
+                matches[int(game_id)] = title
+        if len(matches) == 1:
+            break
+    if not matches:
+        return MobyResult(
+            "no_match",
+            "moby_word_search_no_match",
+            None,
+            None,
+            {"search_title": search_title, "words": words[:max_queries]},
+            None,
+        )
+    if len(matches) > 1:
+        return MobyResult(
+            "ambiguous",
+            "moby_ambiguous",
+            None,
+            None,
+            {"candidates": [{"id": i, "title": t} for i, t in sorted(matches.items())]},
+            None,
+        )
+    game_id, title = next(iter(matches.items()))
+    result = client.resolve_by_id(game_id, search_title, fallback_title=title)
+    if result.metadata_json is not None:
+        result.metadata_json["moby_match_source"] = "api_word_search"
+    return result
+
+
 def web_search_fallback_enabled(moby_cfg: dict) -> bool:
     raw = moby_cfg.get("web_search_fallback")
     if isinstance(raw, bool):
@@ -595,13 +648,17 @@ class MobyClient:
         resp.raise_for_status()
         return resp.json()
 
+    def search_titles(self, title: str) -> list[dict]:
+        """Brief API search results (game_id, title) for a title or word."""
+        data = self._get("games", {"title": title, "format": "brief"})
+        return data if isinstance(data, list) else data.get("games") or data.get("results") or []
+
     def resolve(self, search_title: str) -> MobyResult:
         try:
-            data = self._get("games", {"title": search_title, "format": "brief"})
+            games = self.search_titles(search_title)
         except Exception as e:
             return MobyResult("error", "moby_api_error", None, None, {"error": str(e)}, None)
 
-        games = data if isinstance(data, list) else data.get("games") or data.get("results") or []
         if not games:
             return MobyResult("no_match", "moby_no_match", None, None, None, None)
 
@@ -739,6 +796,13 @@ def resolve_for_game(
                 best = result
         if best is not None and best.status == "ambiguous":
             return best
+        if best is None or best.status in ("no_match", "error"):
+            try:
+                word_result = resolve_word_search_fallback(client, search)
+            except Exception as e:  # API hiccup: fall through to web search
+                word_result = MobyResult("error", "moby_api_error", None, None, {"error": str(e)}, None)
+            if word_result.status in ("ok", "incomplete", "ambiguous"):
+                return word_result
         if web_search_fallback_enabled(moby_cfg) and (
             best is None or best.status in ("no_match", "error")
         ):
