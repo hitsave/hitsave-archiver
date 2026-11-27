@@ -7,7 +7,7 @@ import time
 from typing import Any, Callable
 from urllib.parse import urlencode
 
-from correct_review import current_values
+from correct_review import FIELDS, current_values
 from damaged_panel import render_damaged_panel
 from formatting import ark_url, item_href, moby_badge, status_badge
 from site_ui import render_page_shell
@@ -144,6 +144,38 @@ def _value(text: str) -> str:
     return html.escape(text) if text else '<span class="muted">—</span>'
 
 
+def _moby_title_block(row: dict[str, Any], cur: dict[str, str], item_id: int, here: str) -> str:
+    """The ledger's MobyGames title, with a button to use it when it differs from the catalog title.
+
+    The button opens the catalog correction's check page with only the title changed, so the
+    write still goes through the correction (full-item PATCH, stale-value check, Wasabi update)."""
+    moby_title = str(row.get("moby_title") or "").strip()
+    if not moby_title:
+        return ""
+    label = f'<div class="muted">MobyGames title: {html.escape(moby_title)}</div>'
+    if row.get("moby_status") not in ("ok", "incomplete") or " ".join(moby_title.split()) == " ".join(
+        cur["title"].split()
+    ):
+        return label
+
+    def hidden(name: str, value: str) -> str:
+        return f'<input type="hidden" name="{name}" value="{html.escape(value)}">'
+
+    fields = [hidden("omeka_ref", str(item_id))]
+    fields += [hidden(f, moby_title if f == "title" else cur.get(f, "")) for f in FIELDS]
+    fields += [hidden(f"orig_{f}", cur.get(f, "")) for f in FIELDS]
+    fields += [
+        hidden("correction_summary", "Title changed to the MobyGames title."),
+        hidden("return_to", here),
+        hidden("execute", "true"),
+    ]
+    return f"""{label}
+<form method="post" action="/correct" class="moby-title-form">
+{''.join(fields)}
+<button type="submit" name="step" value="review" class="btn-secondary">Change title to MobyGames title…</button>
+</form>"""
+
+
 def render_review_page(
     *,
     row: dict[str, Any],
@@ -175,7 +207,7 @@ def render_review_page(
         title = cur["title"] or key
         details = f"""<table class="kv review-kv"><tbody>
 <tr><th scope="row">MobyGames</th><td>{moby_badge(row.get("moby_status"))} {moby_link}
-{f'<div class="muted">Ledger match: {html.escape(str(row["moby_title"]))}</div>' if row.get("moby_title") else ""}</td></tr>
+{_moby_title_block(row, cur, item_id, here)}</td></tr>
 <tr><th scope="row">Developers</th><td>{_value(cur["developer"])}</td></tr>
 <tr><th scope="row">Publishers</th><td>{_value(cur["publisher"])}</td></tr>
 <tr><th scope="row">Description</th><td><div class="review-desc">{_value(desc)}</div></td></tr>

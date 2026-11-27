@@ -255,3 +255,71 @@ def test_review_page_links_the_public_item_page_first() -> None:
 
 def test_review_page_links_the_public_page_even_without_omeka_details() -> None:
     assert 'href="https://archive.hitsave.org/ark:/78322/345"' in _page(item=None)
+
+
+# --- "Use the MobyGames title" ----------------------------------------------------------------
+
+def _title_form(page: str) -> dict[str, list[str]] | None:
+    """Fields of the review page's MobyGames-title form, as a browser would post them."""
+    import re
+
+    m = re.search(r'<form method="post" action="/correct" class="moby-title-form">(.*?)</form>', page, re.S)
+    if m is None:
+        return None
+    form: dict[str, list[str]] = {}
+    for name, value in re.findall(r'<input type="hidden" name="([^"]+)" value="([^"]*)"', m.group(1)):
+        form.setdefault(name, []).append(html.unescape(value))
+    step = re.search(r'<button type="submit" name="step" value="([^"]+)"', m.group(1))
+    if step:
+        form["step"] = [step.group(1)]
+    return form
+
+
+def test_review_page_offers_the_moby_title_when_it_differs() -> None:
+    page = _page(row=dict(ROW, moby_title="Foo & Bar: The Game"))
+    assert "Foo &amp; Bar: The Game" in page
+    assert "Change title to MobyGames title" in page
+    form = _title_form(page)
+    assert form is not None
+    assert form["step"] == ["review"]
+    assert form["omeka_ref"] == ["345"]
+    assert form["title"] == ["Foo & Bar: The Game"] and form["orig_title"] == ["Foo <Bar>"]
+    assert form["description"] == form["orig_description"] == ["Line one.\nLine two."]
+    assert form["developer"] == form["orig_developer"] == ["Dev A"]
+    assert form["moby_url"] == form["orig_moby_url"] == ["https://www.mobygames.com/game/1/foo/"]
+    assert form["return_to"] == ["/review?moby=ok&after=11"]  # back to this record afterwards
+
+
+def test_review_page_title_form_opens_a_check_with_only_the_title_changed() -> None:
+    from catalog_correct import correct_post
+
+    form = _title_form(_page(row=dict(ROW, moby_title="Foo & Bar: The Game")))
+    runs: list[dict] = []
+    page = correct_post(
+        form,
+        fetch_item=lambda item_id: ITEM,
+        hint_for=lambda ref: None,
+        run=lambda args: runs.append(args) or (0, ""),
+        audit=lambda ref: None,
+        status_config={},
+    ).decode()
+    assert "Check the changes" in page and not runs
+    rows = page.split("<tbody>", 1)[1].split("</tbody>", 1)[0]
+    assert rows.count("<tr>") == 1 and "Title" in rows
+    assert "Foo &amp; Bar: The Game" in rows
+
+
+def test_review_page_hides_the_moby_title_button_when_titles_match() -> None:
+    page = _page(row=dict(ROW, moby_title="  Foo <Bar> "))
+    assert _title_form(page) is None and "Change title to MobyGames title" not in page
+
+
+def test_review_page_hides_the_moby_title_button_without_a_match() -> None:
+    for status in ("ambiguous", "no_match", "error", None):
+        assert _title_form(_page(row=dict(ROW, moby_status=status, moby_title="Other"))) is None
+    assert _title_form(_page(row=dict(ROW, moby_title=None))) is None
+    assert _title_form(_page(row=dict(ROW, moby_title="Other"), item=None)) is None
+
+
+def test_review_page_offers_the_moby_title_for_incomplete_matches() -> None:
+    assert _title_form(_page(row=dict(ROW, moby_status="incomplete", moby_title="Other"))) is not None
