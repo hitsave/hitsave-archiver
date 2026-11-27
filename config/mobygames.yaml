@@ -8,7 +8,13 @@ mobygames:
   enabled: true
   api_base: https://api.mobygames.com/v1
   credentials_file: secrets/mobygames-credentials.yaml
-  min_request_interval_seconds: 1.1
+  # MobyGames allows about 360 API requests an hour per key. One request every 10 s stays
+  # under that; a lookup can take several requests (title, word search, details).
+  min_request_interval_seconds: 10
+  # After a 429: wait Retry-After (or this many seconds), then retry, up to rate_limit_max_waits
+  # times (13 x 300 s covers a full hourly window) before the lookup ends as moby_api_error.
+  rate_limit_wait_seconds: 300
+  rate_limit_max_waits: 13
   # earliest_platform: one /games/{id}/platforms/{pid} call; all: merge companies from every platform.
   company_platform_scope: earliest_platform
   # When Moby has no synopsis: platform release descriptions from /games/{id}/platforms/{pid}, then HTML.
