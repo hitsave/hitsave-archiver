@@ -25,6 +25,7 @@ Remote contributor ingest (Drive, Wasabi incoming, lane routing): **[remote-inta
 
 - **`source_subpath`** — folder under the material root for the ingest kind (preferred in examples).
 - **`omeka_item_title`** — catalog title for package identity and Omeka.
+- **`attach_to_omeka_item`** — optional Omeka item id. Registration adds the bag to that existing item instead of creating one, and changes none of its values (no title, description, MobyGames or rights updates; only the staff AIP URI). The bag gets the item's visibility, and the item's public flat file media are made private, not deleted. It stops if the item already has a bag the ledger row didn't attach. Used for hand-catalogued press kits such as `Representation_Copies/Completed/`.
 - **`ingest_kind`** — **required** on every game YAML and on batch files for expand (see `ingest-kinds.yaml`).
 - **`batch_key`** — **not** in operator game YAML. Derived from the batch file name (`batch-<slug>.yml` → `<slug>`) and passed at ingest via `HITSAVE_BATCH_KEY` (batch shell scripts set this). Output paths go under `…/batch/{batch_key}/`.
 - **`game_key`** — **not** in operator YAML. Assigned at ingest as ledger **`package_id`** (`title-slug` + UUID v7).

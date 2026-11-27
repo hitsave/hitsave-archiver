@@ -34,6 +34,8 @@ from donor_provenance import PROVENANCE, donor_names, merged_provenance  # noqa:
 from rights_access import apply_to_payload  # noqa: E402
 from normalize_display_title import catalog_item_title  # noqa: E402
 from omeka_dip_media import find_dip_media_id_on_item  # noqa: E402
+import omeka_attach_existing as attach_existing  # noqa: E402
+from omeka_attach_existing import attach_item_id  # noqa: E402
 from omeka_staff_metadata import (  # noqa: E402
     apply_item_aip_uri,
     load_omeka_catalog_config,
@@ -303,6 +305,95 @@ class OmekaItemApi:
     patch_item_rdf_values = staticmethod(patch_item_rdf_values)
 
 
+def _attach_to_existing_item(
+    session: requests.Session,
+    base: str,
+    creds: dict,
+    conn,
+    *,
+    game_key: str,
+    item_id: int,
+    ledger_item_id: int | None,
+    ledger_media_id: int | None,
+    external_dip: dict,
+    dip_ingester: str,
+    package_bytes: int,
+    package_storage_prefix: str,
+    ingest_kind: str | None,
+    ingest_cfg: dict,
+    catalog_cfg: dict,
+) -> dict:
+    """Bag-only registration onto an existing item: no title, description, Moby or rights
+    changes. The bag gets the item's visibility; the item's flat files are made private."""
+    if ledger_item_id is not None and ledger_item_id != item_id:
+        raise SystemExit(
+            f"{game_key}: ledger says item {ledger_item_id}, game YAML says attach_to_omeka_item {item_id}"
+        )
+    item_body = attach_existing.get_item(session, base, creds, item_id, api_url=api_url)
+    item_public = bool(item_body.get("o:is_public"))
+    media = attach_existing.item_media(session, base, creds, item_body, api_url=api_url)
+    package_id = attach_existing.existing_package_id(media, dip_ingester=dip_ingester)
+    already = attach_existing.check_existing_package(package_id, ledger_media_id, item_id)
+    if already:
+        media_id = int(package_id)
+    else:
+        try:
+            assert_bagit_external_dip_available(
+                ingest_cfg=ingest_cfg,
+                catalog_cfg=catalog_cfg,
+                config_root=CONFIG_ROOT,
+                package_storage_prefix=package_storage_prefix,
+                ingest_kind=ingest_kind,
+            )
+        except DipNotAvailableError as e:
+            raise SystemExit(f"BagIt DIP not available for Omeka catalog registration: {e}") from e
+        media_id = attach_external_dip_media(
+            session,
+            base,
+            creds,
+            item_id=item_id,
+            s3_uri=str(external_dip["s3_uri"]),
+            package_storage_prefix=str(external_dip["package_storage_prefix"]),
+            dip_storage=str(external_dip["dip_storage"]),
+            ingester=dip_ingester,
+            is_public=item_public,
+            package_bytes=package_bytes,
+            sha256="",
+            api_url=api_url,
+        )
+    update_ledger(conn, game_key, item_id, media_id)
+    if not item_has_dip_package_media(session, base, creds, item_id, dip_ingester):
+        raise RuntimeError(f"Post-register verification failed for item {item_id} (no DIP package media)")
+    hidden = []
+    for body in attach_existing.flat_media_to_hide(media, keep_media_id=media_id, dip_ingester=dip_ingester):
+        attach_existing.hide_media(session, base, creds, int(body["o:id"]), api_url=api_url)
+        hidden.append(int(body["o:id"]))
+    staff_aip = apply_item_aip_uri(
+        session,
+        base,
+        creds,
+        game_key,
+        item_id,
+        ingest_cfg=ingest_cfg,
+        config_root=CONFIG_ROOT,
+        api=OmekaItemApi,
+    )
+    return {
+        "game_key": game_key,
+        "omeka_item_id": item_id,
+        "omeka_media_id": media_id,
+        "attached_to_existing_item": True,
+        "already_attached": already,
+        "item_is_public": item_public,
+        "flat_media_hidden": hidden,
+        "package_storage_prefix": external_dip["package_storage_prefix"],
+        "s3_uri": external_dip["s3_uri"],
+        "package_bytes": package_bytes,
+        "staff_aip_uri": staff_aip,
+        "wasabi_only": True,
+    }
+
+
 def update_ledger(conn, game_key: str, item_id: int, media_id: int) -> None:
     with conn.cursor() as cur:
         cur.execute(
@@ -470,6 +561,28 @@ def _register(ctx: dict) -> None:
                 f"BagIt package not on Wasabi for {game_key!r} "
                 "(package_storage_prefix empty); run ingest first"
             )
+
+        attach_to = attach_item_id(game_cfg)
+        if attach_to is not None:
+            result = _attach_to_existing_item(
+                session,
+                base,
+                creds,
+                conn,
+                game_key=game_key,
+                item_id=attach_to,
+                ledger_item_id=int(row[0]) if row and row[0] else None,
+                ledger_media_id=int(row[1]) if row and row[1] else None,
+                external_dip=external_dip,
+                dip_ingester=dip_ingester,
+                package_bytes=total_bytes,
+                package_storage_prefix=package_storage_prefix,
+                ingest_kind=ledger_ingest_kind or None,
+                ingest_cfg=ingest_cfg,
+                catalog_cfg=catalog_cfg,
+            )
+            print(json.dumps(result, indent=2))
+            return
 
         moby_cfg = load_mobygames_config(CONFIG_ROOT)
         existing_item_id = int(row[0]) if row and row[0] else None
