@@ -36,3 +36,23 @@ hitsave_compose() {
 compose_run() {
   hitsave_compose docker compose -- run "$@"
 }
+
+# hitsave_require_host_paths: load the private host.env when the host paths aren't set yet, and stop
+# if they still aren't. Compose falls back to empty folders under ./data, so an unset
+# HOST_PRESS_MATERIAL made every ingest of a batch fail with "Source not found" (2026-11-27), and
+# an unset HOST_OUTPUT would write bags under ./data/output.
+hitsave_require_host_paths() {
+  local private="${HITSAVE_PRIVATE_CONFIG:-../hitsave-archiver-config}"
+  if [[ -z "${HOST_PRESS_MATERIAL:-}" || -z "${HOST_OUTPUT:-}" ]] && [[ -f "$private/host.env" ]]; then
+    # shellcheck source=/dev/null
+    source "$private/host.env"
+  fi
+  local name missing=()
+  for name in HOST_PRESS_MATERIAL HOST_OUTPUT; do
+    [[ -n "${!name:-}" ]] || missing+=("$name")
+  done
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "${missing[*]} not set and not in $private/host.env (see docs/e2e-preservation-batch.md)" >&2
+    return 1
+  fi
+}

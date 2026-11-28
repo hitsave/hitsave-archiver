@@ -23,6 +23,11 @@ Set in **`hitsave-archiver-config/host.env`** (from `config/host.env.example` in
 source /path/to/hitsave-archiver-config/host.env
 ```
 
+The batch scripts (`run-batch-preservation-omeka.sh`, `run-batch-resume-omeka.sh`) source
+`$HITSAVE_PRIVATE_CONFIG/host.env` (default `../hitsave-archiver-config/host.env`) themselves when
+`HOST_PRESS_MATERIAL` or `HOST_OUTPUT` is unset, and stop if either is still unset. Without them,
+Compose mounts empty folders under `./data`, and every ingest fails with "Source not found".
+
 Reuse an existing DIP tree by pointing `HOST_OUTPUT` at that directory before compose or batch scripts.
 
 ## Batch configs (local, not in git)

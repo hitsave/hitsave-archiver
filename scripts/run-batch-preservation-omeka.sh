@@ -2,6 +2,9 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+# shellcheck source=compose_shared.sh
+source "$ROOT/scripts/compose_shared.sh"
+hitsave_require_host_paths
 
 BATCH="${1:-config/preservation/batch.yml}"
 if [[ ! -f "$BATCH" ]]; then

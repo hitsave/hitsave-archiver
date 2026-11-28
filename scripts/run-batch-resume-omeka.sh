@@ -6,6 +6,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 # shellcheck source=compose_shared.sh
 source "$ROOT/scripts/compose_shared.sh"
+hitsave_require_host_paths
 
 INGEST_ONLY=0
 if [[ "${1:-}" == "--ingest-only" ]]; then
